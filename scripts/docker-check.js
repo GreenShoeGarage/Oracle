@@ -54,7 +54,7 @@ try {
     await delay(500);
   }
   assert.ok(ready, "Built production image must become ready.");
-  for (const path of ["/", "/app.js", "/style.css", "/api/session"])
+  for (const path of ["/", "/app.js", "/builder.js", "/kit.js", "/style.css", "/themes.css", "/api/session"])
     assert.equal(
       (await fetch(`http://127.0.0.1:3000${path}`)).status,
       200,

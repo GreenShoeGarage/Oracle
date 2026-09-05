@@ -1,10 +1,10 @@
 # ORACLE deployment and recovery
 
-GitHub source control and Railway application/PostgreSQL hosting. Recorded September 5, 2026. Configure each service before its first source-backed deployment.
+GitHub source control and Railway application/PostgreSQL hosting. Recorded September 5, 2026. Batch 2 source targets application v0.2.0 and database schema 2; release verification and promotion are pending. Configure each service before its first source-backed deployment.
 
 ## Current infrastructure
 
-Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Runtime release commit: `b159c88a3f98c9a6d14e488449ac089c4b7001c4` (v0.1.0, schema version 1).
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Last verified production runtime commit: `b159c88a3f98c9a6d14e488449ac089c4b7001c4` (v0.1.0, schema version 1).
 
 Production deployment `83b762b8-47dc-47b8-80aa-8ad2e04eee45` succeeded from the `production` branch at that exact commit.
 
@@ -23,9 +23,9 @@ The canonical production origin is `https://oracle.greenshoegarage.com`, explici
 
 The owner-created repository is public and contains the source at its root. Its existing license and Git attributes have been preserved. Keep secrets out of Git.
 
-Use `main` for integration and `staging` for the staging application. The supplied workflow runs for pushes to both branches and for pull requests. Railway production follows the dedicated `production` release branch, currently at runtime commit `b159c88a3f98c9a6d14e488449ac089c4b7001c4`. Advance that branch only after checking CI and staging for the exact candidate commit. This is a manual promotion procedure: Railway's Wait for CI was unavailable through the connector and `checkSuites` remains false. No automatic branch protection is claimed.
+Use `main` for integration and `staging` for the staging application. The workflow listens to `main`, `staging`, and `production` pushes and pull requests. Its `verify` job runs on integration/staging commits and pull requests. On `staging`, a dependent `staging-smoke` job waits for the checked `GITHUB_SHA` to appear in readiness with the expected application and schema versions, then runs the authenticated two-account journey. Production promotion skips duplicate verification and runs `production-smoke`: up to five minutes waiting for that exact SHA, version, and schema at the canonical custom domain, followed by public GET checks. This relies on promoting the already-verified commit; the production job is not a replacement for CI and staging gates. Railway production follows the dedicated `production` release branch, currently at runtime commit `b159c88a3f98c9a6d14e488449ac089c4b7001c4`. Advance that branch only after checking CI and staging for the exact candidate commit. This is a manual promotion procedure: Railway's Wait for CI was unavailable through the connector and `checkSuites` remains false. No automatic branch protection is claimed.
 
-The initial release passed CI and deployed public health/session checks. The additional two-account walkthrough against remote staging was interrupted before a complete result, so it remains an open acceptance check. The equivalent authorization and persistence tests passed in CI; these results are recorded separately.
+The Batch 1 two-account walkthrough against remote staging was interrupted. Batch 2 makes this an automated staging gate, including theme changes, secret filtering, exports/imports, and access removal. It must pass on the exact release candidate before production promotion; source implementation alone is not a passed deployment check.
 
 Do not assume that a successful push proves deployment success. Inspect the workflow for the exact commit, then the Railway deployment result and readiness endpoint.
 
@@ -60,13 +60,15 @@ Attach the confirmed repository and correct environment branch only after databa
 
 ## Release gate
 
-1. Run `npm ci` and `npm run verify` on the release commit.
-2. Pass the GitHub job against PostgreSQL 18, including the concurrent credential/session test, backup/restore rehearsal, and checks of the running production Docker image.
-3. Deploy staging with its isolated database. Check logs, exact version, and `/health/ready`.
-4. Use two disposable accounts and events to verify sign-in, ownership, invitation redemption, role enforcement, persistence after refresh, and removal of access.
-5. Take a database backup before schema changes and verify recovery prerequisites.
-6. Advance the `production` branch to that checked source commit. Verify deployment success, readiness, public assets, and authenticated access at the canonical production origin.
-7. Record the release commit, app version, migration version, deployment ID, and known limitations.
+1. Run `npm ci` and `npm run verify` on the release candidate.
+2. Pass GitHub's `verify` job against PostgreSQL 18, including the Batch 1-to-2 migration fixture, authorization tests, concurrent credential/session test, backup/restore rehearsal, and running production Docker image checks.
+3. Deploy that candidate to the isolated staging database. The `staging-smoke` job waits up to five minutes for `/health/ready` to report the expected app version, schema, and exact `GITHUB_SHA` in `deploymentCommit`. A healthy older deployment does not satisfy this gate.
+4. Pass the two-account staging journey: event isolation, invitation redemption, roles, player/prop secret filtering, all three theme changes without record loss, organizer pack import as a separate Draft, player export filtering, stale-version rejection, persistence after a fresh sign-in, and immediate access removal. Cleanup archives disposable events and logs out sessions. This is HTTP workflow verification; it does not replace browser/device or human field testing.
+5. Review the migration and recovery position before production schema changes. Migration 002 is additive and preserves existing Batch 1 data. No live database backup or scheduled backup is currently available through the configured platform; record this unresolved limitation. Event-pack exports do not protect account or membership data. Prefer a verified protected database checkpoint when backup capability is available, and use the schema-2 roll-forward procedure below.
+6. Advance the `production` branch to the exact checked source commit. Verify Railway deployment success, readiness, the deployment commit, public assets, and the session endpoint at the canonical production origin. The automated `production-smoke` job waits up to five minutes for the exact promoted commit and checks only public GET routes. It creates no production users or events.
+7. Record the release commit, app version, migration version, deployment ID, successful CI/staging checks, and remaining operational limitations in [STATUS.md](STATUS.md).
+
+To exercise the authenticated staging gate manually, set `EXPECTED_COMMIT` to the full 40-character candidate SHA and run `node scripts/staging-check.js`. It permits account/event mutations only at the hard-coded staging origin. Do not alter the allowlist to run disposable-account checks against production. The ordinary `SMOKE_ORIGIN='https://oracle.greenshoegarage.com' npm run smoke` is the public production check.
 
 Railway's deployment health check gates traffic switching; it is not continuous uptime monitoring. See [Health checks](https://docs.railway.com/deployments/healthchecks), [Pre-deploy commands](https://docs.railway.com/deployments/pre-deploy-command), and [GitHub autodeploys](https://docs.railway.com/deployments/github-autodeploys).
 
@@ -90,10 +92,12 @@ ORACLE's production Node image does not contain PostgreSQL client utilities. Run
 
 ## Application rollback and database recovery
 
-Retain the last known good image and compatible configuration. An application rollback does not reverse database changes. This release expects schema version 1; an older application must not be pointed at a newer unsupported schema simply by disabling readiness checks.
+Migration `002_event_setup.sql` adds event setup with a valid blank Fantasy default. It preserves existing event identities, metadata, owner membership, lifecycle, version counters, invitation hashes, and audit history. Migration checksums and transactions remain enforced. No destructive down migration is provided.
 
-Prefer additive migrations in future batches. Before release, verify that the intended rollback image can safely use the migrated schema. If it cannot, write an explicit recovery plan and verify it on staging first.
+**After migration 002, v0.1.0 is not a compatible rollback image.** It requires schema 1 exactly and cannot serve the migrated database. Do not roll production back to it, disable schema checks, or remove the new column to force startup. Keep the migrated data and roll forward with a fix that supports schema 2. Verify the fix against the migration-preservation fixture and staging before promotion. Retain previous source/images for investigation, not as an assumed compatible rollback target.
 
-For database recovery: pause writes, take a current checkpoint where possible, restore into an isolated target, inspect data and schema, verify the compatible application, switch the intended application connection, and verify authenticated journeys. A restore may discard changes since the chosen backup; it is an explicit incident decision, never an automatic companion to application rollback.
+For subsequent schema-2 releases, an application-only rollback is appropriate only after verifying that the target image and configuration support the current schema and stored setup format. A database restore is never an automatic companion to an application rollback.
+
+If incident recovery requires restoring a database: pause writes, take a current checkpoint where possible, restore a known verified backup into a separate target, inspect records and schema, verify a compatible application, switch the intended connection, and check authenticated workflows. A restore can discard changes since the backup and requires an explicit incident decision. No verified live production backup is currently recorded, so database restoration is not an available recovery promise for this deployment.
 
 Official references: [Environments](https://docs.railway.com/environments), [PostgreSQL](https://docs.railway.com/databases/postgresql), [Backups](https://docs.railway.com/volumes/backups), [Deployment actions](https://docs.railway.com/deployments/deployment-actions).

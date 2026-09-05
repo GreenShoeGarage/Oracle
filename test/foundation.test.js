@@ -104,8 +104,8 @@ after(async () => {
 });
 
 test("migration is repeatable and preserves existing accounts", async () => {
-  assert.equal(await migrate(pool), 1);
-  assert.equal(await checkSchema(pool), 1);
+  assert.equal(await migrate(pool), 2);
+  assert.equal(await checkSchema(pool), 2);
   assert.equal(
     (await pool.query("SELECT count(*)::int AS n FROM users")).rows[0].n,
     6,
@@ -690,7 +690,7 @@ test("an isolated database snapshot restores records and accepts repeat migratio
         release() {},
       }),
     };
-    assert.equal(await migrate(adapter), 1);
+    assert.equal(await migrate(adapter), 2);
   } finally {
     await restored.close();
   }

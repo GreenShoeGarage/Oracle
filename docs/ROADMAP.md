@@ -2,16 +2,16 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 1.3 · September 5, 2026
+Development roadmap · Planning revision: 1.4 · September 5, 2026
 
-Status: Batch 1 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). PostgreSQL 18, recovery, running Docker image CI, and public deployment checks passed. The remote authenticated staging walkthrough and scheduled backups remain outstanding. All later batches are planned.
+Status: Batch 1 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Batch 2 (v0.2.0) is implemented; its exact-commit CI, authenticated staging gate, and production promotion are in progress. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batches 3–12 remain planned.
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
 
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
-The first complete adventure is targeted for v0.4. Player-to-player information exchanges arrive in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batch 1 status is recorded below; all later batches are planned.
+The first complete adventure is targeted for v0.4. Player-to-player information exchanges arrive in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batch 1 and Batch 2 status are recorded below; Batches 3–12 remain planned.
 
 **Product commitments**
 
@@ -37,11 +37,15 @@ Completion gate: A checked commit can be deployed to staging; a user can create 
 
 **Batch 2 — v0.2: Themes and guided event setup**
 
+Implementation status (September 5, 2026): Source v0.2.0 implements Fantasy, Cyberpunk, and Wasteland themes; the four-step event builder; Blank event and three starter briefings; optional Briefing; player/organizer/prop views; outdoor and reduced-motion settings; collapsible controls; explicit save status; bounded rules definitions; and strict format-1 organizer/player event-pack import/export. Themes preserve rules and stable content IDs. The twelve planned gameplay instruments are unavailable. The three themed starters contain opening briefings and organizer notes, not complete adventures.
+
+Migration 002 adds setup data while preserving Batch 1 events, lifecycle, memberships, invitations, and audit records. The database advances to schema 2; v0.1.0 is not a compatible rollback target. Recover through a tested schema-2-compatible roll-forward fix. The new GitHub staging gate waits for the exact release commit before exercising two accounts, audience filtering, theme preservation, import/export, persistence, and access removal. Local API and real Chromium workflow checks have passed, including all three theme wizards, audience filtering, export/import, failed-save recovery, and desktop/375-pixel layouts. The public production smoke path also passed a read-only local rehearsal. Remote CI/deployment results are pending and must be recorded after actual verification; the production release branch now runs an exact-commit public smoke job. The existing scheduled-backup limitation remains open. See [STATUS.md](STATUS.md).
+
 Build theme packs with color and typography tokens, icons, textures, terminology, optional sound definitions, and accessible fallbacks. Ship fantasy, cyberpunk, and wasteland starter packs. Create the event builder: choose a theme, choose a template, enable available instruments, add content, and preview as a player.
 
 Implement basic player, organizer, and prop views; responsive layouts; collapsible controls; clear save status; optional reduced motion; and readable outdoor/dark settings. Define a bounded rules profile for attributes, expertise, resources, and challenge outcomes. Support validated, versioned event-pack import/export with distinct organizer backups and safe player material. Unimplemented modules remain unavailable in the player interface.
 
-Completion gate: The same test event can switch among all three themes without changing its rules or losing records. A new organizer can create, preview, export, and reimport a small event. Imported themes use data and validated assets rather than executable scripts.
+Completion gate: The same test event can switch among all three themes without changing its rules or losing records. A new organizer can create, preview, export, and reimport a small event. Imported themes use strictly validated data and built-in visual/audio choices; arbitrary CSS, markup, scripts, formulas, and external asset URLs are rejected.
 
 **Batch 3 — v0.3: Characters, factions, and identity**
 
@@ -148,7 +152,7 @@ Completion gate: All twelve instruments meet their acceptance criteria; each sta
 | Trade | Guild quartermaster | Black-market exchange | Trading post |
 | News | Town crier's broadsheet | Underground newswire | Settlement bulletin |
 
-Theme packs affect presentation and vocabulary. Event packs supply the story and content. Rules profiles define actual behavior. The theme can rename an explicitly configured resource but cannot silently change balances, ability requirements, or outcomes. Every interface retains understandable actions and accessibility overrides.
+Theme packs affect presentation and vocabulary. Event packs supply the story and content. Rules profiles define game data and, as gameplay instruments arrive, their supported behavior. In v0.2 they are bounded definitions only. The theme can rename an explicitly configured resource but cannot silently change balances, ability requirements, or outcomes. Every interface retains understandable actions and accessibility overrides.
 
 **Checks required throughout development**
 

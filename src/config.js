@@ -1,5 +1,5 @@
-export const VERSION = "0.1.0";
-export const SCHEMA_VERSION = 1;
+export const VERSION = "0.2.0";
+export const SCHEMA_VERSION = 2;
 export function readConfig(env = process.env) {
   const production = env.NODE_ENV === "production";
   const port = Number(env.PORT || 3000);
@@ -26,6 +26,7 @@ export function readConfig(env = process.env) {
   if (env.DATABASE_SSL && !["require", "disable"].includes(env.DATABASE_SSL))
     throw new Error("DATABASE_SSL must be require or disable.");
   return {
+    deploymentCommit: env.RAILWAY_GIT_COMMIT_SHA || null,
     port,
     origin,
     production,

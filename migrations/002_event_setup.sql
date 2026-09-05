@@ -1,0 +1,4 @@
+-- Additive upgrade: preserve all existing event identifiers, lifecycle state,
+-- memberships, invitations and activity. The default is a valid blank setup.
+ALTER TABLE events ADD COLUMN setup jsonb NOT NULL DEFAULT '{"version":1,"theme":{"id":"fantasy","name":"Fantasy","version":1,"tokens":{"background":"#111810","panel":"#1d281b","text":"#f4efd9","muted":"#c0c9ad","accent":"#dbbd73","font":"serif","texture":"grain","icon":"sigil"},"terms":{"briefing":"Field chronicle","people":"Company","resources":"Supplies","expertise":"Lore"},"sounds":{"enabled":false,"cue":"bell"}},"templateId":"blank","enabledInstruments":["briefing"],"rules":{"version":1,"attributes":[],"expertise":[],"resources":[],"outcomes":[]},"content":[]}'::jsonb;
+ALTER TABLE events ADD CONSTRAINT events_setup_object CHECK (jsonb_typeof(setup) = 'object');

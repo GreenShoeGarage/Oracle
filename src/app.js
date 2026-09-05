@@ -3,6 +3,16 @@ import { readFile } from "node:fs/promises";
 import { VERSION } from "./config.js";
 import { checkSchema, transaction } from "./db.js";
 import {
+  THEMES,
+  TEMPLATES,
+  INSTRUMENTS,
+  defaultSetup,
+  validateSetup,
+  projectSetup,
+  validateEventPack,
+  makeEventPack,
+} from "../public/kit.js";
+import {
   digest,
   hashPassword,
   verifyPassword,
@@ -71,14 +81,14 @@ function positive(value, label, max) {
     fail(400, `${label} must be between 1 and ${max}.`);
   return value;
 }
-async function body(req) {
+async function body(req, maxBytes = 16384) {
   if (!(req.headers["content-type"] || "").startsWith("application/json"))
     fail(415, "Send JSON content.");
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 16384) fail(413, "Request is too large.");
+    if (size > maxBytes) fail(413, "Request is too large.");
     chunks.push(chunk);
   }
   try {
@@ -127,6 +137,25 @@ async function setSession(db, res, config, userId, previous) {
 function safeUser(row) {
   return { id: row.id, email: row.email, displayName: row.display_name };
 }
+// Explicit projections keep organizer material out of every player response,
+// including joins and list views. Preview never grants organizer permissions.
+function safeEvent(row, audience = managers.has(row.role) ? "organizer" : "player", preview = false) {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    location: row.location,
+    starts_at: row.starts_at,
+    status: row.status,
+    version: row.version,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    setup: projectSetup(row.setup, audience),
+    ...(!preview && row.role ? { role: row.role } : {}),
+    ...(!preview && row.member_count !== undefined ? { member_count: row.member_count } : {}),
+    ...(!preview && row.alreadyMember ? { alreadyMember: true } : {}),
+  };
+}
 
 export function createApp({
   pool,
@@ -151,10 +180,11 @@ export function createApp({
     if (config.production)
       res.setHeader("Strict-Transport-Security", "max-age=31536000");
     try {
-      const path = new URL(req.url, config.origin).pathname;
+      const url = new URL(req.url, config.origin);
+      const path = url.pathname;
       const method = req.method;
       if (path === "/health/live" && method === "GET")
-        return send(res, 200, { status: "ok", version: VERSION });
+        return send(res, 200, { status: "ok", version: VERSION, deploymentCommit: config.deploymentCommit || null });
       if (path === "/health/ready" && method === "GET") {
         try {
           const version = await checkSchema(pool);
@@ -162,6 +192,7 @@ export function createApp({
             status: "ready",
             version: VERSION,
             schemaVersion: version,
+            deploymentCommit: config.deploymentCommit || null,
           });
         } catch {
           return send(res, 503, { status: "unavailable", version: VERSION });
@@ -172,7 +203,10 @@ export function createApp({
         const assets = {
           "/": ["index.html", "text/html"],
           "/app.js": ["app.js", "text/javascript"],
+          "/builder.js": ["builder.js", "text/javascript"],
+          "/kit.js": ["kit.js", "text/javascript"],
           "/style.css": ["style.css", "text/css"],
+          "/themes.css": ["themes.css", "text/css"],
           "/favicon.svg": ["favicon.svg", "image/svg+xml"],
         };
         const asset = assets[path];
@@ -261,6 +295,8 @@ export function createApp({
         return send(res, 200, { user: safeUser(existing) });
       }
       if (!user) fail(401, "Sign in to continue.");
+      if (path === "/api/catalog" && method === "GET")
+        return send(res, 200, { themes: THEMES, templates: TEMPLATES, instruments: INSTRUMENTS });
       if (path === "/api/auth/logout" && method === "POST") {
         await pool.query("DELETE FROM sessions WHERE token_hash=$1", [
           digest(token),
@@ -302,16 +338,17 @@ export function createApp({
           "SELECT e.*,m.role,(SELECT count(*)::int FROM memberships n WHERE n.event_id=e.id) AS member_count FROM events e JOIN memberships m ON m.event_id=e.id WHERE m.user_id=$1 ORDER BY e.updated_at DESC",
           [user.id],
         );
-        return send(res, 200, { events: rows });
+        return send(res, 200, { events: rows.map((row) => safeEvent(row)) });
       }
       if (path === "/api/events" && method === "POST") {
         if (!(await limit(pool, `create-event:${user.id}`, 20, 60)))
           fail(429, "Event creation limit reached. Try again later.");
-        const input = await body(req);
+        const input = await body(req, 262144);
+        const setup = input.setup === undefined ? defaultSetup() : validateSetup(input.setup);
         const event = await transaction(pool, async (db) => {
           const id = randomUUID();
           const result = await db.query(
-            "INSERT INTO events(id,owner_user_id,name,description,location,starts_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
+            "INSERT INTO events(id,owner_user_id,name,description,location,starts_at,setup) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",
             [
               id,
               user.id,
@@ -319,6 +356,7 @@ export function createApp({
               text(input.description || "", "Description", 0, 2000),
               text(input.location || "", "Location", 0, 200),
               date(input.startsAt),
+              JSON.stringify(setup),
             ],
           );
           await db.query(
@@ -328,7 +366,29 @@ export function createApp({
           await audit(db, id, user.id, "event.created");
           return { ...result.rows[0], role: "owner" };
         });
-        return send(res, 201, { event });
+        return send(res, 201, { event: safeEvent(event) });
+      }
+      if (path === "/api/events/import" && method === "POST") {
+        if (!(await limit(pool, `create-event:${user.id}`, 20, 60)))
+          fail(429, "Event creation limit reached. Try again later.");
+        const input = await body(req, 262144);
+        const pack = validateEventPack(input.pack);
+        const event = await transaction(pool, async (db) => {
+          const id = randomUUID();
+          // Import always creates a fresh draft owned by the caller. It cannot
+          // import identities, live progress, memberships or credentials.
+          const result = await db.query(
+            "INSERT INTO events(id,owner_user_id,name,description,location,starts_at,setup) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",
+            [id, user.id, pack.event.name, pack.event.description, pack.event.location, date(pack.event.startsAt), JSON.stringify(pack.setup)],
+          );
+          await db.query(
+            "INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'owner')",
+            [id, user.id],
+          );
+          await audit(db, id, user.id, "event.imported", { formatVersion: pack.version, audience: pack.audience });
+          return { ...result.rows[0], role: "owner" };
+        });
+        return send(res, 201, { event: safeEvent(event) });
       }
       if (path === "/api/events/join" && method === "POST") {
         if (!(await limit(pool, `join:${user.id}`, 30)))
@@ -405,10 +465,10 @@ export function createApp({
           await audit(db, ev.id, user.id, "member.joined", { role: inv.role });
           return { ...ev, role: inv.role };
         });
-        return send(res, 200, { event });
+        return send(res, 200, { event: safeEvent(event) });
       }
       const match = path.match(
-        /^\/api\/events\/([^/]+)(?:\/(members|invites|audit)(?:\/([^/]+))?)?$/,
+        /^\/api\/events\/([^/]+)(?:\/(members|invites|audit|pack|preview)(?:\/([^/]+))?)?$/,
       );
       if (!match) fail(404, "Not found.");
       const [, rawId, section, rawTarget] = match;
@@ -416,6 +476,17 @@ export function createApp({
         target = rawTarget ? identifier(rawTarget) : null;
       if (method === "GET") {
         const event = await membership(pool, id, user.id);
+        if (section === "pack" && !target) {
+          const audience = url.searchParams.get("audience") || (managers.has(event.role) ? "organizer" : "player");
+          if (!["organizer", "player"].includes(audience)) fail(400, "Choose an organizer or player event pack.");
+          if (audience === "organizer") requireManager(event);
+          return send(res, 200, makeEventPack(event, audience));
+        }
+        if (section === "preview" && !target) {
+          const audience = url.searchParams.get("audience") || "player";
+          if (!["player", "prop"].includes(audience)) fail(400, "Choose a player or prop preview.");
+          return send(res, 200, { event: safeEvent(event, audience, true), audience, readOnly: true });
+        }
         if (!section) {
           const members = (
             await pool.query(
@@ -424,7 +495,7 @@ export function createApp({
             )
           ).rows;
           return send(res, 200, {
-            event,
+            event: safeEvent(event),
             members,
             transitions: managers.has(event.role)
               ? transitions[event.status]
@@ -452,7 +523,7 @@ export function createApp({
           });
         fail(404, "Not found.");
       }
-      const input = method === "DELETE" ? {} : await body(req);
+      const input = method === "DELETE" ? {} : await body(req, !section && method === "PATCH" ? 262144 : 16384);
       const result = await transaction(pool, async (db) => {
         const event = await membership(db, id, user.id, true);
         if (!section && method === "PATCH") {
@@ -483,10 +554,17 @@ export function createApp({
             input.startsAt === undefined
               ? event.starts_at
               : date(input.startsAt);
+          if (input.setup !== undefined && input.theme !== undefined)
+            fail(400, "Send either event setup or a theme change.");
+          const setup = input.setup !== undefined
+            ? validateSetup(input.setup)
+            : input.theme !== undefined
+              ? validateSetup({ ...event.setup, theme: input.theme })
+              : event.setup;
           const changed = (
             await db.query(
-              "UPDATE events SET name=$1,description=$2,location=$3,starts_at=$4,status=$5,version=version+1,updated_at=now() WHERE id=$6 RETURNING *",
-              [name, description, location, startsAt, status, id],
+              "UPDATE events SET name=$1,description=$2,location=$3,starts_at=$4,status=$5,setup=$6,version=version+1,updated_at=now() WHERE id=$7 RETURNING *",
+              [name, description, location, startsAt, status, JSON.stringify(setup), id],
             )
           ).rows[0];
           await audit(
@@ -496,7 +574,7 @@ export function createApp({
             status !== event.status ? "event.status_changed" : "event.updated",
             status !== event.status ? { from: event.status, to: status } : {},
           );
-          return { event: { ...changed, role: event.role } };
+          return { event: safeEvent({ ...changed, role: event.role }) };
         }
         if (section === "invites" && method === "POST" && !target) {
           requireManager(event);
