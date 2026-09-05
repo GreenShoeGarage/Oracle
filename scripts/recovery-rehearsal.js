@@ -3,8 +3,11 @@ import { mkdtemp, rm, open } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
-import { createPool, migrate } from "../src/db.js";
+import { randomBytes, randomUUID } from "node:crypto";
+import { createPool, migrate, transaction } from "../src/db.js";
 import { digest } from "../src/security.js";
+import { defaultSetup } from "../public/kit.js";
+import { defaultCharacterProfile } from "../public/characters-model.js";
 const sourceUrl = new URL(process.env.TEST_DATABASE_URL || "");
 const targetUrl = new URL(process.env.RESTORE_DATABASE_URL || "");
 for (const url of [sourceUrl, targetUrl])
@@ -64,6 +67,29 @@ try {
     0,
     "Restore database already exists; choose a fresh name.",
   );
+  // The last integration suite can leave the new tables empty. Seed a complete
+  // fictional Batch 3 record in this already-validated disposable database so
+  // the dump/restore gate checks actual character and administrator data.
+  await migrate(source);
+  const fixture = { user: randomUUID(), event: randomUUID(), faction: randomUUID(), character: randomUUID(), item: randomUUID() };
+  const setup = defaultSetup("fantasy", "council");
+  const profile = {
+    ...defaultCharacterProfile(setup.rules), name: "Recovery rehearsal character", factionId: fixture.faction,
+    privateObjectives: "A fictional secret that must survive database recovery.",
+    startingEquipment: [{ name: "Recovery lantern", quantity: 2, notes: "Original allocation." }],
+  };
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const badge = [...randomBytes(20)].map((byte) => alphabet[byte % alphabet.length]).join("");
+  await transaction(source, async (client) => {
+    await client.query("INSERT INTO users(id,email,display_name,password_hash,is_superuser,is_disabled) VALUES($1,$2,'Recovery rehearsal','not-a-login-credential',true,true)", [fixture.user, `recovery-${fixture.user}@example.invalid`]);
+    await client.query("INSERT INTO events(id,owner_user_id,name,setup) VALUES($1,$2,'Recovery rehearsal event',$3)", [fixture.event, fixture.user, JSON.stringify(setup)]);
+    await client.query("INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'owner')", [fixture.event, fixture.user]);
+    await client.query("INSERT INTO event_character_settings(event_id,require_approval,max_per_player,public_fields,version) VALUES($1,true,2,'[\"pronouns\",\"faction\"]',3)", [fixture.event]);
+    await client.query("INSERT INTO factions(id,event_id,name,description) VALUES($1,$2,'Recovery guild','Preserve this faction description.')", [fixture.faction, fixture.event]);
+    await client.query("INSERT INTO characters(id,event_id,user_id,status,profile,badge_code,review_notes,inventory_initialized,version) VALUES($1,$2,$3,'approved',$4,$5,'Approval survives recovery.',true,5)", [fixture.character, fixture.event, fixture.user, JSON.stringify(profile), badge]);
+    await client.query("INSERT INTO character_inventory(id,event_id,character_id,name,quantity,notes,version) VALUES($1,$2,$3,'Recovery lantern',1,'Current quantity after use.',2)", [fixture.item, fixture.event, fixture.character]);
+    await client.query("INSERT INTO system_audit_entries(actor_id,target_user_id,action,details) VALUES($1,$1,'recovery.fixture',$2)", [fixture.user, JSON.stringify({ fictional: true, eventId: fixture.event })]);
+  });
   await source.query(`CREATE DATABASE "${name}"`);
   const out = await open(backup, "wx", 0o600);
   try {
@@ -111,6 +137,11 @@ try {
     ["memberships", "event_id,user_id"],
     ["invitations", "id"],
     ["audit_entries", "id"],
+    ["system_audit_entries", "id"],
+    ["event_character_settings", "event_id"],
+    ["factions", "id"],
+    ["characters", "id"],
+    ["character_inventory", "id"],
     ["schema_migrations", "version"],
   ]) {
     const a = (await source.query(`SELECT * FROM ${table} ORDER BY ${order}`))
@@ -145,8 +176,11 @@ try {
     BigInt(inserted.id) > maximum,
     "Restored identity sequence must advance safely.",
   );
+  const maximumSystemAudit = BigInt((await restored.query("SELECT COALESCE(max(id),0) AS id FROM system_audit_entries")).rows[0].id);
+  const systemAudit = (await restored.query("INSERT INTO system_audit_entries(actor_id,target_user_id,action) VALUES($1,$1,'recovery.rehearsed') RETURNING id", [fixture.user])).rows[0];
+  assert.ok(BigInt(systemAudit.id) > maximumSystemAudit, "Restored system audit identity sequence must advance safely.");
   console.log(
-    "PostgreSQL pg_dump/pg_restore round trip and migration after restore passed.",
+    "PostgreSQL pg_dump/pg_restore round trip, populated character and administrator records, both audit sequences, and migration after restore passed.",
   );
 } finally {
   if (restored) await restored.end();

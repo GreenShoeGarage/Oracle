@@ -92,9 +92,9 @@ after(async () => {
   if (database) await database.close();
 });
 
-test("Batch 1 to Batch 2 migration preserves event identity, lifecycle, membership, invitations and audit", async () => {
-  assert.equal(await migrate(pool), 2);
-  assert.equal(await checkSchema(pool), 2);
+test("Batch 1 to Batch 3 migration preserves event identity, lifecycle, membership, invitations and audit", async () => {
+  assert.equal(await migrate(pool), 4);
+  assert.equal(await checkSchema(pool), 4);
   const event = (await pool.query("SELECT * FROM events WHERE id=$1", [legacy.event])).rows[0];
   assert.equal(event.name, "Existing live event");
   assert.equal(event.description, "Original description");
@@ -106,6 +106,12 @@ test("Batch 1 to Batch 2 migration preserves event identity, lifecycle, membersh
   assert.equal((await pool.query("SELECT role FROM memberships WHERE event_id=$1 AND user_id=$2", [legacy.event, legacy.user])).rows[0].role, "owner");
   assert.equal((await pool.query("SELECT token_hash FROM invitations WHERE id=$1", [legacy.invitation])).rows[0].token_hash, "original-token-hash");
   assert.equal((await pool.query("SELECT action FROM audit_entries WHERE event_id=$1", [legacy.event])).rows[0].action, "event.created");
+  const user = (await pool.query("SELECT id,password_hash,is_superuser,is_disabled FROM users WHERE id=$1", [legacy.user])).rows[0];
+  assert.equal(user.id, legacy.user);
+  assert.equal(user.password_hash, "existing-hash");
+  assert.equal(user.is_superuser, false);
+  assert.equal(user.is_disabled, false);
+  assert.deepEqual((await pool.query("SELECT version FROM schema_migrations ORDER BY version")).rows.map((row) => row.version), [1, 2, 3, 4]);
 });
 
 test("catalog requires authentication and theme module is served under the script CSP", async () => {

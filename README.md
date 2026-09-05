@@ -1,16 +1,22 @@
 # ORACLE
 
-**LARP Field Kit** · v0.2.0 · Green Shoe Garage
+**LARP Field Kit** · v0.3.0 · Green Shoe Garage
 
-ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players get a focused reading view; a prop display presents selected material on a shared screen.
+ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. A prop display presents selected briefing material on a shared screen.
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 2 (v0.2.0) is live. Local browser/API checks, PostgreSQL/Docker CI, the full remote staging workflow, and exact-commit production checks passed. See [docs/STATUS.md](docs/STATUS.md) for deployment evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
+Batch 3 (v0.3.0, database schema 4) is implemented in this source and undergoing verification. Production's last verified release is v0.2.0. See [docs/STATUS.md](docs/STATUS.md) for release evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
 
 ## What works in this release
 
-- Accounts, private event membership, expiring invitation codes, roles, lifecycle controls, and activity logs from Batch 1.
+- Accounts, private event membership, expiring invitation codes, roles, lifecycle controls, and activity logs.
+- Guided character creation with portraits, pronouns, biographies, event factions, attributes, skills, starting equipment, and private objectives.
+- Organizer approval/change requests, prewritten character assignment, per-player limits, and controlled public identity fields.
+- Initial inventory created once on approval, with later additions and quantity changes managed by organizers.
+- Printable QR badges, camera/photo/manual-code lookup, badge rotation, and retirement.
+- Cross-event character copies with a fresh identity, destination rules, and reset gameplay data.
+- Project administration for an operator-provisioned superuser: all-event access, account search, disable/enable, session revocation, and project audit history.
 - A four-step event builder: **World → Event → Material & rules → Review**.
 - Fantasy, Cyberpunk, and Wasteland themes with colors, fonts, icons, textures, terminology, and optional sound cues.
 - A blank event and three starter briefings: **The Lantern Council**, **The Missing Signal**, and **The Last Water Stop**. These provide a starting scene and organizer preparation notes; complete adventures arrive later.
@@ -20,16 +26,19 @@ Batch 2 (v0.2.0) is live. Local browser/API checks, PostgreSQL/Docker CI, the fu
 - Versioned JSON event packs: private organizer backups and player material with organizer-only content removed.
 - Dark and outdoor reading settings, reduced motion, collapsible navigation, and clear manual-save status.
 
-**Briefing** is the available optional instrument. All twelve planned gameplay instruments remain unavailable. Character creation, QR scanning/exchanges, gameplay inventories, automated challenge resolution, and offline synchronization are later batches. Rules in this release are definitions to prepare those features; they do not execute scripts or run challenges.
+**Briefing** is the available optional instrument. All twelve planned gameplay instruments remain unavailable. Badge scanning identifies an approved character; selected information exchanges arrive in Batch 5. Automated challenges, trading, shared resource balances, and offline synchronization remain later batches. Event rules supply character attributes and available skills; they do not execute scripts or automatically resolve challenges.
 
 ## Stack and project layout
 
-Node.js 22 (22.9 or newer) or 24, a small native HTTP server, PostgreSQL, and plain HTML/CSS/JavaScript. The only production package is `pg`. There is no front-end compilation step and no third-party behavioral analytics.
+Node.js 22 (22.9 or newer) or 24, a small native HTTP server, PostgreSQL, and plain HTML/CSS/JavaScript. The only server production package is `pg`. QR generation and decoding use locally vendored browser libraries with their licenses in `public/vendor/`; no QR service or CDN is used. There is no front-end compilation step and no third-party behavioral analytics.
 
 | Path | Purpose |
 | --- | --- |
 | `src/app.js` | Authenticated API, authorization, static asset delivery |
 | `src/security.js` | Password hashing, tokens, cookies, rate limits |
+| `src/characters.js`, `public/characters-model.js` | Event character API, validation, and public/private projections |
+| `src/admin.js`, `public/admin-ui.js` | Operator provisioning and project administration |
+| `public/characters-ui.js`, `public/qr.js` | Character workflow, portraits, printable badges, and local scanning |
 | `src/db.js` | Database pool, transactions, checked migrations |
 | `src/server.js` | Startup, readiness, graceful shutdown |
 | `public/app.js` | Account, membership, and event interface |
@@ -65,7 +74,7 @@ npm run migrate
 npm run dev
 ```
 
-Open `http://localhost:3000`. Create your own account and first event. No default administrator password or seeded user is created. Event creators automatically become that event's owner; signing up does not give administrative access to other events.
+Open `http://localhost:3000`. Create your own account and first event. No default administrator password or seeded user is created. Event creators become that event's owner. Ordinary registration cannot grant project administration; optional operator provisioning is documented below.
 
 ## Build and run an event
 
@@ -85,13 +94,36 @@ Open `http://localhost:3000`. Create your own account and first event. No defaul
 
 **Shared prop devices:** Player and prop previews exclude organizer-only entries, but previewing does not lower a signed-in organizer's account permissions. Use a separate player account on an unattended device. Prop display is a reading view, not a locked kiosk or a new authorization role. Fullscreen depends on browser support.
 
+## Create and use characters
+
+1. Join or open an event and select **Characters**. Organizers can expand **Character settings & factions** to enable player creation, require approval, choose 1–10 active characters per player, set public fields, and create event factions. Defaults allow player creation, require approval, and permit one active character per player.
+2. Select **Create character** and follow **Identity → Abilities → Kit & goals → Review**. Add an optional portrait, pronouns, biography, and faction; choose attributes and skills allowed by this event; then add private objectives and proposed starting equipment. JPEG, PNG, and WebP uploads up to 8 MB are resized locally for storage.
+3. Use **Save draft** or **Save character** to persist the sheet. Open it and choose **Submit for approval**. If approval is disabled, choose **Activate character**. Saving an edited approved character returns it to Draft, so its public badge stays unavailable until it is approved or activated again.
+4. An organizer opens a submitted sheet and chooses **Approve character** or **Request changes**. A change request includes private feedback. The first approval creates the starting inventory once. Reapproval does not duplicate or refill items; organizers use the separate Inventory controls for later changes.
+5. To prepare a prewritten character, an organizer chooses **Unassigned · prewritten character** under Assign to. Use **Assign character** later to give its complete private sheet to a current event member. Assignment obeys the destination player's active-character limit and removes the former assignee's private access immediately.
+6. Open an approved character and choose **Public badge & QR** to inspect the permitted identity, copy its link, or print a badge. **Scan a badge** accepts a camera scan, a QR photo, the printed code, or a badge link from this ORACLE site. Readers must sign in and belong to the same event. A badge grants no editing, inventory, or organizer privileges.
+
+Character name is always shared after approval. The organizer may also allow portrait, pronouns, biography, faction, and skills. Private objectives, attributes, equipment, inventory, review notes, and account details are excluded from public cards. The complete sheet is visible to its assigned player, event managers, and project superusers.
+
+Camera access starts only after **Start camera** and the browser's permission prompt. It stops after a successful scan, Stop camera, closing the scanner, or hiding/leaving the page. Camera frames and QR photos are decoded locally; only the extracted badge identifier is sent for an authorized lookup. If camera access is denied, enter the code or choose a QR image instead. Portraits are different: the resized portrait is saved with the character.
+
+**Copy to another event** creates a new Draft assigned to you. Name, portrait, pronouns, and biography carry over; only skills present in the destination rules remain. Attributes use destination defaults. Faction, private objectives, starting equipment, inventory, approval, and event progress are reset, with new character and badge identifiers. The destination's creation policy, membership, and character limit apply.
+
+Retiring a character makes it read-only and invalidates its badge. Replacing a badge code invalidates the previous printed QR/link immediately. Archived event data remains readable under its normal permissions, while edits are blocked.
+
+## Project administration
+
+An operator-provisioned project superuser can open **Project administration** to search accounts, disable or re-enable access, sign out sessions, and review project activity. **All events** provides event management across the project. Disabling an account revokes its sessions and prevents sign-in while retaining its data; re-enabling preserves its password. The interface cannot disable superusers, change passwords, or grant new superuser roles.
+
+Provisioning uses protected deployment settings, never an email address embedded in the repository. An already-existing account selected by the operator is promoted during `npm run migrate` without replacing its identity or password. If that reserved account does not exist, first registration requires an operator-held setup secret as well as normal account details. Knowing the reserved email alone cannot claim the role. See [deployment provisioning instructions](docs/DEPLOYMENT.md#project-superuser-provisioning).
+
 ## Export, reuse, and customize
 
 **Export organizer backup** downloads event setup and all authored material, including private organizer notes. Keep that file private. **Export player material** removes organizer-only entries on the server. A player pack still contains public event details, the theme, and rules definitions; put secrets only in entries marked **Organizer only**.
 
 From the event list, choose **Import an event pack**, select the JSON file, inspect its validation preview, and select **Create from pack**. Import always creates a new Draft owned by the importing account. It keeps the pack's theme, rules, and content identifiers but creates a new event identity and fresh owner membership. Existing events remain intact. Memberships, account information, invitation codes, activity history, and live event state are never exported or imported.
 
-An organizer pack is a reusable content backup, **not a database backup**. Restoring it does not recover participants or event history. A player pack can also seed a new event, but cannot recover omitted private material.
+An organizer pack is a reusable content backup, **not a database backup**. Format 1 contains event setup and briefing material; it does not include characters, factions, character settings, inventories, participants, or event history. Use the separate character-copy workflow to reuse a character identity. A player pack can also seed a new event, but cannot recover omitted private material.
 
 Custom themes can be supplied inside a validated event pack. They may contain approved color, font, texture, icon, terminology, and sound choices; arbitrary CSS, markup, scripts, formulas, and external asset URLs are rejected. There is no custom theme editor in this release. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#event-pack-format) for the exact format and a valid example.
 
@@ -112,7 +144,7 @@ Custom themes can be supplied inside a validated event pack. They may contain ap
 | Review invitation list/activity | Yes | Yes | No | No |
 | Remove or demote the owner | No | No | No | No |
 
-Event access is enforced on every server request. A remembered event URL or an old session does not preserve access after membership removal. Accounts keep their email private; the event roster contains display names and roles. Reusable Player codes grant no higher role. Privileged codes are single-use, and role changes revoke any outstanding invitations issued by the changed member.
+The table describes event membership roles. A project superuser has an explicit server-checked project role with access across events and management authority. Ordinary membership and badge possession cannot grant that role. Event access is enforced on every server request. A remembered event URL or an old session does not preserve access after membership removal. Accounts keep their email private; the event roster contains display names and roles. Reusable Player codes grant no higher role. Privileged codes are single-use, and role changes revoke any outstanding invitations issued by the changed member.
 
 ## Environment settings
 
@@ -125,6 +157,8 @@ Event access is enforced on every server request. A remembered event URL or an o
 | `APP_ENV` | `development`, `staging`, or `production`; staging is visibly labeled |
 | `REGISTRATION_ENABLED` | Set `false` to close account registration; existing sign-in still works |
 | `DATABASE_SSL` | `require` for verified external TLS, or `disable` for the intended private network connection |
+| `BOOTSTRAP_SUPERUSER_EMAIL` | Optional operator-selected reserved account; protected deployment configuration only |
+| `BOOTSTRAP_SUPERUSER_SETUP_TOKEN` | Optional 32–512-character operator secret, required only to claim a reserved account that does not already exist |
 
 When `APP_ORIGIN` is omitted, Railway's generated `RAILWAY_PUBLIC_DOMAIN` may supply the HTTPS origin. Set it explicitly for a custom domain. Use one canonical app origin; redirect aliases to it. Cookie-authenticated writes from other origins are rejected.
 
@@ -161,7 +195,7 @@ For the configured disposable staging environment:
 EXPECTED_COMMIT='<full-40-character-release-commit>' node scripts/staging-check.js
 ```
 
-This script waits for the expected deployment commit, app version, and schema. It then creates disposable staging accounts/events to exercise event isolation, invitation redemption, role restrictions, player/prop secret filtering, all three theme switches, pack round trips, stale saves, fresh-session persistence, and immediate access removal. Cleanup archives test events and logs out test sessions. Mutations are restricted to the allowlisted staging origin. The `staging-smoke` GitHub job runs this after `verify` and uses `GITHUB_SHA` as the required deployed commit. After promotion, `production-smoke` waits for that same commit at the canonical production domain and runs public GET checks without creating users or events.
+This script waits for the expected deployment commit, app version, and schema. It then creates disposable staging accounts/events to exercise event isolation, invitation redemption, role restrictions, player/prop secret filtering, all three theme switches, pack round trips, stale saves, fresh-session persistence, and immediate access removal. Batch 3 extends the journey through two approved characters, faction/field settings, badge privacy and rotation, inventory initialization/reapproval, prewritten assignment, malformed-write rejection, and cross-event copies. Cleanup archives test events and logs out test sessions. Mutations are restricted to the allowlisted staging origin. The `staging-smoke` GitHub job runs this after `verify` and uses `GITHUB_SHA` as the required deployed commit. After promotion, `production-smoke` waits for that same commit at the canonical production domain and runs public GET checks without creating users or events.
 
 ## Railway deployment and recovery
 
@@ -176,6 +210,9 @@ Follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Staging and production use sepa
 - **Invitation fails:** Check its expiry, remaining uses, revocation, issuer role, and whether the event has ended. Staff/Organizer codes work once.
 - **Edit conflict:** Preserve any unsaved text you need, refresh the event, review the latest details, and reapply your change.
 - **Pack import is rejected:** Use event-pack format version 1. Review the validation message for unsupported fields, invalid rules, theme contrast, duplicate identifiers, or oversized content.
+- **A badge is unavailable:** Sign in to the correct event. Only approved characters resolve; an edit, retirement, removed membership, or replaced code may invalidate an old badge.
+- **A character cannot be created or assigned:** Check that player creation is enabled and the current event member has room under the active-character limit.
+- **Inventory did not refill after reapproval:** This is expected. Starting equipment initializes once; an organizer must change current inventory separately.
 - **Material is missing:** Check that Briefing is enabled, the entry is visible to players, and—if viewing a prop—it is marked for prop display. Refresh after saving.
 - **Theme changed but outdoor colors stayed light:** Outdoor is a local readability override. Choose Dark under Reading settings to see the theme palette.
 - **Too many attempts:** Authentication and join requests are rate limited. Wait for the stated interval.

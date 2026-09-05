@@ -1,8 +1,8 @@
 {
   "name": "oracle-larp-field-kit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "ORACLE \u2014 LARP Field Kit. Themes, guided event setup, and safe event packs.",
+  "description": "ORACLE — LARP Field Kit. Themed events, characters, and QR identity.",
   "type": "module",
   "engines": {
     "node": ">=22.9.0 <25"

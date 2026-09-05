@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { VERSION } from "./config.js";
+import { createAdminHandler, isReservedSuperuserEmail, registerSuperuserAllowed, systemAudit } from "./admin.js";
+import { createCharacterHandler } from "./characters.js";
 import { checkSchema, transaction } from "./db.js";
 import {
   THEMES,
@@ -33,7 +35,8 @@ const fail = (status, message) => {
   throw new HttpError(status, message);
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const managers = new Set(["owner", "organizer"]);
+const managers = new Set(["owner", "organizer", "superuser"]);
+const canOwn = (event) => ["owner", "superuser"].includes(event.role);
 const transitions = {
   draft: ["rehearsal"],
   rehearsal: ["draft", "live"],
@@ -111,8 +114,14 @@ async function audit(db, eventId, actorId, action, details = {}) {
   );
 }
 async function membership(db, eventId, userId, lock = false) {
+  // Every event mutation takes this lock before reading current permissions.
+  // A fresh statement after waiting sees concurrent membership revocations.
+  if (lock) await db.query("SELECT id FROM events WHERE id=$1 FOR UPDATE", [eventId]);
   const { rows } = await db.query(
-    `SELECT e.*,m.role FROM events e JOIN memberships m ON m.event_id=e.id WHERE e.id=$1 AND m.user_id=$2${lock ? " FOR UPDATE OF e,m" : ""}`,
+    `SELECT e.*,CASE WHEN u.is_superuser THEN 'superuser' ELSE m.role END AS role
+     FROM events e JOIN users u ON u.id=$2
+     LEFT JOIN memberships m ON m.event_id=e.id AND m.user_id=u.id
+     WHERE e.id=$1 AND NOT u.is_disabled AND (u.is_superuser OR m.user_id IS NOT NULL)`,
     [eventId, userId],
   );
   if (!rows[0]) fail(404, "Event not found or access has been removed.");
@@ -135,7 +144,7 @@ async function setSession(db, res, config, userId, previous) {
   res.setHeader("Set-Cookie", sessionCookie(config, token));
 }
 function safeUser(row) {
-  return { id: row.id, email: row.email, displayName: row.display_name };
+  return { id: row.id, email: row.email, displayName: row.display_name, isSuperuser: row.is_superuser === true };
 }
 // Explicit projections keep organizer material out of every player response,
 // including joins and list views. Preview never grants organizer permissions.
@@ -162,6 +171,9 @@ export function createApp({
   config,
   logger = (entry) => console.log(JSON.stringify(entry)),
 }) {
+  const helpers = { body, send, fail, identifier, membership, audit, transaction };
+  const adminHandler = createAdminHandler({ pool, config, helpers });
+  const characterHandler = createCharacterHandler({ pool, config, helpers });
   return async function handle(req, res) {
     const requestId = randomUUID();
     res.setHeader("X-Request-Id", requestId);
@@ -170,11 +182,11 @@ export function createApp({
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader(
       "Permissions-Policy",
-      "camera=(), microphone=(), geolocation=()",
+      "camera=(self), microphone=(), geolocation=()",
     );
     res.setHeader(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     );
     res.setHeader("Cache-Control", "no-store");
     if (config.production)
@@ -203,6 +215,13 @@ export function createApp({
         const assets = {
           "/": ["index.html", "text/html"],
           "/app.js": ["app.js", "text/javascript"],
+          "/characters-ui.js": ["characters-ui.js", "text/javascript"],
+          "/characters-model.js": ["characters-model.js", "text/javascript"],
+          "/characters.css": ["characters.css", "text/css"],
+          "/admin-ui.js": ["admin-ui.js", "text/javascript"],
+          "/qr.js": ["qr.js", "text/javascript"],
+          "/vendor/qrcode-generator-2.0.4.js": ["vendor/qrcode-generator-2.0.4.js", "text/javascript"],
+          "/vendor/jsqr-1.4.0.js": ["vendor/jsqr-1.4.0.js", "text/javascript"],
           "/builder.js": ["builder.js", "text/javascript"],
           "/kit.js": ["kit.js", "text/javascript"],
           "/style.css": ["style.css", "text/css"],
@@ -226,7 +245,7 @@ export function createApp({
       const user = token
         ? (
             await pool.query(
-              "SELECT u.id,u.email,u.display_name FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()",
+              "SELECT u.id,u.email,u.display_name,u.is_superuser,u.is_disabled FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND NOT u.is_disabled",
               [digest(token)],
             )
           ).rows[0]
@@ -263,19 +282,23 @@ export function createApp({
         if (path.endsWith("/register")) {
           if (!config.registrationEnabled)
             fail(403, "New accounts are currently closed.");
+          if (!registerSuperuserAllowed(address, input.setupCode, config))
+            fail(403, "This account is reserved. Sign in or use your operator setup code.");
+          const superuser = isReservedSuperuserEmail(address, config);
           const displayName = text(input.displayName, "Display name", 2, 80);
           const hash = await hashPassword(pass);
           const created = await transaction(pool, async (db) => {
             const id = randomUUID();
             const result = await db.query(
-              "INSERT INTO users(id,email,display_name,password_hash) VALUES($1,$2,$3,$4) ON CONFLICT(email) DO NOTHING RETURNING id,email,display_name",
-              [id, address, displayName, hash],
+              "INSERT INTO users(id,email,display_name,password_hash,is_superuser) VALUES($1,$2,$3,$4,$5) ON CONFLICT(email) DO NOTHING RETURNING id,email,display_name,is_superuser",
+              [id, address, displayName, hash, superuser],
             );
             if (!result.rows[0])
               fail(
                 409,
                 "Unable to create this account. Try signing in instead.",
               );
+            if (superuser) await systemAudit(db, id, id, "superuser.claimed");
             await setSession(db, res, config, id, token);
             return result.rows[0];
           });
@@ -287,7 +310,7 @@ export function createApp({
               address,
             ])
           ).rows[0];
-          if (!(await verifyPassword(pass, current?.password_hash)))
+          if (!(await verifyPassword(pass, current?.password_hash)) || current.is_disabled)
             fail(401, "Email or password is incorrect.");
           await setSession(db, res, config, current.id, token);
           return current;
@@ -295,6 +318,8 @@ export function createApp({
         return send(res, 200, { user: safeUser(existing) });
       }
       if (!user) fail(401, "Sign in to continue.");
+      if (await adminHandler({ req, res, path, url, method, user })) return;
+      if (await characterHandler({ req, res, path, url, method, user })) return;
       if (path === "/api/catalog" && method === "GET")
         return send(res, 200, { themes: THEMES, templates: TEMPLATES, instruments: INSTRUMENTS });
       if (path === "/api/auth/logout" && method === "POST") {
@@ -335,8 +360,8 @@ export function createApp({
       }
       if (path === "/api/events" && method === "GET") {
         const { rows } = await pool.query(
-          "SELECT e.*,m.role,(SELECT count(*)::int FROM memberships n WHERE n.event_id=e.id) AS member_count FROM events e JOIN memberships m ON m.event_id=e.id WHERE m.user_id=$1 ORDER BY e.updated_at DESC",
-          [user.id],
+          "SELECT e.*,CASE WHEN $2::boolean THEN 'superuser' ELSE m.role END AS role,(SELECT count(*)::int FROM memberships n WHERE n.event_id=e.id) AS member_count FROM events e LEFT JOIN memberships m ON m.event_id=e.id AND m.user_id=$1 WHERE $2::boolean OR m.user_id IS NOT NULL ORDER BY e.updated_at DESC",
+          [user.id, user.is_superuser],
         );
         return send(res, 200, { events: rows.map((row) => safeEvent(row)) });
       }
@@ -437,14 +462,14 @@ export function createApp({
             );
           const issuer = (
             await db.query(
-              "SELECT role FROM memberships WHERE event_id=$1 AND user_id=$2",
+              "SELECT u.is_superuser,u.is_disabled,m.role FROM users u LEFT JOIN memberships m ON m.user_id=u.id AND m.event_id=$1 WHERE u.id=$2",
               [ev.id, inv.created_by],
             )
           ).rows[0];
           if (
             !issuer ||
-            !managers.has(issuer.role) ||
-            (inv.role === "organizer" && issuer.role !== "owner")
+            !(!issuer.is_disabled && (issuer.is_superuser || managers.has(issuer.role))) ||
+            (inv.role === "organizer" && !issuer.is_superuser && issuer.role !== "owner")
           )
             fail(400, "This invitation is no longer available.");
           const existing = (
@@ -583,7 +608,7 @@ export function createApp({
           const role = input.role || "player";
           if (
             !["player", "staff", "organizer"].includes(role) ||
-            (role === "organizer" && event.role !== "owner")
+            (role === "organizer" && !canOwn(event))
           )
             fail(403, "You cannot invite that role.");
           const maxUses = positive(
@@ -632,7 +657,7 @@ export function createApp({
             )
           ).rows[0];
           if (!row) fail(404, "Invitation not found.");
-          if (row.role === "organizer" && event.role !== "owner")
+          if (row.role === "organizer" && !canOwn(event))
             fail(403, "Only the owner can revoke organizer invitations.");
           await db.query(
             "UPDATE invitations SET revoked_at=COALESCE(revoked_at,now()) WHERE id=$1 AND event_id=$2",
@@ -658,7 +683,7 @@ export function createApp({
           if (member.role === "owner")
             fail(403, "The event owner cannot be removed or demoted.");
           if (method === "PATCH") {
-            if (event.role !== "owner")
+            if (!canOwn(event))
               fail(403, "Only the event owner can change roles.");
             if (!["organizer", "staff", "player"].includes(input.role))
               fail(400, "Choose a valid membership role.");
@@ -680,7 +705,7 @@ export function createApp({
             if (
               target !== user.id &&
               (!managers.has(event.role) ||
-                (member.role === "organizer" && event.role !== "owner"))
+                (member.role === "organizer" && !canOwn(event)))
             )
               fail(403, "You cannot remove this member.");
             await db.query(

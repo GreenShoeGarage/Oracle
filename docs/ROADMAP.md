@@ -2,16 +2,16 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 1.4 · September 5, 2026
+Development roadmap · Planning revision: 1.5 · September 5, 2026
 
-Status: Batch 2 (v0.2.0) is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Local browser/API checks, PostgreSQL/Docker CI, the full remote staging workflow, and exact-commit production checks passed. The prior authenticated staging gap is closed. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batches 3–12 remain planned.
+Status: Batch 3 (v0.3.0, schema 4) is implemented and undergoing verification. Batch 2 remains the last verified deployment at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 4 is next; Batches 4–12 remain planned.
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
 
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
-The first complete adventure is targeted for v0.4. Player-to-player information exchanges arrive in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batch 1 and Batch 2 status are recorded below; Batches 3–12 remain planned.
+The first complete adventure is targeted for v0.4. Player-to-player information exchanges arrive in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–3 status are recorded below; Batches 4–12 remain planned.
 
 **Product commitments**
 
@@ -48,6 +48,12 @@ Implement basic player, organizer, and prop views; responsive layouts; collapsib
 Completion gate: The same test event can switch among all three themes without changing its rules or losing records. A new organizer can create, preview, export, and reimport a small event. Imported themes use strictly validated data and built-in visual/audio choices; arbitrary CSS, markup, scripts, formulas, and external asset URLs are rejected.
 
 **Batch 3 — v0.3: Characters, factions, and identity**
+
+Implementation status: Candidate v0.3.0 provides a four-step character creator, event factions, organizer approval/change requests, creation limits, prewritten assignment, public-field controls, private sheets, initial inventory, printable QR badges, camera/photo/manual lookup, badge rotation, retirement, and cross-event identity copies. Copies use destination attribute defaults and supported skills, with new identity/badge and no transferred faction, objectives, equipment, inventory, or approval. Badges require signed-in event access and never confer editing rights. Event-pack format 1 remains setup/briefing-only.
+
+This batch also provides an operator-provisioned project superuser, all-event management, account enable/disable, session revocation, and project audit history. Existing selected accounts retain their identity and password; an absent reserved account requires an operator-held secret to claim. No personal operator address or secret belongs in source. Additive migrations advance the database to schema 4; earlier binaries require incompatible schemas, so recover with a tested schema-4 roll-forward fix.
+
+Candidate source and local checks are in progress. The full remote staging journey and production release have not yet been verified for Batch 3; results will be recorded in [STATUS.md](STATUS.md). Batch 2's Chromium results are historical evidence, not a Batch 3 authenticated browser test. Scheduled backups remain open; physical-device and human field testing remain future gates.
 
 Build a guided character creator for name, portrait, optional pronouns, biography, affiliation, skills, starting equipment, and private objectives. Support organizer approval, freely created characters within event limits, and assignment of prewritten characters. Separate account identity from the fictional character.
 
@@ -169,4 +175,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next development batch: Batch 3 — characters, factions, and identity. Batch 2 is fully deployed; scheduled database backups remain a separate operational requirement. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next development batch after the active Batch 3 release: Batch 4 — first complete playable adventure. Batch 3 verification/deployment is in progress; scheduled database backups remain a separate operational requirement. Public branding uses ORACLE with the subtitle “LARP Field Kit.”

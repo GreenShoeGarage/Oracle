@@ -16,6 +16,17 @@ try {
     ),
   );
   await checkSchema(pool);
+  if (config.bootstrapSuperuserEmail) {
+    const { rows } = await pool.query(
+      "SELECT is_superuser,is_disabled FROM users WHERE email=$1",
+      [config.bootstrapSuperuserEmail],
+    );
+    console.log(JSON.stringify({
+      event: "superuser_status",
+      accountExists: Boolean(rows[0]),
+      enabled: rows[0]?.is_superuser === true && rows[0]?.is_disabled === false,
+    }));
+  }
   const server = createServer(
     { requestTimeout: 30000, headersTimeout: 10000, maxHeaderSize: 16384 },
     createApp({ pool, config }),

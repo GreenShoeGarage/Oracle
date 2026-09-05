@@ -1,5 +1,5 @@
-export const VERSION = "0.2.0";
-export const SCHEMA_VERSION = 2;
+export const VERSION = "0.3.0";
+export const SCHEMA_VERSION = 4;
 export function readConfig(env = process.env) {
   const production = env.NODE_ENV === "production";
   const port = Number(env.PORT || 3000);
@@ -25,6 +25,18 @@ export function readConfig(env = process.env) {
     );
   if (env.DATABASE_SSL && !["require", "disable"].includes(env.DATABASE_SSL))
     throw new Error("DATABASE_SSL must be require or disable.");
+  const bootstrapSuperuserEmail = (env.BOOTSTRAP_SUPERUSER_EMAIL || "")
+    .trim()
+    .toLowerCase();
+  if (
+    bootstrapSuperuserEmail &&
+    (bootstrapSuperuserEmail.length > 254 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bootstrapSuperuserEmail))
+  )
+    throw new Error("BOOTSTRAP_SUPERUSER_EMAIL must be a valid email address.");
+  const bootstrapSetupToken = env.BOOTSTRAP_SUPERUSER_SETUP_TOKEN || "";
+  if (bootstrapSetupToken && (!bootstrapSuperuserEmail || bootstrapSetupToken.length < 32 || bootstrapSetupToken.length > 512))
+    throw new Error("BOOTSTRAP_SUPERUSER_SETUP_TOKEN requires a reserved email and 32–512 characters.");
   return {
     deploymentCommit: env.RAILWAY_GIT_COMMIT_SHA || null,
     port,
@@ -34,6 +46,8 @@ export function readConfig(env = process.env) {
     ssl: env.DATABASE_SSL === "require",
     appEnv: env.APP_ENV || (production ? "production" : "development"),
     registrationEnabled: env.REGISTRATION_ENABLED !== "false",
+    bootstrapSuperuserEmail,
+    bootstrapSetupToken,
     cookieName: production ? "__Host-oracle_session" : "oracle_session",
   };
 }

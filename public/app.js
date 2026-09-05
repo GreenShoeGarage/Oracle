@@ -1,5 +1,7 @@
 "use strict";
 import { createKitUI } from "./builder.js";
+import { createCharacterUI } from "./characters-ui.js";
+import { createAdminUI } from "./admin-ui.js";
 const app = document.querySelector("#app");
 const modal = document.querySelector("#modal");
 const modalContent = document.querySelector("#modal-content");
@@ -30,10 +32,13 @@ const date = (v) =>
         timeStyle: "short",
       })
     : "Not scheduled";
-const isManager = () => ["owner", "organizer"].includes(state.event?.role);
+const isManager = () => state.session?.user?.isSuperuser || ["owner", "organizer", "superuser"].includes(state.event?.role);
+const isOwner = () => state.session?.user?.isSuperuser || ["owner", "superuser"].includes(state.event?.role);
 const badge = (v) => `<span class="badge ${esc(v)}">${esc(v)}</span>`;
 const err = '<p class="error" role="alert"></p>';
 const kit = createKitUI({ state, api, shell, esc: (v) => esc(v), openModal, closeModal, loadEvent, toast, isManager, err: '<p class="error" role="alert"></p>', render });
+const characters = createCharacterUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, isOwner, err, render });
+const admin = createAdminUI({ state, api, shell, esc, openModal, closeModal, toast, err, render });
 function toast(message) {
   const el = document.querySelector("#notice");
   clearTimeout(noticeTimer);
@@ -54,6 +59,9 @@ async function api(path, method = "GET", data) {
   if (!response.ok) {
     if (response.status === 401 && state.session?.user) {
       state.session.user = null;
+      state.event = null;
+      state.events = [];
+      closeModal(true);
       render();
     }
     throw new Error(result.error || "Request failed. Please try again.");
@@ -65,7 +73,8 @@ function openModal(heading, content) {
   if (!modal.open) modal.showModal();
 }
 function closeModal(force = false) {
-  if (!force && !kit.confirmDiscard()) return;
+  if (!force && (!kit.confirmDiscard() || !characters.confirmDiscard())) return;
+  characters.cleanupModal();
   if (force) kit.resetDraft();
   modal.classList.remove("wide-modal");
   modal.close();
@@ -83,15 +92,17 @@ function setError(form, error) {
 function auth() {
   kit.apply();
   const signup = state.authMode === "register";
-  app.innerHTML = `<div class="auth-wrap"><section class="auth-intro"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><h1>Bring your people<br>into the story.</h1><p>Prepare an event, assemble your crew, and give your next world a place to begin.</p><p class="auth-footer">Green Shoe Garage · v${esc(state.session?.version || "0.2.0")}</p></section><main id="main" class="auth-form"><p class="eyebrow">Your field kit</p><h2>${signup ? "Create your account" : "Welcome back"}</h2><p>${signup ? "One account. A place in every world you join." : "Sign in to open your events."}</p><form id="auth-form">${err}${signup ? '<div><label for="displayName">Display name</label><input id="displayName" name="displayName" minlength="2" maxlength="80" required autocomplete="nickname"><p class="hint">Shown to the people in your events.</p></div>' : ""}<div><label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"></div><div><label for="password">Password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" required autocomplete="${signup ? "new-password" : "current-password"}">${signup ? '<p class="hint">At least 12 characters. A passphrase works well.</p>' : ""}</div><button class="primary" type="submit">${signup ? "Create account" : "Sign in"}</button></form>${state.session?.registrationEnabled ? `<button class="switch" data-action="auth-switch">${signup ? "Already have an account? Sign in" : "New to ORACLE? Create an account"}</button>` : ""}<p class="auth-footer">${state.session?.environment === "staging" ? "Staging environment — use test accounts and events." : "Your email is kept private. Events are visible to their members."}</p></main></div>`;
+  app.innerHTML = `<div class="auth-wrap"><section class="auth-intro"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><h1>Bring your people<br>into the story.</h1><p>Prepare an event, assemble your crew, and give your next world a place to begin.</p><p class="auth-footer">Green Shoe Garage · v${esc(state.session?.version || "0.3.0")}</p></section><main id="main" class="auth-form"><p class="eyebrow">Your field kit</p><h2>${signup ? "Create your account" : "Welcome back"}</h2><p>${signup ? "One account. A place in every world you join." : "Sign in to open your events."}</p><form id="auth-form">${err}${signup ? '<div><label for="displayName">Display name</label><input id="displayName" name="displayName" minlength="2" maxlength="80" required autocomplete="nickname"><p class="hint">Shown to the people in your events.</p></div>' : ""}<div><label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"></div><div><label for="password">Password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" required autocomplete="${signup ? "new-password" : "current-password"}">${signup ? '<p class="hint">At least 12 characters. A passphrase works well.</p>' : ""}</div>${signup ? '<details><summary>Have an operator setup code?</summary><label for="setupCode">Operator setup code</label><input id="setupCode" name="setupCode" type="password" maxlength="512" autocomplete="off"><p class="hint">Only needed for an account reserved by the project operator.</p></details>' : ""}<button class="primary" type="submit">${signup ? "Create account" : "Sign in"}</button></form>${state.session?.registrationEnabled ? `<button class="switch" data-action="auth-switch">${signup ? "Already have an account? Sign in" : "New to ORACLE? Create an account"}</button>` : ""}<p class="auth-footer">${state.session?.environment === "staging" ? "Staging environment — use test accounts and events." : "Your email is kept private. Events are visible to their members."}</p></main></div>`;
 }
 function shell(content) {
-  app.innerHTML = `${!navigator.onLine ? '<div class="offline-banner">You are offline. Changes need a connection in this release.</div>' : ""}<div class="layout"><aside class="sidebar"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><nav aria-label="Main navigation"><button class="nav-button ${state.view !== "account" ? "active" : ""}" data-action="events">My events</button><button class="nav-button ${state.view === "account" ? "active" : ""}" data-action="account">Account</button></nav><div class="sidebar-footer"><div><p class="account-name">${esc(state.session.user.displayName)}</p><p class="version">ORACLE / v${esc(state.session.version)}</p></div><button class="quiet" data-action="logout">Sign out</button></div></aside><main class="workspace" id="main"><div class="topbar"><button class="quiet menu-toggle" data-action="kit-collapse" aria-label="Toggle navigation" aria-expanded="true">☰ Menu</button><span class="eyebrow">Green Shoe Garage / Field instruments</span>${kit.controls()}${state.session.environment !== "production" ? `<span class="environment">${esc(state.session.environment)}</span>` : ""}</div>${content}</main></div>`;
+  app.innerHTML = `${!navigator.onLine ? '<div class="offline-banner">You are offline. Changes need a connection in this release.</div>' : ""}<div class="layout"><aside class="sidebar"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><nav aria-label="Main navigation"><button class="nav-button ${!["account", "admin"].includes(state.view) ? "active" : ""}" data-action="events">${state.session.user.isSuperuser ? "All events" : "My events"}</button><button class="nav-button ${state.view === "account" ? "active" : ""}" data-action="account">Account</button>${state.session.user.isSuperuser ? `<button class="nav-button ${state.view === "admin" ? "active" : ""}" data-action="admin-open">Administration</button>` : ""}</nav><div class="sidebar-footer"><div><p class="account-name">${esc(state.session.user.displayName)}</p>${state.session.user.isSuperuser ? '<p class="hint">Project superuser</p>' : ""}<p class="version">ORACLE / v${esc(state.session.version)}</p></div><button class="quiet" data-action="logout">Sign out</button></div></aside><main class="workspace" id="main"><div class="topbar"><button class="quiet menu-toggle" data-action="kit-collapse" aria-label="Toggle navigation" aria-expanded="true">☰ Menu</button><span class="eyebrow">Green Shoe Garage / Field instruments</span>${kit.controls()}${state.session.environment !== "production" ? `<span class="environment">${esc(state.session.environment)}</span>` : ""}</div>${content}</main></div>`;
   kit.apply();
 }
 function render() {
   if (!state.session?.user) return auth();
   if (state.view === "account") return account();
+  if (state.view === "admin") return admin.render();
+  if (state.view === "characters" && state.event) return characters.render();
   if (state.view === "detail" && state.event) return detail();
   events();
 }
@@ -100,17 +111,20 @@ function events() {
     ["live", "paused", "rehearsal"].includes(x.status),
   ).length;
   shell(
-    `<header class="page-head"><div><p class="eyebrow">Event workspace</p><h1>Your worlds, ready to begin.</h1><p class="muted">Open an event to prepare your crew and manage the day.</p></div><div class="actions"><button data-action="kit-import">Import event pack</button><button data-action="join">Join an event</button><button class="primary" data-action="create">+ Create event</button></div></header><div class="summary"><div><strong>${state.events.length}</strong><span>events</span></div><div><strong>${active}</strong><span>in rehearsal or running</span></div><div><strong>${state.events.filter((x) => ["owner", "organizer"].includes(x.role)).length}</strong><span>you organize</span></div></div>${state.events.length ? `<div class="cards">${state.events.map((ev) => `<button class="event-card" data-action="open-event" data-id="${esc(ev.id)}"><div class="card-top">${badge(ev.status)}<span class="role">${esc(ev.role)}</span></div><div><h2>${esc(ev.name)}</h2><p class="hint">${esc(ev.location || "Location to be decided")}</p></div><p class="description">${esc(ev.description || "A new event, ready for its story.")}</p><div class="card-bottom"><span>${ev.member_count} ${ev.member_count === 1 ? "member" : "members"}</span><span>${ev.starts_at ? esc(new Date(ev.starts_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })) : "Open event →"}</span></div></button>`).join("")}</div>` : `<section class="empty"><div class="number">01 / Assemble your crew</div><h2>Every world starts somewhere.</h2><p>Create your first event, or enter an invitation code from your organizer. Your events will appear here.</p><div class="actions"><button class="primary" data-action="create">Create your first event</button><button data-action="join">I have an invitation</button></div></section>`}<p class="footer-note">Only events you belong to appear here.</p>`,
+    `<header class="page-head"><div><p class="eyebrow">Event workspace</p><h1>Your worlds, ready to begin.</h1><p class="muted">Open an event to prepare your crew and manage the day.</p></div><div class="actions"><button data-action="kit-import">Import event pack</button><button data-action="join">Join an event</button><button class="primary" data-action="create">+ Create event</button></div></header><div class="summary"><div><strong>${state.events.length}</strong><span>events</span></div><div><strong>${active}</strong><span>in rehearsal or running</span></div><div><strong>${state.events.filter((x) => ["owner", "organizer", "superuser"].includes(x.role)).length}</strong><span>you organize</span></div></div>${state.events.length ? `<div class="cards">${state.events.map((ev) => `<button class="event-card" data-action="open-event" data-id="${esc(ev.id)}"><div class="card-top">${badge(ev.status)}<span class="role">${esc(ev.role)}</span></div><div><h2>${esc(ev.name)}</h2><p class="hint">${esc(ev.location || "Location to be decided")}</p></div><p class="description">${esc(ev.description || "A new event, ready for its story.")}</p><div class="card-bottom"><span>${ev.member_count} ${ev.member_count === 1 ? "member" : "members"}</span><span>${ev.starts_at ? esc(new Date(ev.starts_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })) : "Open event →"}</span></div></button>`).join("")}</div>` : `<section class="empty"><div class="number">01 / Assemble your crew</div><h2>Every world starts somewhere.</h2><p>Create your first event, or enter an invitation code from your organizer. Your events will appear here.</p><div class="actions"><button class="primary" data-action="create">Create your first event</button><button data-action="join">I have an invitation</button></div></section>`}<p class="footer-note">${state.session.user.isSuperuser ? "Your superuser access includes every event." : "Only events you belong to appear here."}</p>`,
   );
 }
 function detail() {
   if (isManager() && kit.isOrganizerView()) { organizerDetail(); kit.enhanceOrganizer(); }
   else kit.renderPlayer();
+  if (document.documentElement.dataset.prop !== "true") {
+    document.querySelector(".workspace .page-head")?.insertAdjacentHTML("afterend", '<section class="panel character-entry"><div class="panel-head"><div><h2>Characters & identity</h2><p class="hint">Create your character, open your sheet, and exchange public badges.</p></div><button class="primary" data-action="character-open">Characters</button></div></section>');
+  }
 }
 function organizerDetail() {
   const ev = state.event;
   shell(
-    `<div class="actions"><button class="quiet" data-action="events">← My events</button></div><header class="page-head mt"><div><p class="eyebrow">${esc(ev.role)} workspace</p><h1>${esc(ev.name)}</h1><p>${badge(ev.status)} <span class="role">${state.members.length} ${state.members.length === 1 ? "member" : "members"}</span></p></div><div class="actions"><button data-action="refresh-event">Refresh</button>${isManager() && !["ended", "archived"].includes(ev.status) ? '<button class="primary" data-action="invite">Invite people</button>' : ""}</div></header><div class="detail-grid"><div class="stack"><section class="panel"><div class="panel-head"><h2>Event briefing</h2>${isManager() && ev.status !== "archived" ? '<button class="quiet" data-action="edit-event">Edit details</button>' : ""}</div><p class="prose">${esc(ev.description || "Your organizer has not added a briefing yet.")}</p><dl class="facts"><div><dt>Location</dt><dd>${esc(ev.location || "To be decided")}</dd></div><div><dt>Starts</dt><dd>${esc(date(ev.starts_at))}</dd></div></dl></section><section class="panel"><div class="panel-head"><h2>People</h2><span class="muted">${state.members.length}</span></div><ul class="member-list">${state.members.map((m) => `<li><div><p>${esc(m.display_name)}${m.user_id === state.session.user.id ? ' <span class="muted">(you)</span>' : ""}</p><span class="role">${esc(m.role)}</span></div><div class="actions">${ev.role === "owner" && m.role !== "owner" ? `<button data-action="role" data-id="${esc(m.user_id)}">Change role</button>` : ""}${m.role !== "owner" && ((isManager() && (m.role !== "organizer" || ev.role === "owner")) || m.user_id === state.session.user.id) ? `<button class="quiet danger" data-action="remove-member" data-id="${esc(m.user_id)}">${m.user_id === state.session.user.id ? "Leave" : "Remove"}</button>` : ""}</div></li>`).join("")}</ul></section></div><div class="stack"><section class="panel"><h2>Event status</h2><div class="lifecycle">${["draft", "rehearsal", "live", "paused", "ended", "archived"].map((x) => `<span class="${x === ev.status ? "current" : ""}">${title(x)}</span>`).join("")}</div><p class="hint">${esc({ draft: "Prepare your event and invite your crew.", rehearsal: "Practice the event flow before opening play.", live: "Your event is running.", paused: "Play is paused. Members can still read the briefing.", ended: "Play has finished. Existing members retain access.", archived: "This event is kept as a read-only record." }[ev.status])}</p>${isManager() ? `<div class="actions mt">${state.transitions.map((s) => `<button class="${s === "live" ? "primary" : ""}" data-action="status" data-status="${s}">${{ rehearsal: "Start rehearsal", draft: "Return to draft", live: ev.status === "paused" ? "Resume event" : "Go live", paused: "Pause event", ended: "End event", archived: "Archive event" }[s]}</button>`).join("")}</div>` : ""}</section>${isManager() ? '<section class="panel"><h2>Organizer tools</h2><p class="hint">Manage access and review changes to this event.</p><div class="actions mt"><button data-action="invitations">Invitation codes</button><button data-action="audit">Activity log</button></div></section>' : '<section class="panel"><h2>Your place in the event</h2><p class="hint">Your organizer controls event details and access. Use your character name as your display name if you prefer.</p></section>'}</div></div>`,
+    `<div class="actions"><button class="quiet" data-action="events">← My events</button></div><header class="page-head mt"><div><p class="eyebrow">${esc(ev.role)} workspace</p><h1>${esc(ev.name)}</h1><p>${badge(ev.status)} <span class="role">${state.members.length} ${state.members.length === 1 ? "member" : "members"}</span></p></div><div class="actions"><button data-action="refresh-event">Refresh</button>${isManager() && !["ended", "archived"].includes(ev.status) ? '<button class="primary" data-action="invite">Invite people</button>' : ""}</div></header><div class="detail-grid"><div class="stack"><section class="panel"><div class="panel-head"><h2>Event briefing</h2>${isManager() && ev.status !== "archived" ? '<button class="quiet" data-action="edit-event">Edit details</button>' : ""}</div><p class="prose">${esc(ev.description || "Your organizer has not added a briefing yet.")}</p><dl class="facts"><div><dt>Location</dt><dd>${esc(ev.location || "To be decided")}</dd></div><div><dt>Starts</dt><dd>${esc(date(ev.starts_at))}</dd></div></dl></section><section class="panel"><div class="panel-head"><h2>People</h2><span class="muted">${state.members.length}</span></div><ul class="member-list">${state.members.map((m) => `<li><div><p>${esc(m.display_name)}${m.user_id === state.session.user.id ? ' <span class="muted">(you)</span>' : ""}</p><span class="role">${esc(m.role)}</span></div><div class="actions">${isOwner() && m.role !== "owner" ? `<button data-action="role" data-id="${esc(m.user_id)}">Change role</button>` : ""}${m.role !== "owner" && ((isManager() && (m.role !== "organizer" || isOwner())) || m.user_id === state.session.user.id) ? `<button class="quiet danger" data-action="remove-member" data-id="${esc(m.user_id)}">${m.user_id === state.session.user.id ? "Leave" : "Remove"}</button>` : ""}</div></li>`).join("")}</ul></section></div><div class="stack"><section class="panel"><h2>Event status</h2><div class="lifecycle">${["draft", "rehearsal", "live", "paused", "ended", "archived"].map((x) => `<span class="${x === ev.status ? "current" : ""}">${title(x)}</span>`).join("")}</div><p class="hint">${esc({ draft: "Prepare your event and invite your crew.", rehearsal: "Practice the event flow before opening play.", live: "Your event is running.", paused: "Play is paused. Members can still read the briefing.", ended: "Play has finished. Existing members retain access.", archived: "This event is kept as a read-only record." }[ev.status])}</p>${isManager() ? `<div class="actions mt">${state.transitions.map((s) => `<button class="${s === "live" ? "primary" : ""}" data-action="status" data-status="${s}">${{ rehearsal: "Start rehearsal", draft: "Return to draft", live: ev.status === "paused" ? "Resume event" : "Go live", paused: "Pause event", ended: "End event", archived: "Archive event" }[s]}</button>`).join("")}</div>` : ""}</section>${isManager() ? '<section class="panel"><h2>Organizer tools</h2><p class="hint">Manage access and review changes to this event.</p><div class="actions mt"><button data-action="invitations">Invitation codes</button><button data-action="audit">Activity log</button></div></section>' : '<section class="panel"><h2>Your place in the event</h2><p class="hint">Your organizer controls event details and access. Use your character name as your display name if you prefer.</p></section>'}</div></div>`,
   );
 }
 function account() {
@@ -123,6 +137,7 @@ async function loadEvents() {
   state.view = "events";
   state.event = null;
   render();
+  await characters.handleHash();
 }
 async function loadEvent(id) {
   const result = await api(`/api/events/${id}`);
@@ -154,7 +169,7 @@ function joinForm() {
 function inviteForm() {
   openModal(
     "Invite people",
-    `<form id="invite-form">${err}<div><label for="role">Join as</label><select id="role" name="role"><option value="player">Player — view the event</option><option value="staff">Staff — join the event crew</option>${state.event.role === "owner" ? '<option value="organizer">Organizer — manage this event</option>' : ""}</select><p class="hint">Staff tools will expand as event instruments are added. Staff and organizer codes admit one person.</p></div><div class="two-fields"><div><label for="maxUses">Maximum people</label><input id="maxUses" name="maxUses" type="number" min="1" max="1000" value="20" required></div><div><label for="expiresInHours">Expires in hours</label><input id="expiresInHours" name="expiresInHours" type="number" min="1" max="168" value="48" required></div></div><button class="primary" type="submit">Create invitation code</button></form>`,
+    `<form id="invite-form">${err}<div><label for="role">Join as</label><select id="role" name="role"><option value="player">Player — view the event</option><option value="staff">Staff — join the event crew</option>${isOwner() ? '<option value="organizer">Organizer — manage this event</option>' : ""}</select><p class="hint">Staff tools will expand as event instruments are added. Staff and organizer codes admit one person.</p></div><div class="two-fields"><div><label for="maxUses">Maximum people</label><input id="maxUses" name="maxUses" type="number" min="1" max="1000" value="20" required></div><div><label for="expiresInHours">Expires in hours</label><input id="expiresInHours" name="expiresInHours" type="number" min="1" max="168" value="48" required></div></div><button class="primary" type="submit">Create invitation code</button></form>`,
   );
 }
 function confirmModal(heading, message, action, attributes, label) {
@@ -164,6 +179,8 @@ function confirmModal(heading, message, action, attributes, label) {
   );
 }
 async function action(button) {
+  if (await characters.action(button)) return;
+  if (await admin.action(button)) return;
   if (await kit.action(button)) return;
   const id = button.dataset.id;
   switch (button.dataset.action) {
@@ -186,7 +203,7 @@ async function action(button) {
       state.session.user = null;
       state.events = [];
       state.event = null;
-      closeModal();
+      closeModal(true);
       render();
       break;
     case "create":
@@ -284,7 +301,7 @@ async function action(button) {
       );
       openModal(
         "Invitation codes",
-        `<p class="hint">Codes are shown only when created. Revoke access here or create a new code.</p>${err}<ul class="invite-list">${invitations.length ? invitations.map((i) => `<li><div class="card-top"><strong>${esc(title(i.role))}</strong>${!i.revoked_at && new Date(i.expires_at) > new Date() && i.uses < i.max_uses && (state.event.role === "owner" || i.role !== "organizer") ? `<button class="quiet danger" data-action="revoke" data-id="${esc(i.id)}">Revoke</button>` : ""}</div><p class="hint">${i.uses}/${i.max_uses} used · ${i.revoked_at ? "Revoked" : new Date(i.expires_at) <= new Date() ? "Expired" : `Expires ${esc(date(i.expires_at))}`}</p></li>`).join("") : "<li>No invitation codes yet.</li>"}</ul>`,
+        `<p class="hint">Codes are shown only when created. Revoke access here or create a new code.</p>${err}<ul class="invite-list">${invitations.length ? invitations.map((i) => `<li><div class="card-top"><strong>${esc(title(i.role))}</strong>${!i.revoked_at && new Date(i.expires_at) > new Date() && i.uses < i.max_uses && (isOwner() || i.role !== "organizer") ? `<button class="quiet danger" data-action="revoke" data-id="${esc(i.id)}">Revoke</button>` : ""}</div><p class="hint">${i.uses}/${i.max_uses} used · ${i.revoked_at ? "Revoked" : new Date(i.expires_at) <= new Date() ? "Expired" : `Expires ${esc(date(i.expires_at))}`}</p></li>`).join("") : "<li>No invitation codes yet.</li>"}</ul>`,
       );
       break;
     }
@@ -350,6 +367,8 @@ document.addEventListener("submit", async (e) => {
   const error = form.querySelector(".error");
   if (error) error.textContent = "";
   try {
+    if (await characters.submit(form)) return;
+    if (await admin.submit(form)) return;
     if (await kit.submit(form)) return;
     switch (form.id) {
       case "auth-form": {
@@ -420,6 +439,7 @@ document.addEventListener("submit", async (e) => {
     submit.disabled = false;
   }
 });
+window.addEventListener("hashchange", () => { characters.handleHash().catch((error) => toast(error.message)); });
 modal.addEventListener("cancel", (e) => { e.preventDefault(); closeModal(); });
 window.addEventListener("offline", () => {
   render();
