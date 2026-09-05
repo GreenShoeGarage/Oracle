@@ -8,10 +8,11 @@ import { migrate, checkSchema } from "../src/db.js";
 import { createApp } from "../src/app.js";
 import { readConfig } from "../src/config.js";
 import { defaultSetup, THEMES } from "../public/kit.js";
+import { defaultCharacterProfile } from "../public/characters-model.js";
 
 let database, pool, server, origin;
 const users = {};
-const legacy = { user: randomUUID(), event: randomUUID(), invitation: randomUUID() };
+const legacy = { user: randomUUID(), event: randomUUID(), invitation: randomUUID(), faction: randomUUID(), character: randomUUID(), inventory: randomUUID() };
 const secret = "ORGANIZER SECRET: the archivist is the missing heir.";
 const pass = "Batch two test passphrase!";
 async function request(path, method = "GET", data, who, headers = {}) {
@@ -74,6 +75,21 @@ before(async () => {
   await pool.query("INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'owner')", [legacy.event, legacy.user]);
   await pool.query("INSERT INTO invitations(id,event_id,token_hash,role,created_by,max_uses,expires_at) VALUES($1,$2,'original-token-hash','player',$3,3,now()+interval '1 day')", [legacy.invitation, legacy.event, legacy.user]);
   await pool.query("INSERT INTO audit_entries(event_id,actor_id,action,details) VALUES($1,$2,'event.created','{}')", [legacy.event, legacy.user]);
+  // Preserve a populated deployed Batch 3 state through the new migration,
+  // while the assertions below continue checking the original Batch 1 data.
+  for (const name of ["002_event_setup.sql", "003_superuser.sql", "004_characters.sql"]) {
+    const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
+    await pool.query(sql);
+    await pool.query("INSERT INTO schema_migrations(version,name,checksum) VALUES($1,$2,$3)", [Number(name.slice(0, 3)), name, createHash("sha256").update(sql).digest("hex")]);
+  }
+  await pool.query("INSERT INTO event_character_settings(event_id,max_per_player,version) VALUES($1,2,3)", [legacy.event]);
+  await pool.query("INSERT INTO factions(id,event_id,name,description) VALUES($1,$2,'Existing guild','Existing faction description')", [legacy.faction, legacy.event]);
+  const profile = { ...defaultCharacterProfile(), name: "Existing approved character", factionId: legacy.faction, privateObjectives: "Existing private objective", startingEquipment: [{ name: "Existing lantern", quantity: 3, notes: "Original allocation" }] };
+  await pool.query("INSERT INTO characters(id,event_id,user_id,status,profile,badge_code,review_notes,inventory_initialized,version) VALUES($1,$2,$3,'approved',$4,'ABCDEFGHJKLMNPQRSTUV','Existing review',true,8)", [legacy.character, legacy.event, legacy.user, JSON.stringify(profile)]);
+  await pool.query("INSERT INTO character_inventory(id,event_id,character_id,name,quantity,notes,version) VALUES($1,$2,$3,'Existing lantern',1,'Already consumed two',4)", [legacy.inventory, legacy.event, legacy.character]);
+  legacy.tables = {};
+  for (const table of ["event_character_settings", "factions", "characters", "character_inventory"])
+    legacy.tables[table] = (await pool.query(`SELECT * FROM ${table} WHERE event_id=$1`, [legacy.event])).rows;
   await migrate(pool);
   let handler;
   server = createServer((req, res) => handler(req, res));
@@ -92,9 +108,9 @@ after(async () => {
   if (database) await database.close();
 });
 
-test("Batch 1 to Batch 3 migration preserves event identity, lifecycle, membership, invitations and audit", async () => {
-  assert.equal(await migrate(pool), 4);
-  assert.equal(await checkSchema(pool), 4);
+test("Batch 1 to Batch 4 migration preserves event identity, lifecycle, membership, invitations and audit", async () => {
+  assert.equal(await migrate(pool), 5);
+  assert.equal(await checkSchema(pool), 5);
   const event = (await pool.query("SELECT * FROM events WHERE id=$1", [legacy.event])).rows[0];
   assert.equal(event.name, "Existing live event");
   assert.equal(event.description, "Original description");
@@ -111,7 +127,13 @@ test("Batch 1 to Batch 3 migration preserves event identity, lifecycle, membersh
   assert.equal(user.password_hash, "existing-hash");
   assert.equal(user.is_superuser, false);
   assert.equal(user.is_disabled, false);
-  assert.deepEqual((await pool.query("SELECT version FROM schema_migrations ORDER BY version")).rows.map((row) => row.version), [1, 2, 3, 4]);
+  assert.deepEqual((await pool.query("SELECT version FROM schema_migrations ORDER BY version")).rows.map((row) => row.version), [1, 2, 3, 4, 5]);
+});
+
+test("Batch 3 character identities, approval, private sheets, inventory and settings survive Batch 4 migration", async () => {
+  for (const [table, before] of Object.entries(legacy.tables))
+    assert.deepEqual((await pool.query(`SELECT * FROM ${table} WHERE event_id=$1`, [legacy.event])).rows, before, `${table} must survive the additive adventure migration unchanged.`);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM event_adventures WHERE event_id=$1", [legacy.event])).rows[0].n, 0, "Existing events must not silently acquire a starter adventure.");
 });
 
 test("catalog requires authentication and theme module is served under the script CSP", async () => {
@@ -233,7 +255,7 @@ test("invalid or future event packs cannot create or overwrite records", async (
     (p) => { p.event.status = "live"; },
     (p) => { p.memberships = [{ user_id: users.owner.id, role: "owner" }]; },
     (p) => { p.setup.theme.script = "alert(1)"; },
-    (p) => { p.setup.enabledInstruments = ["relic"]; },
+    (p) => { p.setup.enabledInstruments = ["trace"]; },
   ]) {
     const invalid = structuredClone(pack); mutate(invalid);
     const result = await request("/api/events/import", "POST", { pack: invalid }, users.outsider);

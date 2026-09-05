@@ -54,12 +54,19 @@ try {
     await delay(500);
   }
   assert.ok(ready, "Built production image must become ready.");
-  for (const path of ["/", "/app.js", "/builder.js", "/kit.js", "/characters-model.js", "/characters-ui.js", "/admin-ui.js", "/qr.js", "/vendor/qrcode-generator-2.0.4.js", "/vendor/jsqr-1.4.0.js", "/style.css", "/themes.css", "/api/session"]) {
+  for (const path of [
+    "/", "/app.js", "/builder.js", "/kit.js", "/characters-model.js", "/characters-ui.js", "/admin-ui.js",
+    "/adventure-model.js", "/adventure-player.js", "/adventure-organizer.js", "/prop-code.js", "/offline.js", "/sw.js",
+    "/qr.js", "/vendor/qrcode-generator-2.0.4.js", "/vendor/jsqr-1.4.0.js",
+    "/style.css", "/themes.css", "/adventure.css", "/adventure-organizer.css", "/api/session",
+  ]) {
     const response = await fetch(`http://127.0.0.1:3000${path}`);
     assert.equal(response.status, 200, path);
     if (path.endsWith(".js")) assert.match(response.headers.get("content-type") || "", /^text\/javascript\b/, `${path} must be served as JavaScript.`);
     if (path.endsWith(".css")) assert.match(response.headers.get("content-type") || "", /^text\/css\b/, `${path} must be served as CSS.`);
   }
+  for (const path of ["/adventure-templates.js", "/src/adventure-templates.js"])
+    assert.equal((await fetch(`http://127.0.0.1:3000${path}`)).status, 404, "Server-only starter solutions must never be served as public assets.");
   const response = await fetch("http://127.0.0.1:3000/api/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: origin },

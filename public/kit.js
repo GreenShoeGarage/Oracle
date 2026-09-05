@@ -132,7 +132,7 @@ export function validateSetup(value) {
   return size({
     version: version(value.version, "Event setup"), theme: validateTheme(value.theme),
     templateId: id(value.templateId, "Template identifier"),
-    enabledInstruments: list(value.enabledInstruments, 1, "Enabled instruments", (item) => choice(item, ["briefing"], "Instrument")),
+    enabledInstruments: list(value.enabledInstruments, 5, "Enabled instruments", (item) => choice(item, ["briefing", "relic", "dead-drop", "cipherbox", "wayfinder"], "Instrument")),
     rules: rules(value.rules),
     content: list(value.content, 20, "Briefing content", (item) => {
       record(item, ["id", "title", "body", "visibility", "prop"], "Briefing entry");
@@ -168,7 +168,7 @@ export const INSTRUMENTS = [
     ["wayfinder", "WAYFINDER"], ["trace", "TRACE"], ["whisper", "WHISPER"],
     ["broadside", "BROADSIDE"], ["bazaar", "BAZAAR"], ["oathbook", "OATHBOOK"],
     ["sigil", "SIGIL"], ["static", "STATIC"], ["stagehand", "STAGEHAND"],
-  ].map(([id, name]) => ({ id, name, available: false })),
+  ].map(([id, name]) => ({ id, name, available: ["relic", "dead-drop", "cipherbox", "wayfinder"].includes(id) })),
 ];
 const emptyRules = () => ({ version: 1, attributes: [], expertise: [], resources: [], outcomes: [] });
 const baseSetup = (themeId, templateId) => ({ version: 1, theme: clone(THEMES.find((theme) => theme.id === themeId)), templateId, enabledInstruments: ["briefing"], rules: emptyRules(), content: [] });

@@ -8,6 +8,7 @@ import { createPool, migrate, transaction } from "../src/db.js";
 import { digest } from "../src/security.js";
 import { defaultSetup } from "../public/kit.js";
 import { defaultCharacterProfile } from "../public/characters-model.js";
+import { defaultAdventure, defaultAdventureNode, validateAdventure } from "../public/adventure-model.js";
 const sourceUrl = new URL(process.env.TEST_DATABASE_URL || "");
 const targetUrl = new URL(process.env.RESTORE_DATABASE_URL || "");
 for (const url of [sourceUrl, targetUrl])
@@ -68,11 +69,12 @@ try {
     "Restore database already exists; choose a fresh name.",
   );
   // The last integration suite can leave the new tables empty. Seed a complete
-  // fictional Batch 3 record in this already-validated disposable database so
-  // the dump/restore gate checks actual character and administrator data.
+  // fictional record in this already-validated disposable database so the
+  // dump/restore gate checks actual character, administrator and adventure data.
   await migrate(source);
   const fixture = { user: randomUUID(), event: randomUUID(), faction: randomUUID(), character: randomUUID(), item: randomUUID() };
   const setup = defaultSetup("fantasy", "council");
+  setup.enabledInstruments = ["briefing", "relic", "wayfinder"];
   const profile = {
     ...defaultCharacterProfile(setup.rules), name: "Recovery rehearsal character", factionId: fixture.faction,
     privateObjectives: "A fictional secret that must survive database recovery.",
@@ -80,15 +82,36 @@ try {
   };
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const badge = [...randomBytes(20)].map((byte) => alphabet[byte % alphabet.length]).join("");
+  const propCode = () => [...randomBytes(20)].map((byte) => alphabet[byte % alphabet.length]).join("");
+  const relic = defaultAdventureNode("relic", "recovery-relic", propCode());
+  relic.actions.success = ["recovered"];
+  relic.examinations[0].text = "An authorized private reading preserved through database recovery.";
+  const scene = defaultAdventureNode("wayfinder", "recovery-scene", propCode());
+  scene.conditions.completed = [relic.id];
+  scene.conditions.flags = ["recovered"];
+  const definition = validateAdventure({ ...defaultAdventure(), title: "Recovery adventure", organizerNotes: "Preserve this private organizer plan.", flags: [{ id: "recovered", name: "Reading recovered" }], nodes: [relic, scene] }, setup);
+  const progress = {
+    [relic.id]: { completed: true, failed: false, attempts: 0, hints: [], examinations: [relic.examinations[0].id], lastAttemptAt: null },
+    [scene.id]: { completed: true, failed: false, attempts: 0, hints: [], examinations: [], lastAttemptAt: null },
+  };
+  const requestId = randomUUID();
+  const actionInput = { requestId, version: 1, characterId: fixture.character, nodeId: relic.id, kind: "examine", examId: relic.examinations[0].id, code: relic.code };
+  const payloadHash = digest(JSON.stringify({ override: false, input: Object.fromEntries(Object.keys(actionInput).sort().map((key) => [key, actionInput[key]])) }));
   await transaction(source, async (client) => {
     await client.query("INSERT INTO users(id,email,display_name,password_hash,is_superuser,is_disabled) VALUES($1,$2,'Recovery rehearsal','not-a-login-credential',true,true)", [fixture.user, `recovery-${fixture.user}@example.invalid`]);
-    await client.query("INSERT INTO events(id,owner_user_id,name,setup) VALUES($1,$2,'Recovery rehearsal event',$3)", [fixture.event, fixture.user, JSON.stringify(setup)]);
+    await client.query("INSERT INTO events(id,owner_user_id,name,setup,status) VALUES($1,$2,'Recovery rehearsal event',$3,'rehearsal')", [fixture.event, fixture.user, JSON.stringify(setup)]);
     await client.query("INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'owner')", [fixture.event, fixture.user]);
     await client.query("INSERT INTO event_character_settings(event_id,require_approval,max_per_player,public_fields,version) VALUES($1,true,2,'[\"pronouns\",\"faction\"]',3)", [fixture.event]);
     await client.query("INSERT INTO factions(id,event_id,name,description) VALUES($1,$2,'Recovery guild','Preserve this faction description.')", [fixture.faction, fixture.event]);
     await client.query("INSERT INTO characters(id,event_id,user_id,status,profile,badge_code,review_notes,inventory_initialized,version) VALUES($1,$2,$3,'approved',$4,$5,'Approval survives recovery.',true,5)", [fixture.character, fixture.event, fixture.user, JSON.stringify(profile), badge]);
     await client.query("INSERT INTO character_inventory(id,event_id,character_id,name,quantity,notes,version) VALUES($1,$2,$3,'Recovery lantern',1,'Current quantity after use.',2)", [fixture.item, fixture.event, fixture.character]);
     await client.query("INSERT INTO system_audit_entries(actor_id,target_user_id,action,details) VALUES($1,$1,'recovery.fixture',$2)", [fixture.user, JSON.stringify({ fictional: true, eventId: fixture.event })]);
+    await client.query("INSERT INTO event_adventures(event_id,definition) VALUES($1,$2)", [fixture.event, JSON.stringify(definition)]);
+    await client.query("INSERT INTO adventure_runs(event_id,character_id,progress,flags) VALUES($1,$2,$3,'{\"recovered\":true}')", [fixture.event, fixture.character, JSON.stringify(progress)]);
+    await client.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,audio,type) VALUES($1,$2,$3,$4,$5,$6,$7,NULL,'relic')", [randomUUID(), fixture.event, fixture.character, relic.id, `${relic.id}:exam:${relic.examinations[0].id}`, relic.title, relic.examinations[0].text]);
+    await client.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,audio,type) VALUES($1,$2,$3,$4,$5,$6,$7,NULL,'wayfinder')", [randomUUID(), fixture.event, fixture.character, scene.id, `${scene.id}:success`, scene.title, scene.body]);
+    await client.query("INSERT INTO adventure_requests(event_id,character_id,request_id,payload_hash,outcome) VALUES($1,$2,$3,$4,$5)", [fixture.event, fixture.character, requestId, payloadHash, JSON.stringify({ kind: "examine", message: "Reading saved to your journal.", replayed: false })]);
+    await client.query("INSERT INTO adventure_attendance(event_id,node_id,character_id) VALUES($1,$2,$3)", [fixture.event, scene.id, fixture.character]);
   });
   await source.query(`CREATE DATABASE "${name}"`);
   const out = await open(backup, "wx", 0o600);
@@ -142,6 +165,11 @@ try {
     ["factions", "id"],
     ["characters", "id"],
     ["character_inventory", "id"],
+    ["event_adventures", "event_id"],
+    ["adventure_runs", "event_id,character_id"],
+    ["adventure_journal", "id"],
+    ["adventure_requests", "event_id,character_id,request_id"],
+    ["adventure_attendance", "event_id,node_id,character_id"],
     ["schema_migrations", "version"],
   ]) {
     const a = (await source.query(`SELECT * FROM ${table} ORDER BY ${order}`))
@@ -180,7 +208,7 @@ try {
   const systemAudit = (await restored.query("INSERT INTO system_audit_entries(actor_id,target_user_id,action) VALUES($1,$1,'recovery.rehearsed') RETURNING id", [fixture.user])).rows[0];
   assert.ok(BigInt(systemAudit.id) > maximumSystemAudit, "Restored system audit identity sequence must advance safely.");
   console.log(
-    "PostgreSQL pg_dump/pg_restore round trip, populated character and administrator records, both audit sequences, and migration after restore passed.",
+    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventure definitions, progress, private journals, replay records, attendance, both audit sequences, and migration after restore passed.",
   );
 } finally {
   if (restored) await restored.end();

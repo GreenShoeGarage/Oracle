@@ -2,6 +2,9 @@
 import { createKitUI } from "./builder.js";
 import { createCharacterUI } from "./characters-ui.js";
 import { createAdminUI } from "./admin-ui.js";
+import { createAdventurePlayer } from "./adventure-player.js";
+import { createAdventureOrganizer } from "./adventure-organizer.js";
+import * as offline from "./offline.js";
 const app = document.querySelector("#app");
 const modal = document.querySelector("#modal");
 const modalContent = document.querySelector("#modal-content");
@@ -39,6 +42,8 @@ const err = '<p class="error" role="alert"></p>';
 const kit = createKitUI({ state, api, shell, esc: (v) => esc(v), openModal, closeModal, loadEvent, toast, isManager, err: '<p class="error" role="alert"></p>', render });
 const characters = createCharacterUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, isOwner, err, render });
 const admin = createAdminUI({ state, api, shell, esc, openModal, closeModal, toast, err, render });
+const adventure = createAdventurePlayer({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, offline, openManager: () => adventureOrganizer.open() });
+const adventureOrganizer = createAdventureOrganizer({ state, api, shell, esc, openModal, closeModal, loadEvent, loadEvents, toast, isManager, err, render, openPlayer: async (options) => { if (adventureOrganizer.confirmDiscard()) await adventure.open(options); } });
 function toast(message) {
   const el = document.querySelector("#notice");
   clearTimeout(noticeTimer);
@@ -49,6 +54,7 @@ function toast(message) {
   }, 5000);
 }
 async function api(path, method = "GET", data) {
+  const requestedUserId = state.session?.user?.id;
   const response = await fetch(path, {
     method,
     credentials: "same-origin",
@@ -56,15 +62,60 @@ async function api(path, method = "GET", data) {
     body: data === undefined ? undefined : JSON.stringify(data),
   });
   const result = response.status === 204 ? {} : await response.json();
+  if (requestedUserId && requestedUserId !== state.session?.user?.id) {
+    const error = new Error("The account changed. Open the event again to continue.");
+    error.status = 409;
+    throw error;
+  }
+  const responseAccount = response.headers.get("x-oracle-account");
+  if (requestedUserId && responseAccount && responseAccount !== requestedUserId) {
+    await offline.clearArchive().catch(() => {});
+    adventure.reset?.();
+    adventureOrganizer.reset?.();
+    state.session.user = null;
+    state.offlineArchive = null;
+    state.event = null;
+    state.events = [];
+    state.view = "events";
+    closeModal(true);
+    render();
+    const error = new Error("Your account changed in another tab. Sign in again to continue.");
+    error.status = 401;
+    throw error;
+  }
   if (!response.ok) {
     if (response.status === 401 && state.session?.user) {
       state.session.user = null;
+      await offline.clearArchive().catch(() => {});
+      adventure.reset?.();
+      adventureOrganizer.reset?.();
       state.event = null;
       state.events = [];
+      state.offlineArchive = null;
+      state.view = "events";
       closeModal(true);
       render();
     }
-    throw new Error(result.error || "Request failed. Please try again.");
+    if (response.status === 404 && result.error === "Event not found or access has been removed.") {
+      const eventId = path.match(/^\/api\/events\/([0-9a-f-]{36})(?:[/?]|$)/i)?.[1];
+      if (eventId) {
+        await offline.purgeEvent(eventId).catch(() => {});
+        state.offlineArchive = null;
+        state.events = state.events.filter((event) => event.id !== eventId);
+        if (state.event?.id === eventId) {
+          adventure.reset();
+          adventureOrganizer.reset();
+          state.event = null;
+          state.view = "events";
+          closeModal(true);
+          render();
+        }
+      }
+    }
+    const error = new Error(result.error || "Request failed. Please try again.");
+    error.status = response.status;
+    error.retryAfter = response.headers.get("retry-after");
+    throw error;
   }
   return result;
 }
@@ -73,7 +124,9 @@ function openModal(heading, content) {
   if (!modal.open) modal.showModal();
 }
 function closeModal(force = false) {
-  if (!force && (!kit.confirmDiscard() || !characters.confirmDiscard())) return;
+  if (!force && (!kit.confirmDiscard() || !characters.confirmDiscard() || !adventureOrganizer.confirmDiscard("modal"))) return;
+  adventure.cleanupModal();
+  adventureOrganizer.cleanupModal();
   characters.cleanupModal();
   if (force) kit.resetDraft();
   modal.classList.remove("wide-modal");
@@ -92,17 +145,20 @@ function setError(form, error) {
 function auth() {
   kit.apply();
   const signup = state.authMode === "register";
-  app.innerHTML = `<div class="auth-wrap"><section class="auth-intro"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><h1>Bring your people<br>into the story.</h1><p>Prepare an event, assemble your crew, and give your next world a place to begin.</p><p class="auth-footer">Green Shoe Garage · v${esc(state.session?.version || "0.3.0")}</p></section><main id="main" class="auth-form"><p class="eyebrow">Your field kit</p><h2>${signup ? "Create your account" : "Welcome back"}</h2><p>${signup ? "One account. A place in every world you join." : "Sign in to open your events."}</p><form id="auth-form">${err}${signup ? '<div><label for="displayName">Display name</label><input id="displayName" name="displayName" minlength="2" maxlength="80" required autocomplete="nickname"><p class="hint">Shown to the people in your events.</p></div>' : ""}<div><label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"></div><div><label for="password">Password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" required autocomplete="${signup ? "new-password" : "current-password"}">${signup ? '<p class="hint">At least 12 characters. A passphrase works well.</p>' : ""}</div>${signup ? '<details><summary>Have an operator setup code?</summary><label for="setupCode">Operator setup code</label><input id="setupCode" name="setupCode" type="password" maxlength="512" autocomplete="off"><p class="hint">Only needed for an account reserved by the project operator.</p></details>' : ""}<button class="primary" type="submit">${signup ? "Create account" : "Sign in"}</button></form>${state.session?.registrationEnabled ? `<button class="switch" data-action="auth-switch">${signup ? "Already have an account? Sign in" : "New to ORACLE? Create an account"}</button>` : ""}<p class="auth-footer">${state.session?.environment === "staging" ? "Staging environment — use test accounts and events." : "Your email is kept private. Events are visible to their members."}</p></main></div>`;
+  app.innerHTML = `<div class="auth-wrap"><section class="auth-intro"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><h1>Bring your people<br>into the story.</h1><p>Prepare an event, assemble your crew, and give your next world a place to begin.</p><p class="auth-footer">Green Shoe Garage · v${esc(state.session?.version || "0.4.0")}</p></section><main id="main" class="auth-form"><p class="eyebrow">Your field kit</p><h2>${signup ? "Create your account" : "Welcome back"}</h2><p>${signup ? "One account. A place in every world you join." : "Sign in to open your events."}</p><form id="auth-form">${err}${signup ? '<div><label for="displayName">Display name</label><input id="displayName" name="displayName" minlength="2" maxlength="80" required autocomplete="nickname"><p class="hint">Shown to the people in your events.</p></div>' : ""}<div><label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"></div><div><label for="password">Password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" required autocomplete="${signup ? "new-password" : "current-password"}">${signup ? '<p class="hint">At least 12 characters. A passphrase works well.</p>' : ""}</div>${signup ? '<details><summary>Have an operator setup code?</summary><label for="setupCode">Operator setup code</label><input id="setupCode" name="setupCode" type="password" maxlength="512" autocomplete="off"><p class="hint">Only needed for an account reserved by the project operator.</p></details>' : ""}<button class="primary" type="submit">${signup ? "Create account" : "Sign in"}</button></form>${state.session?.registrationEnabled ? `<button class="switch" data-action="auth-switch">${signup ? "Already have an account? Sign in" : "New to ORACLE? Create an account"}</button>` : ""}<p class="auth-footer">${state.session?.environment === "staging" ? "Staging environment — use test accounts and events." : "Your email is kept private. Events are visible to their members."}</p></main></div>`;
 }
 function shell(content) {
-  app.innerHTML = `${!navigator.onLine ? '<div class="offline-banner">You are offline. Changes need a connection in this release.</div>' : ""}<div class="layout"><aside class="sidebar"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><nav aria-label="Main navigation"><button class="nav-button ${!["account", "admin"].includes(state.view) ? "active" : ""}" data-action="events">${state.session.user.isSuperuser ? "All events" : "My events"}</button><button class="nav-button ${state.view === "account" ? "active" : ""}" data-action="account">Account</button>${state.session.user.isSuperuser ? `<button class="nav-button ${state.view === "admin" ? "active" : ""}" data-action="admin-open">Administration</button>` : ""}</nav><div class="sidebar-footer"><div><p class="account-name">${esc(state.session.user.displayName)}</p>${state.session.user.isSuperuser ? '<p class="hint">Project superuser</p>' : ""}<p class="version">ORACLE / v${esc(state.session.version)}</p></div><button class="quiet" data-action="logout">Sign out</button></div></aside><main class="workspace" id="main"><div class="topbar"><button class="quiet menu-toggle" data-action="kit-collapse" aria-label="Toggle navigation" aria-expanded="true">☰ Menu</button><span class="eyebrow">Green Shoe Garage / Field instruments</span>${kit.controls()}${state.session.environment !== "production" ? `<span class="environment">${esc(state.session.environment)}</span>` : ""}</div>${content}</main></div>`;
+  app.innerHTML = `${!navigator.onLine ? '<div class="offline-banner">You are offline. Changes need a connection in this release.</div>' : ""}<div class="layout"><aside class="sidebar"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><nav aria-label="Main navigation"><button class="nav-button ${!["account", "admin"].includes(state.view) ? "active" : ""}" data-action="events">${state.session.user.isSuperuser ? "All events" : "My events"}</button><button class="nav-button ${state.view === "account" ? "active" : ""}" data-action="account">Account</button><button class="nav-button" data-action="offline-open">Saved readings</button>${state.session.user.isSuperuser ? `<button class="nav-button ${state.view === "admin" ? "active" : ""}" data-action="admin-open">Administration</button>` : ""}</nav><div class="sidebar-footer"><div><p class="account-name">${esc(state.session.user.displayName)}</p>${state.session.user.isSuperuser ? '<p class="hint">Project superuser</p>' : ""}<p class="version">ORACLE / v${esc(state.session.version)}</p></div><button class="quiet" data-action="logout">Sign out</button></div></aside><main class="workspace" id="main"><div class="topbar"><button class="quiet menu-toggle" data-action="kit-collapse" aria-label="Toggle navigation" aria-expanded="true">☰ Menu</button><span class="eyebrow">Green Shoe Garage / Field instruments</span>${kit.controls()}${state.session.environment !== "production" ? `<span class="environment">${esc(state.session.environment)}</span>` : ""}</div>${content}</main></div>`;
   kit.apply();
 }
 function render() {
+  if (state.view === "offline") { app.innerHTML = offline.renderArchive({ esc, archive: state.offlineArchive }); return; }
   if (!state.session?.user) return auth();
   if (state.view === "account") return account();
   if (state.view === "admin") return admin.render();
   if (state.view === "characters" && state.event) return characters.render();
+  if (state.view === "adventure" && state.event) return adventure.render();
+  if (state.view === "adventure-manage" && state.event) return adventureOrganizer.render();
   if (state.view === "detail" && state.event) return detail();
   events();
 }
@@ -111,14 +167,14 @@ function events() {
     ["live", "paused", "rehearsal"].includes(x.status),
   ).length;
   shell(
-    `<header class="page-head"><div><p class="eyebrow">Event workspace</p><h1>Your worlds, ready to begin.</h1><p class="muted">Open an event to prepare your crew and manage the day.</p></div><div class="actions"><button data-action="kit-import">Import event pack</button><button data-action="join">Join an event</button><button class="primary" data-action="create">+ Create event</button></div></header><div class="summary"><div><strong>${state.events.length}</strong><span>events</span></div><div><strong>${active}</strong><span>in rehearsal or running</span></div><div><strong>${state.events.filter((x) => ["owner", "organizer", "superuser"].includes(x.role)).length}</strong><span>you organize</span></div></div>${state.events.length ? `<div class="cards">${state.events.map((ev) => `<button class="event-card" data-action="open-event" data-id="${esc(ev.id)}"><div class="card-top">${badge(ev.status)}<span class="role">${esc(ev.role)}</span></div><div><h2>${esc(ev.name)}</h2><p class="hint">${esc(ev.location || "Location to be decided")}</p></div><p class="description">${esc(ev.description || "A new event, ready for its story.")}</p><div class="card-bottom"><span>${ev.member_count} ${ev.member_count === 1 ? "member" : "members"}</span><span>${ev.starts_at ? esc(new Date(ev.starts_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })) : "Open event →"}</span></div></button>`).join("")}</div>` : `<section class="empty"><div class="number">01 / Assemble your crew</div><h2>Every world starts somewhere.</h2><p>Create your first event, or enter an invitation code from your organizer. Your events will appear here.</p><div class="actions"><button class="primary" data-action="create">Create your first event</button><button data-action="join">I have an invitation</button></div></section>`}<p class="footer-note">${state.session.user.isSuperuser ? "Your superuser access includes every event." : "Only events you belong to appear here."}</p>`,
+    `<header class="page-head"><div><p class="eyebrow">Event workspace</p><h1>Your worlds, ready to begin.</h1><p class="muted">Open an event to prepare your crew and manage the day.</p></div><div class="actions"><button data-action="kit-import">Import briefing pack</button><button data-action="join">Join an event</button><button data-action="create">+ Blank event</button><button class="primary" data-action="advedit-starter">Start an adventure</button></div></header><div class="summary"><div><strong>${state.events.length}</strong><span>events</span></div><div><strong>${active}</strong><span>in rehearsal or running</span></div><div><strong>${state.events.filter((x) => ["owner", "organizer", "superuser"].includes(x.role)).length}</strong><span>you organize</span></div></div>${state.events.length ? `<div class="cards">${state.events.map((ev) => `<button class="event-card" data-action="open-event" data-id="${esc(ev.id)}"><div class="card-top">${badge(ev.status)}<span class="role">${esc(ev.role)}</span></div><div><h2>${esc(ev.name)}</h2><p class="hint">${esc(ev.location || "Location to be decided")}</p></div><p class="description">${esc(ev.description || "A new event, ready for its story.")}</p><div class="card-bottom"><span>${ev.member_count} ${ev.member_count === 1 ? "member" : "members"}</span><span>${ev.starts_at ? esc(new Date(ev.starts_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })) : "Open event →"}</span></div></button>`).join("")}</div>` : `<section class="empty"><div class="number">01 / Assemble your crew</div><h2>Every world starts somewhere.</h2><p>Create your first event, or enter an invitation code from your organizer. Your events will appear here.</p><div class="actions"><button class="primary" data-action="advedit-starter">Start your first adventure</button><button data-action="create">Create a blank event</button><button data-action="join">I have an invitation</button></div></section>`}<p class="footer-note">${state.session.user.isSuperuser ? "Your superuser access includes every event." : "Only events you belong to appear here."}</p>`,
   );
 }
 function detail() {
   if (isManager() && kit.isOrganizerView()) { organizerDetail(); kit.enhanceOrganizer(); }
   else kit.renderPlayer();
   if (document.documentElement.dataset.prop !== "true") {
-    document.querySelector(".workspace .page-head")?.insertAdjacentHTML("afterend", '<section class="panel character-entry"><div class="panel-head"><div><h2>Characters & identity</h2><p class="hint">Create your character, open your sheet, and exchange public badges.</p></div><button class="primary" data-action="character-open">Characters</button></div></section>');
+    document.querySelector(".workspace .page-head, .workspace .world-header")?.insertAdjacentHTML("afterend", `<section class="panel character-entry"><div class="panel-head"><div><h2>Your field kit</h2><p class="hint">Choose a character, follow discoveries, and find your next scene.</p></div><div class="actions"><button data-action="character-open">Characters</button><button class="primary" data-action="adv-open">Open adventure</button>${isManager() ? '<button data-action="advedit-open">Prepare adventure</button>' : ''}</div></div></section>`);
   }
 }
 function organizerDetail() {
@@ -138,6 +194,7 @@ async function loadEvents() {
   state.event = null;
   render();
   await characters.handleHash();
+  await adventure.handleHash();
 }
 async function loadEvent(id) {
   const result = await api(`/api/events/${id}`);
@@ -179,11 +236,29 @@ function confirmModal(heading, message, action, attributes, label) {
   );
 }
 async function action(button) {
+  const destination = button.dataset.action;
+  if (["events", "account", "logout", "open-event", "create", "kit-import", "character-open", "advedit-open", "advedit-starter", "offline-open", "admin-open"].includes(destination)) {
+    if (state.view === "adventure" && !adventure.confirmDiscard()) return;
+    if (state.view === "adventure-manage" && !adventureOrganizer.confirmDiscard()) return;
+  }
+  if (await adventure.action(button)) return;
+  if (await adventureOrganizer.action(button)) return;
   if (await characters.action(button)) return;
   if (await admin.action(button)) return;
   if (await kit.action(button)) return;
   const id = button.dataset.id;
   switch (button.dataset.action) {
+    case "offline-open":
+      await openOffline();
+      break;
+    case "offline-refresh":
+      await start();
+      break;
+    case "offline-clear":
+      await offline.clearArchive({ keepAccount: Boolean(state.session?.user) });
+      await openOffline();
+      toast("Saved readings cleared from this device.");
+      break;
     case "close":
       closeModal();
       break;
@@ -200,7 +275,12 @@ async function action(button) {
       break;
     case "logout":
       await api("/api/auth/logout", "POST", {});
+      await offline.clearArchive().catch(() => {});
+      adventure.reset?.();
+      adventureOrganizer.reset?.();
       state.session.user = null;
+      state.view = "events";
+      state.offlineArchive = null;
       state.events = [];
       state.event = null;
       closeModal(true);
@@ -362,11 +442,13 @@ document.addEventListener("submit", async (e) => {
   if (state.busy) return;
   state.busy = true;
   const submit = form.querySelector('button[type="submit"]');
-  submit.disabled = true;
+  if (submit) submit.disabled = true;
   const input = Object.fromEntries(new FormData(form));
   const error = form.querySelector(".error");
   if (error) error.textContent = "";
   try {
+    if (await adventure.submit(form)) return;
+    if (await adventureOrganizer.submit(form)) return;
     if (await characters.submit(form)) return;
     if (await admin.submit(form)) return;
     if (await kit.submit(form)) return;
@@ -374,6 +456,7 @@ document.addEventListener("submit", async (e) => {
       case "auth-form": {
         const result = await api(`/api/auth/${state.authMode}`, "POST", input);
         state.session.user = result.user;
+        await offline.setAccount(result.user.id).catch(() => {});
         await loadEvents();
         break;
       }
@@ -436,10 +519,19 @@ document.addEventListener("submit", async (e) => {
     setError(form, error);
   } finally {
     state.busy = false;
-    submit.disabled = false;
+    if (submit) submit.disabled = false;
   }
 });
-window.addEventListener("hashchange", () => { characters.handleHash().catch((error) => toast(error.message)); });
+window.addEventListener("hashchange", async () => {
+  try {
+    if (location.hash.startsWith("#prop/") && (!kit.confirmDiscard() || !characters.confirmDiscard() || !adventureOrganizer.confirmDiscard())) {
+      history.replaceState(null, "", `${location.pathname}${location.search}`);
+      return;
+    }
+    await characters.handleHash();
+    await adventure.handleHash();
+  } catch (error) { toast(error.message); }
+});
 modal.addEventListener("cancel", (e) => { e.preventDefault(); closeModal(); });
 window.addEventListener("offline", () => {
   render();
@@ -449,14 +541,28 @@ window.addEventListener("online", () => {
   render();
   toast("Connection restored. Refresh the event to see current information.");
 });
+async function openOffline() {
+  state.offlineArchive = await offline.loadArchive().catch(() => ({ accountId: null, records: [], lastChecked: null }));
+  state.view = "offline";
+  closeModal(true);
+  render();
+}
 async function start() {
   try {
+    const previousUser = state.session?.user?.id;
     state.session = await api("/api/session");
+    if (previousUser !== state.session.user?.id) {
+      adventure.reset?.();
+      adventureOrganizer.reset?.();
+    }
+    await offline.setAccount(state.session.user?.id || null).catch(() => {});
+    state.offlineArchive = null;
+    state.view = "events";
     if (state.session.user) await loadEvents();
     else render();
   } catch {
-    app.innerHTML =
-      '<main class="boot" id="main"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p><p class="error">Unable to connect. Check your connection, then reload this page.</p></main>';
+    await openOffline();
   }
 }
+offline.registerOfflineShell().catch(() => {});
 start();

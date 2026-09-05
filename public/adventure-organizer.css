@@ -1,0 +1,53 @@
+.advedit-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: start; gap: 1.25rem; }
+.advedit-layout > *, .advedit-preview > *, .advedit-three-fields > * { min-width: 0; }
+.advedit-fields { display: grid; gap: 1rem; min-width: 0; }
+.advedit-fields[disabled] { opacity: .8; }
+.advedit-node-list { list-style: none; padding: 0; margin: 1rem 0 0; }
+.advedit-node-list li { display: grid; gap: .8rem; padding: 1rem 0; border-top: 1px solid var(--line); }
+.advedit-node-list h3 { margin: .4rem 0; overflow-wrap: anywhere; }
+.advedit-node-list p { overflow-wrap: anywhere; }
+.advedit-conditions, .advedit-examination { border: 1px solid var(--line); border-radius: .5rem; padding: .85rem; margin: .7rem 0; }
+.advedit-conditions summary, .advedit-examination summary { cursor: pointer; font-weight: 650; }
+.advedit-conditions > p, .advedit-examination > label { margin-top: .85rem; }
+.advedit-conditions fieldset { margin: .75rem 0; min-width: 0; }
+.advedit-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem .8rem; max-height: 18rem; overflow: auto; }
+.advedit-checks label { align-items: start; overflow-wrap: anywhere; }
+.advedit-flag-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .65rem; margin: .75rem 0; }
+.advedit-hint { display: grid; gap: .65rem; padding: 1rem 0; border-top: 1px solid var(--line); }
+.advedit-three-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; }
+.advedit-preview { display: flex; flex-wrap: wrap; gap: .85rem; align-items: end; }
+.advedit-preview > label { flex: 1 1 16rem; }
+.advedit-override-list { display: grid; gap: 1rem; }
+.advedit-override-list > div { padding: .75rem 0; border-top: 1px solid var(--line); }
+.advedit-override-list .actions { margin-top: .6rem; }
+.advedit-audio { display: grid; gap: .6rem; }
+.advedit-audio audio { width: 100%; max-width: 100%; }
+.advedit-code { font-family: ui-monospace, monospace; overflow-wrap: anywhere; letter-spacing: .035em; }
+.advedit-template-options { display: grid; gap: .75rem; }
+.advedit-template { display: flex; align-items: flex-start; gap: .75rem; padding: 1rem; border: 1px solid var(--line); border-radius: .5rem; cursor: pointer; }
+.advedit-template input { flex: 0 0 auto; margin-top: .25rem; width: auto; }
+.advedit-template > span { display: grid; gap: .5rem; min-width: 0; }
+.advedit-template:has(input:checked) { border-color: var(--accent); background: var(--panel); }
+.advedit-labels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.advedit-prop-label { padding: 1.2rem; border: 1px solid var(--line); border-radius: .5rem; text-align: center; overflow-wrap: anywhere; }
+.advedit-prop-label h3 { font-size: 1.25rem; margin: .6rem 0; }
+.advedit-prop-qr { display: flex; justify-content: center; margin: .8rem 0; }
+@media (max-width: 900px) { .advedit-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 540px) {
+  .advedit-checks, .advedit-three-fields, .advedit-labels { grid-template-columns: minmax(0, 1fr); }
+  .advedit-flag-row { grid-template-columns: minmax(0, 1fr); }
+  .advedit-preview { align-items: stretch; }
+  .advedit-preview .actions { width: 100%; }
+  .advedit-conditions, .advedit-examination { padding: .65rem; }
+}
+@media print {
+  body.advedit-printing { background: white !important; color: black !important; }
+  body.advedit-printing > :not(#modal), body.advedit-printing .modal-head, body.advedit-printing .advedit-no-print { display: none !important; }
+  body.advedit-printing #modal { position: static; display: block; overflow: visible; width: auto; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; box-shadow: none; background: white; color: black; }
+  body.advedit-printing #modal::backdrop { display: none; }
+  body.advedit-printing #modal-content { overflow: visible; max-height: none; padding: 0; }
+  body.advedit-printing .advedit-labels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12mm; }
+  body.advedit-printing .advedit-prop-label { break-inside: avoid; border: 1px solid black; border-radius: 0; padding: 7mm; color: black; background: white; }
+  body.advedit-printing .advedit-prop-label * { color: black !important; }
+  body.advedit-printing .advedit-prop-qr canvas { max-width: 45mm !important; }
+}

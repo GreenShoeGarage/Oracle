@@ -2,16 +2,16 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 1.5 · September 5, 2026
+Development roadmap · Planning revision: 1.6 · September 5, 2026
 
-Status: Batch 3 (v0.3.0, schema 4) is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). CI, the complete remote two-player workflow, and exact-commit production checks passed. The reserved operator account awaits its owner's secure first registration. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 4 is next; Batches 4–12 remain planned.
+Status: Batch 4 (v0.4.0, schema 5) is implemented and undergoing release verification. Local automated tests and the three-theme workflow rehearsal passed; exact-commit CI and deployment results are pending. Batch 3 remains the last verified production release at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 5 is next; Batches 5–12 remain planned.
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
 
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
-The first complete adventure is targeted for v0.4. Player-to-player information exchanges arrive in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–3 status are recorded below; Batches 4–12 remain planned.
+The first complete adventure is targeted for v0.4. Player-to-player information exchanges arrive in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–4 status are recorded below; Batches 5–12 remain planned.
 
 **Product commitments**
 
@@ -62,6 +62,12 @@ Add public character cards, private character sheets, event enrollment, basic in
 Completion gate: Two players can join the same event, create or receive characters, obtain approval where required, and scan each other's public cards. Private fields remain inaccessible through both the interface and direct requests. Printed badges grant no character-control privileges.
 
 **Batch 4 — v0.4: First complete playable adventure**
+
+Implementation status: Candidate v0.4.0 includes RELIC, DEAD DROP, CIPHERBOX, and WAYFINDER; per-character discovery journals; bounded completed-node/skill/flag/event-status conditions; idempotent outcomes; uploaded recordings; safe printed prop labels; focused prop view; read-only previews; and explicit organizer overrides. Dedicated rehearsal copies preserve the source and can reset their own progress. Already-permitted journal readings and the public app shell can be read offline; new actions/reveals require connectivity.
+
+Three complete 30-minute adventures for 2–6 players are implemented: The Last Lantern (Fantasy), The Last Neighborhood Signal (Cyberpunk), and The Last Water Beacon (Wasteland). Each creates two approved unassigned characters, a relic discovery, a gated message, a solvable puzzle with hints, and complete success/fallback scenes. Assignment, printing, rehearsal, and running instructions are included in private organizer notes. Format-1 briefing packs do not contain adventure definitions or progress.
+
+Local verification passed 106 tests (105 passed, one TCP-only skip), plus a full three-theme HTTP rehearsal (145 reads/196 writes) and eleven DOM/API flows with zero uncaught JavaScript errors. Final CI and actual deployment evidence are pending in [STATUS.md](STATUS.md). These results do not claim authenticated real-browser/mobile-camera or human field testing. Migration 005 requires schema-5-compatible roll-forward recovery. Scheduled backups remain unresolved; the reserved operator claim remains idempotent and preserves account identity/passwords.
 
 Implement four connected instruments:
 
@@ -175,4 +181,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next development batch: Batch 4 — first complete playable adventure. Batch 3 is deployed; the operator's first account claim and scheduled database backups remain separate operational items. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next development batch after the active Batch 4 release: Batch 5 — player-to-player information exchanges. Batch 4 verification/deployment is in progress; scheduled database backups remain a separate operational item. Public branding uses ORACLE with the subtitle “LARP Field Kit.”

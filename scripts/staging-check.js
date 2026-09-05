@@ -40,7 +40,8 @@ if (publicOnly) {
       redirect: "error",
       signal: AbortSignal.timeout(10000),
     });
-    assert.equal(response.status, status, `${method} ${path} must return HTTP ${status}.`);
+    const safePath = path.replace(/([?&]code=)[^&]*/g, "$1[redacted]").replace(/(\/api\/badges\/)[^/?]+/, "$1[redacted]");
+    assert.equal(response.status, status, `${method} ${safePath} must return HTTP ${status}.`);
     const cookie = response.headers.get("set-cookie");
     if (account && cookie) {
       assert.ok(
@@ -248,6 +249,193 @@ if (publicOnly) {
     assert.ok(!JSON.stringify(value).includes(secretMarker), `${label} must exclude organizer secrets.`);
   }
 
+  function safeAdventure(snapshot, definition, { initial = false } = {}) {
+    assert.ok(Array.isArray(snapshot.nodes) && Array.isArray(snapshot.journal), "Adventure play must include projected nodes and a private journal.");
+    const forbidden = new Set(["definition", "organizerNotes", "conditions", "actions", "flags", "answer", "releaseCode", "code", "userId", "email", "password_hash", "token_hash"]);
+    const inspect = (value) => {
+      if (!value || typeof value !== "object") return;
+      for (const [key, child] of Object.entries(value)) {
+        assert.ok(!forbidden.has(key), "Adventure play must omit server rules, answers, codes, and account data.");
+        inspect(child);
+      }
+    };
+    inspect(snapshot);
+    const serialized = JSON.stringify(snapshot);
+    if (definition.organizerNotes) assert.ok(!serialized.includes(definition.organizerNotes), "Organizer notes must never enter a player snapshot.");
+    if (initial) {
+      assert.equal(snapshot.journal.length, 0, "A newly assigned player must begin with an empty journal.");
+      for (const node of definition.nodes) {
+        const protectedTexts = node.type === "relic" ? node.examinations.map((exam) => exam.text)
+          : node.type === "dead_drop" ? [node.body]
+          : node.type === "cipherbox" ? [node.successText, node.failureText, ...node.hints.map((hint) => hint.text)] : [];
+        for (const value of protectedTexts.filter(Boolean)) assert.ok(!serialized.includes(value), "Unreleased readings, messages, hints, and puzzle outcomes must remain hidden.");
+      }
+    }
+    for (const node of snapshot.nodes.filter((entry) => entry.locked))
+      assert.ok(Object.keys(node).every((key) => ["id", "type", "title", "summary", "locked", "lockReason", "completed", "failed", "joined"].includes(key)), "Locked instruments must expose only their public summary and the player's own attendance state.");
+  }
+
+  async function adventureJourney(owner, player) {
+    const catalog = await request(owner, "/api/adventure-templates");
+    assert.deepEqual(catalog.templates.map((template) => template.id).sort(), ["cyberpunk", "fantasy", "wasteland"], "All three complete starter adventures must be available.");
+    for (const template of catalog.templates)
+      assert.ok(Object.keys(template).every((key) => ["id", "title", "summary", "durationMinutes", "players"].includes(key)), "Starter catalog must contain metadata only.");
+    await request(null, "/api/adventure-templates", { status: 401 });
+    const completedSources = [];
+    for (const theme of ["fantasy", "cyberpunk", "wasteland"]) {
+      let { event } = await request(owner, `/api/adventure-templates/${theme}`, {
+        method: "POST", body: { name: `CI ${theme} adventure ${runId}` }, status: 201,
+      });
+      ownedEvents.push({ account: owner, id: event.id });
+      assert.equal(event.status, "draft", "Starter adventures must be created as fresh draft events.");
+      assert.equal(event.setup.theme.id, theme, "Starter adventure must use the selected theme.");
+      const base = `/api/events/${event.id}/adventure`;
+      await request(player, `${base}/manage`, { status: 404 });
+      const { invitation } = await request(owner, `/api/events/${event.id}/invites`, {
+        method: "POST", body: { role: "player", maxUses: 1, expiresInHours: 1 }, status: 201,
+      });
+      await request(player, "/api/events/join", { method: "POST", body: { code: invitation.code } });
+      await request(player, `${base}/manage`, { status: 403 });
+      const { characters } = await request(owner, `/api/events/${event.id}/characters`);
+      assert.equal(characters.length, 2, "Every complete starter must provide two prewritten characters.");
+      for (const character of characters) {
+        assert.equal(character.status, "approved", "Prewritten starter characters must be ready to assign and play.");
+        assert.equal(character.userId, null, "Starter characters must not inherit another event's ownership.");
+      }
+      const assigned = [];
+      for (const [index, account] of [owner, player].entries()) {
+        const { character } = await request(owner, `/api/events/${event.id}/characters/${characters[index].id}/assign`, {
+          method: "POST", body: { version: characters[index].version, userId: account.id },
+        });
+        assigned.push({ account, character });
+      }
+      const manage = await request(owner, `${base}/manage`);
+      const { definition, version } = manage;
+      const relic = definition.nodes.find((node) => node.id === "evidence-core");
+      const message = definition.nodes.find((node) => node.id === "sealed-message");
+      const puzzle = definition.nodes.find((node) => node.id === "restoration-console");
+      const scene = definition.nodes.find((node) => node.id === "community-gathering");
+      const alternate = definition.nodes.find((node) => node.id === "manual-watch");
+      assert.ok(relic && message && puzzle && scene && alternate, "Every starter must include the complete investigation and fallback scene.");
+      const exam = relic.examinations.find((entry) => entry.id === "read-markings");
+      assert.ok(exam, "Every starter must offer its ungated opening examination.");
+      const playPath = (character) => `${base}/play?characterId=${character.id}`;
+      const act = (account, character, node, kind, fields = {}, { requestId = randomUUID(), status = 200 } = {}) => request(account, `${base}/action`, {
+        method: "POST", body: { requestId, version, characterId: character.id, nodeId: node.id, kind, ...fields }, status,
+      });
+      for (const { account, character } of assigned) safeAdventure(await request(account, playPath(character)), definition, { initial: true });
+      const preview = await request(owner, `${playPath(assigned[1].character)}&preview=true`);
+      assert.equal(preview.readOnly, true, "Organizer simulations must be read-only.");
+      assert.equal(preview.preview, true, "Organizer simulations must identify their preview state.");
+      assert.equal(preview.journal.length, 0, "Preview must not create progress or journal entries.");
+      await request(null, playPath(assigned[0].character), { status: 401 });
+      await request(null, `${base}/lookup?characterId=${assigned[0].character.id}&code=${relic.code}`, { status: 401 });
+      await request(player, playPath(assigned[0].character), { status: 404 });
+      await request(player, `${base}/override`, {
+        method: "POST", body: { requestId: randomUUID(), version, characterId: assigned[1].character.id, nodeId: puzzle.id, kind: "solve" }, status: 403,
+      });
+      event = await patchEvent(owner, event, { status: "rehearsal" });
+      let firstRequest;
+      for (const [index, { account, character }] of assigned.entries()) {
+        if (index === 1) event = await patchEvent(owner, event, { status: "live" });
+        safeAdventure(await request(account, playPath(character)), definition, { initial: true });
+        await act(account, character, message, "open", { code: message.releaseCode }, { status: 403 });
+        const lookedUp = await request(account, `${base}/lookup?characterId=${character.id}&code=${relic.code}`);
+        assert.equal(lookedUp.focusNodeId, relic.id, "Printed prop lookup must focus the correct instrument.");
+        safeAdventure(lookedUp, definition, { initial: true });
+        const requestId = randomUUID();
+        let played = await act(account, character, relic, "examine", { examId: exam.id, code: relic.code }, { requestId });
+        assert.ok(played.journal.some((entry) => entry.nodeId === relic.id && entry.text === exam.text), "Authorized examination must persist its actual reading in the private journal.");
+        const replay = await act(account, character, relic, "examine", { examId: exam.id, code: relic.code }, { requestId });
+        assert.equal(replay.outcome.replayed, true, "An exact action retry must be recognized as a replay.");
+        assert.ok(isDeepStrictEqual(replay.journal, played.journal), "An exact action retry must not duplicate journal entries.");
+        await act(account, character, relic, "examine", { examId: exam.id, code: "AAAAAAAAAAAAAAAAAAAA" }, { requestId, status: 409 });
+        const repeated = await act(account, character, relic, "examine", { examId: exam.id, code: relic.code });
+        assert.ok(isDeepStrictEqual(repeated.journal, played.journal), "Repeating a completed examination under a new request ID must not duplicate its reward.");
+        if (index === 0) firstRequest = { requestId, character, account };
+        played = await act(account, character, message, "open", { code: message.releaseCode });
+        assert.ok(played.journal.some((entry) => entry.nodeId === message.id && entry.text === message.body), "Opening a released message must persist its permitted contents.");
+        if (index === 1) {
+          const wrongAnswer = `incorrect-${randomUUID()}`;
+          for (let attempt = 0; attempt < puzzle.maxAttempts; attempt++) {
+            if (attempt > 0) await delay(1100);
+            played = await act(account, character, puzzle, "attempt", { answer: wrongAnswer });
+          }
+          assert.equal(played.nodes.find((node) => node.id === puzzle.id).failed, true, "Exhausted puzzle attempts must enter the declared failure state.");
+          assert.equal(played.nodes.find((node) => node.id === alternate.id).locked, false, "The declared failure outcome must unlock the fallback scene.");
+          played = await act(account, character, alternate, "join");
+          assert.ok(played.journal.some((entry) => entry.nodeId === alternate.id), "The fallback scene must create a durable journal entry.");
+          const overridden = await request(owner, `${base}/override`, {
+            method: "POST", body: { requestId: randomUUID(), version, characterId: character.id, nodeId: puzzle.id, kind: "reset_attempts" },
+          });
+          assert.equal(overridden.nodes.find((node) => node.id === puzzle.id).failed, false, "An organizer may explicitly reset exhausted attempts.");
+          assert.equal(overridden.nodes.find((node) => node.id === puzzle.id).attempts, 0, "An explicit organizer reset must clear the attempt count.");
+          played = await request(owner, `${base}/override`, {
+            method: "POST", body: { requestId: randomUUID(), version, characterId: character.id, nodeId: puzzle.id, kind: "solve" },
+          });
+        } else {
+          const availableHint = played.nodes.find((node) => node.id === puzzle.id).hints.find((hint) => hint.available);
+          assert.ok(availableHint, "Every starter must offer its introductory hint before the first attempt.");
+          assert.ok(!Object.hasOwn(availableHint, "text"), "Available hints must remain hidden until explicitly requested.");
+          played = await act(account, character, puzzle, "hint", { hintIndex: availableHint.index });
+          assert.ok(played.nodes.find((node) => node.id === puzzle.id).hints.some((hint) => hint.index === availableHint.index && hint.requested && typeof hint.text === "string"), "An explicitly requested available hint must reveal only its authorized text.");
+          played = await act(account, character, puzzle, "attempt", { answer: puzzle.answer });
+        }
+        assert.equal(played.nodes.find((node) => node.id === puzzle.id).completed, true, "A valid solution or explicit organizer solve must complete the puzzle.");
+        assert.equal(played.nodes.find((node) => node.id === scene.id).locked, false, "Puzzle success must unlock the final scene.");
+        played = await act(account, character, scene, "join");
+        assert.equal(played.nodes.find((node) => node.id === scene.id).joined, true, "The player must be enrolled in the final scene.");
+        const entries = played.journal.length;
+        const repeatedJoin = await act(account, character, scene, "join");
+        assert.equal(repeatedJoin.journal.length, entries, "Repeated scene attendance must not duplicate outcomes or journal entries.");
+        const reloaded = await request(account, playPath(character));
+        assert.ok(isDeepStrictEqual(reloaded.journal, played.journal), "The private field journal must survive a fresh HTTP load.");
+        safeAdventure(reloaded, definition);
+      }
+      const finalReplay = await act(firstRequest.account, firstRequest.character, relic, "examine", { examId: exam.id, code: relic.code }, { requestId: firstRequest.requestId });
+      assert.ok(finalReplay.journal.some((entry) => entry.nodeId === scene.id), "Replaying an old action must return the current permitted state rather than an obsolete snapshot.");
+      event = await patchEvent(owner, event, { status: "paused" });
+      await act(firstRequest.account, firstRequest.character, relic, "examine", { examId: exam.id, code: relic.code }, { requestId: firstRequest.requestId, status: 409 });
+      event = await patchEvent(owner, event, { status: "live" });
+      const original = await request(owner, playPath(assigned[0].character));
+      const originalInventory = (await request(owner, `/api/events/${event.id}/characters/${assigned[0].character.id}/inventory`)).inventory;
+      const { event: rehearsal } = await request(owner, `${base}/rehearsal`, { method: "POST", body: {}, status: 201 });
+      ownedEvents.push({ account: owner, id: rehearsal.id });
+      assert.notEqual(rehearsal.id, event.id, "Rehearsal must create a separate event.");
+      assert.equal(rehearsal.status, "rehearsal", "The copied rehearsal event must be ready for rehearsal play.");
+      const rehearsalBase = `/api/events/${rehearsal.id}/adventure`;
+      let rehearsalManage = await request(owner, `${rehearsalBase}/manage`);
+      assert.equal(rehearsalManage.isRehearsal, true, "Only dedicated rehearsal copies may be reset.");
+      assert.equal(rehearsalManage.sourceEventId, event.id, "A rehearsal must identify its original source event.");
+      assert.equal(rehearsalManage.progress.length, 0, "Rehearsal copies must not transfer original progress.");
+      const rehearsalCharacters = (await request(owner, `/api/events/${rehearsal.id}/characters`)).characters;
+      assert.equal(rehearsalCharacters.length, 2, "Rehearsal must copy both authored character identities.");
+      assert.ok(rehearsalCharacters.every((character) => character.userId === null && !assigned.some((entry) => entry.character.id === character.id)), "Rehearsal characters must have new identities and await assignment.");
+      const { character: rehearsalCharacter } = await request(owner, `/api/events/${rehearsal.id}/characters/${rehearsalCharacters[0].id}/assign`, {
+        method: "POST", body: { version: rehearsalCharacters[0].version, userId: owner.id },
+      });
+      const rehearsalRelic = rehearsalManage.definition.nodes.find((node) => node.id === relic.id);
+      await request(owner, `${rehearsalBase}/action`, {
+        method: "POST", body: { requestId: randomUUID(), version: rehearsalManage.version, characterId: rehearsalCharacter.id, nodeId: rehearsalRelic.id, kind: "examine", examId: exam.id, code: rehearsalRelic.code },
+      });
+      const rehearsalPlayPath = `${rehearsalBase}/play?characterId=${rehearsalCharacter.id}`;
+      assert.ok((await request(owner, rehearsalPlayPath)).journal.length > 0, "The rehearsal reset check must clear actual persisted play.");
+      await request(owner, `${base}/reset`, { method: "POST", body: { version, confirm: true }, status: 409 });
+      await request(owner, `${rehearsalBase}/reset`, { method: "POST", body: { version: rehearsalManage.version, confirm: true } });
+      rehearsalManage = await request(owner, `${rehearsalBase}/manage`);
+      assert.ok(rehearsalManage.version > version, "A rehearsal reset must advance the adventure version.");
+      assert.equal((await request(owner, rehearsalPlayPath)).journal.length, 0, "A rehearsal reset must remove its journal and play state.");
+      assert.ok(isDeepStrictEqual((await request(owner, playPath(assigned[0].character))).journal, original.journal), "Resetting a rehearsal must preserve the original event's journal.");
+      assert.ok(isDeepStrictEqual((await request(owner, `/api/events/${event.id}/characters/${assigned[0].character.id}/inventory`)).inventory, originalInventory), "Resetting a rehearsal must preserve original character inventory.");
+      await request(owner, `/api/events/${event.id}/members/${player.id}`, { method: "DELETE" });
+      await request(player, playPath(assigned[1].character), { status: 404 });
+      await act(player, assigned[1].character, scene, "join", {}, { status: 404 });
+      completedSources.push({ event, journalEntries: original.journal.length });
+      pass(`${theme} starter: two assigned characters, conditional readings, puzzle outcomes, scenes, replay, privacy, persistence, and isolated rehearsal reset`);
+    }
+    assert.equal(completedSources.length, 3, "Every theme must complete its actual staged adventure journey.");
+  }
+
   async function cleanup() {
     let failed = false;
     for (const { account, id } of ownedEvents) {
@@ -369,6 +557,7 @@ if (publicOnly) {
     await request(player, `/api/events/${event.id}/characters`, { status: 404 });
     await request(player, `/api/badges/${sharedCharacter.badgeCode}`, { status: 404 });
     pass("membership revocation immediately removes detail, export, preview, character, and badge access");
+    await adventureJourney(owner, player);
   } catch (error) {
     // Every assertion above uses an explicit message; never dump request bodies,
     // response payloads, passwords, invitation codes, or session cookies into CI.

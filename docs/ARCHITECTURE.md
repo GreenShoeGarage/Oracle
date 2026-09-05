@@ -1,6 +1,6 @@
 # ORACLE architecture and data contracts
 
-Application v0.3.0 · Database schema 4 · Event-pack format 1
+Application v0.4.0 · Database schema 5 · Briefing-pack format 1 · Adventure format 1
 
 **Identity and data ownership.** An account belongs to a person. Event membership grants a role within one event. Characters, inventories, and factions carry an event ID and authorize against current membership; future clues and encounters must follow the same contract. Copying content into another event creates new event-owned records. The client never decides ownership or privileges.
 
@@ -14,15 +14,15 @@ Application v0.3.0 · Database schema 4 · Event-pack format 1
 
 **Migrations.** SQL files are immutable once applied. The runner takes a PostgreSQL advisory lock, records file checksums, and applies each new migration transactionally. It refuses changed migration history and unsupported versions. Migration `002_event_setup.sql` adds a non-null JSONB `events.setup` column with a valid blank Fantasy setup and an object constraint. Existing event IDs, metadata, owners, lifecycle, version counters, memberships, invitation hashes, and audit records remain intact. A regression fixture created with Batch 1's schema verifies this preservation. Creating an event without `setup` remains supported and receives the same default.
 
-Migration 003 adds default-false superuser/disabled flags and system audit history. Migration 004 adds event character settings, factions, characters, and independent inventory tables with event-scoped constraints. Earlier event setup, memberships, invitations, audit records, and credentials are retained. Startup and readiness require schema 4. The v0.1 and v0.2 applications require older exact schema versions and are **not valid rollback images after this upgrade**. Preserve the migrated data and roll forward with a schema-4-compatible fix. Do not remove schema checks or drop new data to make an older binary start. Database restoration is a separate operator-directed incident action described in [DEPLOYMENT.md](DEPLOYMENT.md).
+Migration 003 adds default-false superuser/disabled flags and system audit history. Migration 004 adds event character settings, factions, characters, and independent inventory tables with event-scoped constraints. Earlier event setup, memberships, invitations, audit records, and credentials are retained. Migration 005 adds adventure definitions, per-character runs, journal snapshots, idempotency records, and scene attendance. Startup and readiness require schema 5. Earlier applications, including v0.3.0 with schema 4, are **not valid rollback images after this upgrade**. Preserve the migrated data and roll forward with a schema-5-compatible fix. Do not remove schema checks or drop new data to make an older binary start. Database restoration is a separate operator-directed incident action described in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 **Themes, event packs and rules.** `public/kit.js` is the shared browser/server contract. Themes control presentation and terminology; setup contains the selected theme, enabled instruments, declarative rules, and authored material. A theme-only update replaces only `setup.theme`, preserving rules, content identifiers, event ownership, and progress. `templateId` records the starter used; it is not an instruction to reapply or execute a template. Available starters are Blank event, The Lantern Council, The Missing Signal, and The Last Water Stop. The latter three are briefing seeds, not complete adventures.
 
 Themes accept six-digit hex colors, enumerated fonts (`serif`, `sans`, `mono`), textures (`none`, `grain`, `grid`, `dust`), icons (`sigil`, `chip`, `compass`), four terminology fields, and optional cues (`bell`, `pulse`, `click`). Text, muted text, and accent must each reach 4.5:1 contrast against both background and panel. Theme assets are built into the application. Arbitrary CSS, HTML, scripts, URLs, and formulas are rejected. Sound is synthesized locally after a user gesture; no remote sound asset or autoplay is used.
 
-Rules define up to 12 attributes, 24 expertise entries, 12 resources, and 12 named outcomes. Attribute/resource minimum, maximum, and default values must be finite, between -1,000,000 and 1,000,000, and satisfy `min ≤ default ≤ max`. These are bounded definitions, not executable mechanics. Batch 3 character attributes and skills validate against these definitions. Automatic challenge resolution remains a later batch.
+Rules define up to 12 attributes, 24 expertise entries, 12 resources, and 12 named outcomes. Attribute/resource minimum, maximum, and default values must be finite, between -1,000,000 and 1,000,000, and satisfy `min ≤ default ≤ max`. These are bounded definitions, not executable mechanics. Batch 3 character attributes and skills validate against these definitions. Batch 4 also evaluates bounded discovery conditions, puzzle answers, and flag outcomes. General scripting and later cooperative-challenge mechanics remain outside this contract.
 
-**Offline contract.** v0.3 requires connectivity for server actions. The guided setup uses explicit Save, with dirty/saving/confirmed status and a discard guard. Its unsaved draft lives only in page memory. Reading preferences use local storage; event data is not cached for offline use. Later releases may cache the app shell and data already authorized for the current event/account. Pending local actions are distinct from confirmed server changes; each replayable request needs a stable request identifier. Logout/account switching clears the associated cache. Unrevealed secrets remain server-side. Trades and shared inventories are authoritative database transactions and remain pending until confirmed. A local event host is a separate future capability.
+**Offline contract.** All mutations, protected reveals, badge/prop lookups, and live authorization require connectivity. Unsaved forms remain in page memory. Batch 4 caches only public static assets through `public/sw.js` and explicitly projected, already-permitted journal readings through IndexedDB. No API response is stored by the service worker. `public/offline.js` excludes profiles, inventory, definition/answer data, credentials, and puzzle state. The standalone archive cannot make new discoveries or claim current authentication. It shows last-checked timestamps, supports deletion, and clears on logout/account switch or known revocation. Scope generations prevent a late request from restoring cleared data; blocked storage/purges fail closed. Offline devices cannot learn a remote revocation until reconnecting. No action queue or local event host is implemented.
 
 **Operational boundaries.** `/health/live` reports the running process; `/health/ready` also verifies the database/schema. Neither reveals credentials or participant data. The server drains on SIGTERM and imposes request/header timeouts. Old sessions and rate-limit buckets are periodically removed. Staging and production require distinct databases, secrets and domains.
 
@@ -41,7 +41,7 @@ Each object has an exact set of supported fields and a format version. Unknown/m
 
 Setup is limited to 180,000 normalized UTF-8 JSON bytes. A complete event pack is limited to 200,000 bytes, reserving enough room for maximum-sized public event metadata. Raw create/update/import requests are capped at 256 KiB, while ordinary small API bodies retain smaller limits. Content is limited to 20 entries, with titles up to 120 characters and bodies up to 6,000 characters. The server independently validates every write; browser validation is for feedback.
 
-All twelve planned gameplay instruments remain catalogued as unavailable. `enabledInstruments` currently accepts only `briefing`, or an empty list. An import cannot enable a future feature by guessing its identifier.
+`enabledInstruments` accepts the available `briefing`, `relic`, `dead-drop`, `cipherbox`, and `wayfinder` IDs, or an empty list. The remaining eight gameplay instruments stay unavailable. Disabling an instrument removes its live player card/action access; already-authorized journal snapshots remain readable.
 
 ## Event-pack format
 
@@ -114,7 +114,7 @@ A valid minimal organizer pack:
 }
 ```
 
-An organizer export includes organizer-only story records and requires owner/organizer membership. A player export is projected on the server; a claimed player pack containing an organizer entry is rejected. Neither format-1 pack includes accounts, memberships, invitations, activity history, live lifecycle state, character settings, factions, characters, or inventories. These additions remain separate database records; use the authorized character-copy API to reuse an identity. Import preserves the pack's nested content/rule IDs while creating a new event UUID, Draft state, fresh owner membership, and `event.imported` audit entry in one transaction. Import never overwrites an existing event. The original event and its permissions remain untouched.
+An organizer export includes organizer-only story records and requires owner/organizer membership. A player export is projected on the server; a claimed player pack containing an organizer entry is rejected. Neither format-1 briefing pack includes adventure definitions/solutions, progress, journal entries, attendance, accounts, memberships, invitations, activity history, live lifecycle state, character settings, factions, characters, or inventories. These additions remain separate database records; use the authorized character-copy API to reuse an identity. Import preserves the pack's nested content/rule IDs while creating a new event UUID, Draft state, fresh owner membership, and `event.imported` audit entry in one transaction. Import never overwrites an existing event. The original event and its permissions remain untouched.
 
 ## Batch 2 API additions
 
@@ -187,3 +187,40 @@ Routes below require a signed-in, enabled account. Event routes check current ev
 | `DELETE /api/admin/users/:user/sessions` | Superuser target-session revocation |
 
 Creation/copy returns HTTP 201; other successful character operations return 200. Invalid input returns 400, unauthenticated access 401, insufficient mutation authority 403, unavailable private/foreign records or badges 404, and stale/archived/capacity conflicts 409. Character/settings/item versions increment only on successful mutations. Private read responses may include separate inventory data; public responses never inherit fields from private serialization.
+
+
+## Adventure data and access
+
+`src/adventure-templates.js` is server-only and contains the three complete stories, solutions, release words, and two prewritten profiles per template. `GET /api/adventure-templates` returns only title/summary/player-count/duration metadata. Public static routing never serves that module. Templates create fresh Draft events, approved unassigned characters, initial inventory, and new cryptographic prop codes.
+
+`public/adventure-model.js` defines adventure format 1: `{ formatVersion, title, summary, organizerNotes, flags, nodes }`. It accepts up to 50 instruments and 30 flags, within 2,000,000 normalized JSON bytes. Common node fields are `{ id, type, title, summary, code, conditions, actions }`, plus exact type fields. Unknown fields, invalid own-data descriptors, unsupported types/references, duplicate codes/IDs, and cyclic completed-node dependencies are rejected. `dead_drop` is the node type; `dead-drop` is the setup instrument ID.
+
+Conditions require every selected completed node, character skill, and flag. A nonempty `statuses` list matches any listed **event lifecycle status**. Outcomes set declared flags once. RELIC allows 1–8 separately authorized examinations; DEAD DROP holds protected text, optional release phrase, and optional validated MPEG/Ogg/WAV data audio; CIPHERBOX holds an answer, matching mode, 1–20 attempts, up to five threshold-gated hints, and success/failure readings; WAYFINDER holds scene instructions, location, duration, capacity, and optional dated availability. Audio totals at most 1,000,000 decoded bytes per adventure, with allowed MIME signatures and no external URLs.
+
+Players act only as their assigned approved character in Live or Rehearsal. Current membership, account status, enabled instruments, conditions, and record versions are checked on the server. Managers preview approved characters read-only and use separate audited overrides to release/solve/reset attempts. An unapproved character may read its prior journal but receives no newly unlocked instrument content. Public projections omit solutions, release phrases, organizer notes, conditions/actions/flags, unrevealed examination text, and unrequested hint text. Node titles and summaries are public introductions and must not contain secrets.
+
+Actions acquire the event lock before fresh membership/assignment checks. Each action has a UUID request ID, definition version, character/node IDs, and a supported kind. The server hashes its payload: same ID/same payload returns the original outcome with a fresh authorized snapshot; changed payload returns 409. Completion flags and unique journal entry keys prevent double effects even with a new request ID. Puzzle attempts have a one-second cooldown; exhausted attempts set the failure outcome. Resetting failed attempts preserves previous readings and flags. Journal rows are immutable snapshots of what was actually revealed.
+
+WAYFINDER joining checks open/start/end state and current eligible attendance under the event lock. Ineligible retired/draft/unassigned/disabled or removed-member reservations do not consume live capacity. Minimum players is a gathering guide, maximum capacity is enforced. Joining records a reservation and authored outcome once; leaving/rejoining does not duplicate it. A reservation is not proof that an in-person scene took place.
+
+Definition editing requires Draft/Rehearsal with no run records. A dedicated rehearsal copy uses a new event, fresh codes and character IDs, remapped factions, approved unassigned characters, and initial equipment only. Sources with more than 100 profiles are rejected. Copies carry no memberships, invitations, progress, requests, journal, or attendance. Reset requires that copy's Rehearsal status, current version, and explicit confirmation; it clears only its gameplay tables and advances the definition version. Original event records, definition, and characters are preserved. Both event factories enforce a current enabled account and bounded creation rate.
+
+## Adventure routes and prop identity
+
+| Route | Contract |
+| --- | --- |
+| `GET /api/adventure-templates` | Authenticated safe catalog |
+| `POST /api/adventure-templates/:theme` | Optional `{ name }`; create full Draft template, return `{ event }` |
+| `GET/PUT /api/events/:event/adventure/manage` | Manager definition/progress; save `{ version, definition }` |
+| `GET .../adventure/play?characterId=UUID` | Authorized player snapshot; manager-only `preview=true` is read-only |
+| `GET .../adventure/lookup?characterId=UUID&code=CODE` | Same snapshot plus focused unlocked node |
+| `POST .../adventure/action` | `{ requestId, version, characterId, nodeId, kind, ...kindFields }` |
+| `POST .../adventure/override` | Manager `release`, `solve`, or `reset_attempts` with the same common IDs/version |
+| `POST .../adventure/rehearsal` | `{}` creates isolated copy and returns `{ event }` |
+| `POST .../adventure/reset` | `{ version, confirm: true }` resets a dedicated copy |
+
+Player kinds are `examine` (`examId`, printed `code`), `open` (optional release `code`), `attempt` (`answer`), `hint` (`hintIndex`), `join`, and `leave`. Responses include the fresh safe play snapshot and `{ outcome: { kind, message, replayed } }`. No client-supplied success, profile, or flag value is trusted. Requests are bounded to 5,000 per character/adventure; definition requests use a separate size cap.
+
+Prop QR links use same-origin `/#prop/EVENT_UUID/CODE20`, distinct from character badge links. Scans are parsed as data and never navigate arbitrary URLs. Label printing includes only event name, node title/type, and code/QR. Single-prop view keeps the current character's authorization and offers fullscreen; it does not grant anonymous access or lock an organizer session. Browser camera consent and teardown follow the existing QR scanner contract.
+
+The IndexedDB archive keeps at most 30 event/character journal snapshots, each at most 3 MB. Cached scene data is only a journal reading previously recorded on joining; it does not assert current availability. Preview responses are not cached. Static caching is an exact same-origin GET allowlist, using network-first responses and offline fallback, with no API/range/auth-header/query caching. Failed asset writes do not break the live application.

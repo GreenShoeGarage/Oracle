@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { VERSION } from "./config.js";
 import { createAdminHandler, isReservedSuperuserEmail, registerSuperuserAllowed, systemAudit } from "./admin.js";
 import { createCharacterHandler } from "./characters.js";
+import { createAdventureHandler } from "./adventures.js";
 import { checkSchema, transaction } from "./db.js";
 import {
   THEMES,
@@ -171,9 +172,10 @@ export function createApp({
   config,
   logger = (entry) => console.log(JSON.stringify(entry)),
 }) {
-  const helpers = { body, send, fail, identifier, membership, audit, transaction };
+  const helpers = { body, send, fail, identifier, membership, audit, transaction, safeEvent };
   const adminHandler = createAdminHandler({ pool, config, helpers });
   const characterHandler = createCharacterHandler({ pool, config, helpers });
+  const adventureHandler = createAdventureHandler({ pool, config, helpers });
   return async function handle(req, res) {
     const requestId = randomUUID();
     res.setHeader("X-Request-Id", requestId);
@@ -186,7 +188,7 @@ export function createApp({
     );
     res.setHeader(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' data: blob:; worker-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     );
     res.setHeader("Cache-Control", "no-store");
     if (config.production)
@@ -215,6 +217,14 @@ export function createApp({
         const assets = {
           "/": ["index.html", "text/html"],
           "/app.js": ["app.js", "text/javascript"],
+          "/adventure-model.js": ["adventure-model.js", "text/javascript"],
+          "/adventure-player.js": ["adventure-player.js", "text/javascript"],
+          "/adventure-organizer.js": ["adventure-organizer.js", "text/javascript"],
+          "/adventure.css": ["adventure.css", "text/css"],
+          "/adventure-organizer.css": ["adventure-organizer.css", "text/css"],
+          "/offline.js": ["offline.js", "text/javascript"],
+          "/prop-code.js": ["prop-code.js", "text/javascript"],
+          "/sw.js": ["sw.js", "text/javascript"],
           "/characters-ui.js": ["characters-ui.js", "text/javascript"],
           "/characters-model.js": ["characters-model.js", "text/javascript"],
           "/characters.css": ["characters.css", "text/css"],
@@ -318,8 +328,10 @@ export function createApp({
         return send(res, 200, { user: safeUser(existing) });
       }
       if (!user) fail(401, "Sign in to continue.");
+      res.setHeader("X-ORACLE-Account", user.id);
       if (await adminHandler({ req, res, path, url, method, user })) return;
       if (await characterHandler({ req, res, path, url, method, user })) return;
+      if (await adventureHandler({ req, res, path, url, method, user })) return;
       if (path === "/api/catalog" && method === "GET")
         return send(res, 200, { themes: THEMES, templates: TEMPLATES, instruments: INSTRUMENTS });
       if (path === "/api/auth/logout" && method === "POST") {
