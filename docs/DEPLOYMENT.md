@@ -1,28 +1,37 @@
 # ORACLE deployment and recovery
 
-Target: GitHub source control and Railway application/PostgreSQL hosting. Configure each real service before its first source-backed deployment. Never deploy a placeholder image to satisfy a setup step.
+GitHub source control and Railway application/PostgreSQL hosting. Recorded September 5, 2026. Configure each service before its first source-backed deployment.
 
 ## Current infrastructure
 
-- Railway project: ORACLE
-- Project ID: `d1989864-9a40-4176-a9d3-203a06c4bd72`
-- Production environment ID: `c31cbf3b-caa0-4c09-ae75-741daa6bcd85`
-- Current state: Empty project; no application, database, domain, or staging deployment is live.
-- GitHub repository: https://github.com/GreenShoeGarage/Oracle (created by the owner; source upload and verification in progress).
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Runtime release commit: `b159c88a3f98c9a6d14e488449ac089c4b7001c4` (v0.1.0, schema version 1).
 
-No failed application deployment was started. Exploratory staged infrastructure was discarded before deployment because it did not meet the requested configuration.
+Production deployment `83b762b8-47dc-47b8-80aa-8ad2e04eee45` succeeded from the `production` branch at that exact commit.
+
+| Target | Railway project | Project ID | Application URL | Status |
+| --- | --- | --- | --- | --- |
+| Staging | ORACLE Staging | `4e75d5ec-f8e9-492d-ae75-e0d44428d24a` | [Staging app](https://oracle-production-488d.up.railway.app) | Deployed; public readiness and asset checks passed; authenticated walkthrough incomplete |
+| Production | ORACLE | `d1989864-9a40-4176-a9d3-203a06c4bd72` | [Production app](https://oracle.greenshoegarage.com) | v0.1.0 live; HTTPS readiness and session API verified |
+
+Each project uses its own default Railway environment named `production`. These are separate environments in separate projects: staging has `APP_ENV=staging`, while production has `APP_ENV=production`. The environment IDs are `ae381b6c-578f-4e25-a71c-094124ca2105` for staging and `c31cbf3b-caa0-4c09-ae75-741daa6bcd85` for production.
+
+Each has a separate PostgreSQL 18 service and persistent volume, using Railway's PostgreSQL template with `/var/lib/postgresql/data` mounted as required by that image. Application `DATABASE_URL` references resolve to the Postgres service in the same project and environment. Credentials and event data are isolated.
+
+The canonical production origin is `https://oracle.greenshoegarage.com`, explicitly set in `APP_ORIGIN`. The generated [Railway production domain](https://oracle-production-77f2.up.railway.app) also serves health checks, but cookie-authenticated mutations require the canonical origin. Use the custom domain for normal application access.
 
 ## Repository and release branches
 
-Create a private repository named `ORACLE` in the selected GitHub account or organization and grant both the connected GitHub application and Railway access to it. Upload this repository's contents at the repository root. Keep secrets out of Git.
+The owner-created repository is public and contains the source at its root. Its existing license and Git attributes have been preserved. Keep secrets out of Git.
 
-Use `staging` for staging and `main` for production. The supplied workflow runs for pushes to both and for pull requests. Set the required `verify` status check on protected release branches if the account supports branch protection. Enable Railway's Wait for CI where the integration offers it. If the feature cannot be enabled, disable automatic production deployment and explicitly deploy only the checked commit.
+Use `main` for integration and `staging` for the staging application. The supplied workflow runs for pushes to both branches and for pull requests. Railway production follows the dedicated `production` release branch, currently at runtime commit `b159c88a3f98c9a6d14e488449ac089c4b7001c4`. Advance that branch only after checking CI and staging for the exact candidate commit. This is a manual promotion procedure: Railway's Wait for CI was unavailable through the connector and `checkSuites` remains false. No automatic branch protection is claimed.
+
+The initial release passed CI and deployed public health/session checks. The additional two-account walkthrough against remote staging was interrupted before a complete result, so it remains an open acceptance check. The equivalent authorization and persistence tests passed in CI; these results are recorded separately.
 
 Do not assume that a successful push proves deployment success. Inspect the workflow for the exact commit, then the Railway deployment result and readiness endpoint.
 
 ## Configure Railway before source attachment
 
-Create a separate staging environment, with its own PostgreSQL instance, credentials, persistent volume, app instance, and domain. Verify that staging's `DATABASE_URL` resolves to its staging database; it must not reference production data. Use the platform PostgreSQL template and confirm that its database data directory is actually on a mounted persistent volume.
+The current deployment uses a separate staging project, with its own PostgreSQL instance, credentials, persistent volume, app instance, and domain. When recreating it, verify that staging's `DATABASE_URL` resolves to its staging database and that the PostgreSQL template's required data directory is on the mounted persistent volume.
 
 For each application service, configure:
 
@@ -37,7 +46,9 @@ For each application service, configure:
 | Application sleep | Disabled for live events |
 | `NODE_ENV` | `production` |
 | `APP_ENV` | `staging` or `production` |
-| `DATABASE_URL` | Reference the database in this environment |
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}`, referencing the database in this project/environment |
+| `DATABASE_SSL` | `disable` for the intended Railway private network connection |
+| `PORT` | `3000`, matching the generated domain's target port |
 | `APP_ORIGIN` | Exact HTTPS origin for this app instance |
 | `REGISTRATION_ENABLED` | `true` initially; configurable by operator |
 
@@ -50,18 +61,20 @@ Attach the confirmed repository and correct environment branch only after databa
 ## Release gate
 
 1. Run `npm ci` and `npm run verify` on the release commit.
-2. Pass the GitHub job against PostgreSQL 18, including the backup/restore rehearsal and production Docker build.
+2. Pass the GitHub job against PostgreSQL 18, including the concurrent credential/session test, backup/restore rehearsal, and checks of the running production Docker image.
 3. Deploy staging with its isolated database. Check logs, exact version, and `/health/ready`.
 4. Use two disposable accounts and events to verify sign-in, ownership, invitation redemption, role enforcement, persistence after refresh, and removal of access.
 5. Take a database backup before schema changes and verify recovery prerequisites.
-6. Promote that checked source state to production. Verify deployment success, readiness, public assets, and authenticated access.
+6. Advance the `production` branch to that checked source commit. Verify deployment success, readiness, public assets, and authenticated access at the canonical production origin.
 7. Record the release commit, app version, migration version, deployment ID, and known limitations.
 
 Railway's deployment health check gates traffic switching; it is not continuous uptime monitoring. See [Health checks](https://docs.railway.com/deployments/healthchecks), [Pre-deploy commands](https://docs.railway.com/deployments/pre-deploy-command), and [GitHub autodeploys](https://docs.railway.com/deployments/github-autodeploys).
 
 ## Backups
 
-Enable and verify the database's available scheduled volume backups. Availability and retention depend on the actual account and service; do not assume a schedule exists because it appears in documentation. If scheduling is unavailable, use a scheduled external backup runner with protected credentials and durable storage. Scheduled backups remain an outstanding deployment gate until configured and verified.
+Scheduled production backups are **not configured**. Railway's returned effective limits for this HOBBY workspace report `maxBackupsCount: 0`. No paid plan change or external backup service has been configured. The PostgreSQL `pg_dump`/`pg_restore` rehearsal passed in GitHub CI on disposable test data; it verifies the recovery tooling and does not protect live production data.
+
+Before relying on ORACLE for event data, enable and verify scheduled volume backups on a plan that supports them, or configure a scheduled external backup runner with protected credentials and durable storage. Verify retention and a real restore. Scheduled backups remain an outstanding Batch 1 operational requirement until configured and verified.
 
 For a portable logical backup, use PostgreSQL client tools matching or newer than the server major version. Set `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, and `PGDATABASE` in the backup runner's protected environment. Keep backups outside the app container and out of Git.
 

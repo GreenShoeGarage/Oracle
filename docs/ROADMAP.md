@@ -2,8 +2,10 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 1.2 · September 5, 2026  
-Status: Batch 1 is implemented and verified locally; repository creation, PostgreSQL TCP checks, staging, and production deployment remain pending. All later batches are planned.  
+Development roadmap · Planning revision: 1.3 · September 5, 2026
+
+Status: Batch 1 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). PostgreSQL 18, recovery, running Docker image CI, and public deployment checks passed. The remote authenticated staging walkthrough and scheduled backups remain outstanding. All later batches are planned.
+
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
 
@@ -25,7 +27,7 @@ The first complete adventure is targeted for v0.4. Player-to-player information 
 
 **Batch 1 — v0.1: Platform and reliable deployment**
 
-Implementation status (September 5, 2026): Authentication, event membership and roles, lifecycle controls, migrations, health/readiness checks, production Dockerfile, and GitHub checks are written. The local PostgreSQL-in-WebAssembly suite passed 22 checks, including snapshot restoration; one multi-connection password-change race test is reserved for the PostgreSQL TCP CI gate. The production dependency audit reported zero vulnerabilities. Railway project ORACLE exists and is empty. The available GitHub connector cannot create a repository, so source upload, GitHub CI, PostgreSQL TCP/pg_dump recovery verification, configured backups, isolated staging, and deployment remain outstanding. This batch is not yet accepted as deployed.
+Implementation status (September 5, 2026): Authentication, event membership and roles, lifecycle controls, migrations, health/readiness checks, and the production Docker image are implemented in [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Runtime commit `b159c88a3f98c9a6d14e488449ac089c4b7001c4` passed GitHub CI on main and staging against PostgreSQL 18 TCP, including concurrent password changes, real `pg_dump`/`pg_restore` recovery with content and identity-sequence checks, startup/readiness/shutdown, and secure sessions in the running production image. The production dependency audit reported zero vulnerabilities. Isolated Railway projects ORACLE and ORACLE Staging have separate PostgreSQL services and persistent volumes. Staging and production are deployed; public readiness/session checks passed, confirming application v0.1.0 and schema version 1. The additional remote authenticated staging walkthrough was interrupted before a complete result and remains unverified. Production follows a dedicated `production` branch for manual promotion after CI and staging checks; Railway Wait for CI is not enabled. Scheduled backups are not configured because the workspace's effective Railway HOBBY limits report zero managed-backup capacity. The CI restore rehearsal verifies tooling, not ongoing protection of live event data. See [STATUS.md](STATUS.md) for evidence and remaining requirements.
 
 Create the GitHub project, application skeleton, Railway application and database configuration, and a repeatable deployment workflow. Establish an isolated staging environment, authentication, event membership, organizer/staff/player permissions, and server-side event isolation. Define event states: draft, rehearsal, live, paused, ended, and archived.
 
@@ -163,4 +165,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next action: create or resolve the ORACLE GitHub repository, upload the checked source, run the PostgreSQL and Docker CI gates, and complete the staging/deployment requirements for Batch 1. Batch 2 has not started. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next action: complete the remote authenticated staging walkthrough and resolve the scheduled-backup requirement for Batch 1. Batch 2 has not started. Public branding uses ORACLE with the subtitle “LARP Field Kit.”

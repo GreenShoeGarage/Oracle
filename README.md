@@ -4,7 +4,7 @@
 
 ORACLE is a modular web application for Live Action Roleplaying events. This first development batch provides accounts, private event workspaces, invitations, membership roles, and event lifecycle management. The longer roadmap adds themed instruments, characters, QR exchanges, and live event tools.
 
-This is the Batch 1 foundation. Source repository: https://github.com/GreenShoeGarage/Oracle. The production deployment and PostgreSQL TCP/restore CI gate are being completed for this release. See [docs/STATUS.md](docs/STATUS.md) for the exact verification status.
+The Batch 1 foundation is live at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app). GitHub CI has passed against PostgreSQL 18, including recovery and the running production Docker image. Scheduled database backups and a completed authenticated staging walkthrough remain outstanding. See [docs/STATUS.md](docs/STATUS.md) for the exact verification status.
 
 ## What works in this release
 
@@ -33,7 +33,7 @@ Node.js 22 (22.9 or newer) or 24, a small native HTTP server, PostgreSQL, and pl
 | `migrations/` | Ordered, immutable PostgreSQL migrations |
 | `scripts/` | Checks, migration, smoke, and recovery tools |
 | `test/` | Database-backed authorization and persistence tests |
-| `.github/workflows/ci.yml` | Checks against PostgreSQL 18 and Docker image build |
+| `.github/workflows/ci.yml` | PostgreSQL 18 checks, backup/restore rehearsal, and running Docker image checks |
 | `Dockerfile` | Non-root Railway production image |
 | `docs/` | Roadmap, architecture, deployment, and current status |
 
@@ -121,7 +121,7 @@ export TEST_DATABASE_URL='postgresql://oracle:local-password@localhost:5432/orac
 npm run verify
 ```
 
-The suite resets that database's `public` schema. Never point it at an event database. The GitHub workflow provisions PostgreSQL 18 for this gate, rehearses `pg_dump`/`pg_restore` into a new database, checks startup and shutdown, and builds the production Docker image.
+The suite resets that database's `public` schema. Never point it at an event database. The GitHub workflow provisions PostgreSQL 18 for this gate, rehearses `pg_dump`/`pg_restore` into a new database with content and identity-sequence comparisons, checks startup and shutdown, and builds and runs the production Docker image with secure session settings.
 
 For a deployed service:
 
@@ -133,7 +133,7 @@ The smoke command checks readiness, session API, and public assets without creat
 
 ## Railway deployment and recovery
 
-Follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). It describes source attachment, separate staging and production databases, current Railway settings, CI gates, environment variables, backups, and rollback. Configure the database and migration/readiness settings before attaching a source so the first app deploy has its prerequisites.
+Follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Staging and production use separate Railway projects, PostgreSQL databases, and volumes. The `main` branch is for integration, `staging` deploys the test environment, and Railway production follows the dedicated `production` release branch. Future promotions require a successful CI run and the staging checks described in the release guide. Scheduled backups are not configured: the workspace currently reports zero managed-backup capacity. The passed CI restore rehearsal verifies recovery tooling, but does not back up live event data.
 
 ## Troubleshooting
 
