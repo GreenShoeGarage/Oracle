@@ -2,75 +2,55 @@
 
 Recorded September 5, 2026.
 
-Source repository: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Candidate application version: `0.2.0`; target schema version: `2`. Candidate verification and production promotion are in progress. The last verified production release is `b159c88a3f98c9a6d14e488449ac089c4b7001c4` (application `0.1.0`, schema `1`).
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Release commit: `537c17443947694664499d91007c289bdfc2ac6d`. Application `0.2.0`; database schema `2`; event-pack format `1`.
 
-## Batch 2 implemented
+Batch 2 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Local verification, GitHub CI, the full remote staging journey, Railway production deployment, and exact-commit production smoke all passed.
 
-- Fantasy, Cyberpunk, and Wasteland themes with validated colors, font/icon/texture choices, terminology, and optional sound cues.
-- Four-step guided event setup and editing: World, Event, Material & rules, Review.
-- Blank event and three themed starter briefings, each with a starting scene and organizer notes. Complete adventures remain a later batch.
-- Optional Briefing instrument, audience-marked authored entries, organizer workspace, player reading/preview, and prop display.
-- Dark/outdoor settings, device/reduced motion, collapsible navigation, and explicit unsaved/saving/confirmed status. Drafts remain in page memory until the organizer saves.
-- Bounded declarative rules definitions; no scripts or automatic challenge execution.
-- Strict format-1 organizer/player packs. Imports create a new owned Draft, preserve nested rule/content IDs, and do not transfer identities, memberships, invitations, history, or lifecycle state.
-- Additive schema-2 migration preserving Batch 1 records, plus targeted migration and authorization regression tests.
-- GitHub `staging-smoke` waits for the exact candidate commit, version, and schema before the two-account deployed workflow. On the release branch, `production-smoke` waits for that same checked commit at the canonical production origin and performs only public GET requests.
+## Shipped capabilities
 
-All twelve planned gameplay instruments, characters, QR exchange, offline synchronization, and complete starter adventures remain unimplemented. A prop preview retains the signed-in account's permissions; unattended devices should use a player account.
+- Batch 1 accounts, private event membership, roles, invitations, lifecycle controls, and activity logs remain supported.
+- Fantasy, Cyberpunk, and Wasteland themes with validated colors, fonts, icons, textures, terminology, and optional sound cues.
+- Four-step guided setup, a blank template, and three themed starter briefings with organizer preparation notes.
+- Optional Briefing instrument; player and organizer material; organizer workspace, player preview/reading view, and fullscreen prop display.
+- Dark/outdoor settings, reduced motion, collapsible navigation, and explicit unsaved/saving/confirmed status.
+- Bounded declarative rules and strict format-1 organizer/player event packs. Imports create new owned Drafts without transferring memberships, account information, invitations, history, or lifecycle state.
+- Additive schema-2 migration that preserves Batch 1 records. Event creation without setup remains compatible.
 
-## Batch 2 verification
+The twelve planned gameplay instruments, character creation, QR exchange, offline synchronization, and complete starter adventures remain later batches. A prop preview retains the signed-in account's permissions; use a player account on unattended devices.
 
-Local verification completed:
+## Verified release evidence
 
-- The final `npm run verify` passed 42 of 43 tests, with zero failures and one deliberate skip for the test that requires independent PostgreSQL TCP connections. This includes the near-limit event-pack export regression. Syntax, version alignment, asset presence, and Git whitespace checks also passed.
-- Real Chromium browser QA passed 11 scenario groups against the local application. Covered registration, all three themed setup wizards, bounded-rule validation with retained inputs, player/prop private-content exclusion from the DOM, prop flags, return to organizer controls, and theme switches preserving rules and content IDs.
-- Browser QA also exercised actual export downloads and UI import into a fresh Draft; a simulated 503 save retained the draft, protected cancellation, and saved successfully on retry. Desktop and 375-pixel viewport checks covered outdoor settings, collapsed navigation, and refresh without horizontal overflow or unexpected console errors.
-- The complete staging-check script passed a local API rehearsal using production cookie settings and an expected-commit fixture. SQL cleanup checks found zero active test sessions and zero unarchived test events. This rehearses the checker; it is not a remote staging result.
-- The production read-only smoke path passed its local rehearsal: 11 GET requests, zero created users, and zero created events.
-- The documented JSON event-pack example passes the shared server/browser validator.
+| Check | Result |
+| --- | --- |
+| Local `npm run verify` | 43 tests: 42 passed, 0 failed, 1 TCP-only skip; syntax, version, assets, and whitespace checks passed |
+| [Main CI 33996969465](https://github.com/GreenShoeGarage/Oracle/actions/runs/33996969465) | Passed on the recorded release commit |
+| [Staging CI 33996970033](https://github.com/GreenShoeGarage/Oracle/actions/runs/33996970033) | Verification and deployed staging workflow passed on the same commit |
+| GitHub PostgreSQL 18 suite | 43 tests: 42 passed, 0 failed, 1 PGlite-only snapshot skip; real TCP password/session race passed |
+| Recovery and runtime gates | Real `pg_dump`/`pg_restore` with content/identity checks, startup/readiness/shutdown, and built production Docker image with secure sessions passed |
+| [Remote staging journey, job 101389165649](https://github.com/GreenShoeGarage/Oracle/actions/runs/33996970033/job/101389165649) | Complete two-account workflow passed; test events archived and sessions logged out |
+| Local Chromium QA | 11 scenario groups passed at desktop and 375-pixel widths |
+| [Production CI 33997027349](https://github.com/GreenShoeGarage/Oracle/actions/runs/33997027349) | Exact-commit public smoke passed at the canonical production domain; Railway deployment succeeded |
 
-Pending release evidence: GitHub PostgreSQL/Docker/recovery checks, the full exact-commit remote staging journey, and production deployment verification. Actual deployed results must be recorded after these complete.
+The deployed staging journey checked exact commit/version/schema, assets, secure cookies and Origin protection, registration, cross-event isolation, invitation redemption, player read access and rejected edits, server-filtered player/prop material, all three themes preserving rules/content IDs, organizer export/import into a fresh Draft, player exports without secrets, stale-save conflicts, persistence after sign-in, and immediate revocation across detail/pack/preview routes. This closes the interrupted Batch 1 authenticated staging acceptance check.
 
-The migration retains existing data but changes the expected schema to 2. After applying it, the schema-1-only v0.1.0 app cannot serve as a rollback image. Use a tested schema-2-compatible roll-forward fix; do not drop setup data or bypass readiness.
+Local Chromium QA exercised the actual setup wizards, validation with retained inputs, audience filtering in the DOM, prop flags, organizer return, theme preservation, file download and UI reimport, and simulated 503 save recovery with discard protection. Outdoor/collapsed settings and refresh passed without horizontal overflow or unexpected console errors. Local rehearsals also verified the automated staging check's cleanup and the production smoke's read-only behavior (11 GET requests, zero created users/events). The documented pack example passes shared validation.
 
-## Batch 1 baseline
+Local database tests used PGlite; PostgreSQL TCP, recovery client tools, and Docker results came from GitHub CI. Browser QA used local Chromium, not a human event or representative physical phones.
 
-Account registration/login/logout, password changes, hashed server-side sessions, database-backed rate limiting, exact-origin write protection, private event membership, owner/organizer/staff/player roles, expiring/revocable invitations, single-use privileged invitations, lifecycle transitions, optimistic edit conflicts, activity logs, responsive browser interface, versioned checksum-checked migrations, health/readiness endpoints, production Dockerfile, GitHub CI, and deployment/recovery documentation.
+## Deployment record
 
-Two independent source reviews found and led to fixes for: password-change/login ordering; privileged invitation reuse; shutdown exit-code verification; production-image execution in CI; and content/identity-sequence checks after recovery.
-
-## Previously completed Batch 1 verification
-
-- Local `npm run verify`: 23 tests total; 22 passed, 0 failed, 1 deliberately skipped because it requires independent PostgreSQL connections. The local integration database was PGlite (PostgreSQL compiled to WebAssembly).
-- GitHub CI passed for the release commit on [main, run 33994950816](https://github.com/GreenShoeGarage/Oracle/actions/runs/33994950816) and [staging, run 33995002387](https://github.com/GreenShoeGarage/Oracle/actions/runs/33995002387).
-- CI used a real PostgreSQL 18 TCP service. Its suite passed 22 of 23 tests, including the concurrent password-change/login test; the PGlite-only snapshot test was skipped because CI separately exercises a full logical backup and restore.
-- Covered event isolation, role restrictions, invitation authorization/revocation/limits, lifecycle validation, session expiry/logout/password changes, SQL-shaped inputs, transactional rollback, and migration repeatability/checksum protection.
-- The real `pg_dump`/`pg_restore` rehearsal passed with restored content digests, identity-sequence checks, and migration after restore.
-- Startup, database readiness, session API, public assets, and clean shutdown checks passed.
-- CI built and ran the production Docker image, confirming production configuration, secure session creation, and graceful shutdown.
-- Syntax, version alignment, and static entrypoint assets checked. The production dependency audit reported zero vulnerabilities at the time of the check.
-- Staging's public health/readiness, session API, and asset smoke checks passed.
-- Production HTTPS health/readiness returned HTTP 200 with version `0.1.0` and schema version `1`; the session API returned HTTP 200 with the production environment. These checks passed on the canonical custom domain and generated Railway domain.
-- Railway production deployment `83b762b8-47dc-47b8-80aa-8ad2e04eee45` succeeded at the recorded runtime commit from the `production` branch.
-- The additional two-account remote staging walkthrough was interrupted before a complete result. It is not recorded as passed; equivalent authorization and persistence journeys passed in CI. No production test accounts or events were created.
-
-The local environment has no Docker daemon or PostgreSQL server tools. The Docker and PostgreSQL TCP results above were obtained in GitHub CI.
-
-## Infrastructure state
-
-| Target | Railway project | Project ID | State |
+| Target | Project ID | Deployment ID | State |
 | --- | --- | --- | --- |
-| Staging | ORACLE Staging | `4e75d5ec-f8e9-492d-ae75-e0d44428d24a` | Application deployed; public checks passed |
-| Production | ORACLE | `d1989864-9a40-4176-a9d3-203a06c4bd72` | v0.1.0 live; HTTPS readiness and session API verified |
+| [Staging](https://oracle-production-488d.up.railway.app) | `4e75d5ec-f8e9-492d-ae75-e0d44428d24a` | `e8b1aef5-0b88-4069-bac3-a138b831ce1d` | Success at release commit; full workflow passed |
+| [Production](https://oracle.greenshoegarage.com) | `d1989864-9a40-4176-a9d3-203a06c4bd72` | `d8e09f12-373d-4201-911f-8bd7365a3e12` | Success at release commit; public smoke passed |
 
-Production is available at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com), the canonical `APP_ORIGIN`. Staging is available at [oracle-production-488d.up.railway.app](https://oracle-production-488d.up.railway.app). Each Railway project has its own default environment named `production`, PostgreSQL 18 service, credentials, and persistent volume. `APP_ENV=staging` distinguishes the test application; its data is separate from production.
+Each Railway project has its own default environment named `production`, PostgreSQL 18 service, credentials, and persistent volume. Staging uses `APP_ENV=staging`. Production's canonical `APP_ORIGIN` is `https://oracle.greenshoegarage.com`.
 
-Railway staging follows `staging`; production is configured to follow the dedicated `production` release branch at the checked runtime commit. `main` is for integration. Future production branch advances require manual verification of the exact commit's CI and staging results. Railway Wait for CI is not enabled (`checkSuites: false`). See [DEPLOYMENT.md](DEPLOYMENT.md) for the release procedure and current configuration.
+`main` is for integration, `staging` deploys the test application, and `production` advances only to the commit already checked by CI and staging. Railway Wait for CI is not enabled. The successful [production smoke job 101389239199](https://github.com/GreenShoeGarage/Oracle/actions/runs/33997027349/job/101389239199) confirmed the exact promoted commit, application v0.2.0, and schema 2 at the canonical domain using only public GET checks. Duplicate verification and staging jobs were skipped on this release-branch push as intended. No production test accounts or events were created. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
-## Outstanding operational requirements
+## Remaining limits
 
-- Pass the new automated two-account staging gate for the Batch 2 candidate. This will close the interrupted Batch 1 remote walkthrough requirement when an actual successful result is recorded.
-- Configure and verify scheduled production backups. Railway's effective HOBBY plan limits report `maxBackupsCount: 0`; no scheduled backup or external backup runner is configured. The CI recovery rehearsal does not back up live data.
-- Local Chromium visual/workflow QA has passed at desktop and 375-pixel widths. Representative physical-device testing and a human field pilot remain pending.
-
-Batch 1 remains the last verified production deployment. Batch 2 is implemented and undergoing release verification. Production promotion and scheduled backups remain explicitly open until their respective results are recorded.
+- Scheduled production backups are not configured. Railway's effective HOBBY limits report `maxBackupsCount: 0`; no external runner is configured. CI recovery tests do not back up live data, and an organizer event pack does not restore accounts or event history.
+- Schema 2 is not compatible with the schema-1-only v0.1.0 rollback image. Preserve the migrated database and roll forward with a tested schema-2-compatible fix; do not drop setup data or bypass readiness.
+- Unsaved setup drafts live in page memory until explicitly saved. Server actions require connectivity.
+- Representative physical-device testing and a human field pilot remain future roadmap gates.

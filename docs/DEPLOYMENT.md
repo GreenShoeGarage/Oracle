@@ -1,17 +1,17 @@
 # ORACLE deployment and recovery
 
-GitHub source control and Railway application/PostgreSQL hosting. Recorded September 5, 2026. Batch 2 source targets application v0.2.0 and database schema 2; release verification and promotion are pending. Configure each service before its first source-backed deployment.
+GitHub source control and Railway application/PostgreSQL hosting. Recorded September 5, 2026. Batch 2 (application v0.2.0, schema 2) passed GitHub CI, the full remote staging workflow, and production deployment/readiness checks. Configure each service before its first source-backed deployment.
 
 ## Current infrastructure
 
-Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Last verified production runtime commit: `b159c88a3f98c9a6d14e488449ac089c4b7001c4` (v0.1.0, schema version 1).
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Release commit: `537c17443947694664499d91007c289bdfc2ac6d` (v0.2.0, schema version 2).
 
-Production deployment `83b762b8-47dc-47b8-80aa-8ad2e04eee45` succeeded from the `production` branch at that exact commit.
+Staging deployment `e8b1aef5-0b88-4069-bac3-a138b831ce1d` succeeded at this commit. Production deployment `d8e09f12-373d-4201-911f-8bd7365a3e12` succeeded at the same checked commit from `production`. [Production smoke run 33997027349](https://github.com/GreenShoeGarage/Oracle/actions/runs/33997027349) confirmed that exact commit, application v0.2.0, and schema 2 at the canonical custom domain through public GET checks.
 
 | Target | Railway project | Project ID | Application URL | Status |
 | --- | --- | --- | --- | --- |
-| Staging | ORACLE Staging | `4e75d5ec-f8e9-492d-ae75-e0d44428d24a` | [Staging app](https://oracle-production-488d.up.railway.app) | Deployed; public readiness and asset checks passed; authenticated walkthrough incomplete |
-| Production | ORACLE | `d1989864-9a40-4176-a9d3-203a06c4bd72` | [Production app](https://oracle.greenshoegarage.com) | v0.1.0 live; HTTPS readiness and session API verified |
+| Staging | ORACLE Staging | `4e75d5ec-f8e9-492d-ae75-e0d44428d24a` | [Staging app](https://oracle-production-488d.up.railway.app) | v0.2.0 deployed; exact-commit two-account workflow passed |
+| Production | ORACLE | `d1989864-9a40-4176-a9d3-203a06c4bd72` | [Production app](https://oracle.greenshoegarage.com) | v0.2.0 live; exact-commit production smoke passed |
 
 Each project uses its own default Railway environment named `production`. These are separate environments in separate projects: staging has `APP_ENV=staging`, while production has `APP_ENV=production`. The environment IDs are `ae381b6c-578f-4e25-a71c-094124ca2105` for staging and `c31cbf3b-caa0-4c09-ae75-741daa6bcd85` for production.
 
@@ -23,9 +23,9 @@ The canonical production origin is `https://oracle.greenshoegarage.com`, explici
 
 The owner-created repository is public and contains the source at its root. Its existing license and Git attributes have been preserved. Keep secrets out of Git.
 
-Use `main` for integration and `staging` for the staging application. The workflow listens to `main`, `staging`, and `production` pushes and pull requests. Its `verify` job runs on integration/staging commits and pull requests. On `staging`, a dependent `staging-smoke` job waits for the checked `GITHUB_SHA` to appear in readiness with the expected application and schema versions, then runs the authenticated two-account journey. Production promotion skips duplicate verification and runs `production-smoke`: up to five minutes waiting for that exact SHA, version, and schema at the canonical custom domain, followed by public GET checks. This relies on promoting the already-verified commit; the production job is not a replacement for CI and staging gates. Railway production follows the dedicated `production` release branch, currently at runtime commit `b159c88a3f98c9a6d14e488449ac089c4b7001c4`. Advance that branch only after checking CI and staging for the exact candidate commit. This is a manual promotion procedure: Railway's Wait for CI was unavailable through the connector and `checkSuites` remains false. No automatic branch protection is claimed.
+Use `main` for integration and `staging` for the staging application. The workflow listens to `main`, `staging`, and `production` pushes and pull requests. Its `verify` job runs on integration/staging commits and pull requests. On `staging`, a dependent `staging-smoke` job waits for the checked `GITHUB_SHA` to appear in readiness with the expected application and schema versions, then runs the authenticated two-account journey. Production promotion skips duplicate verification and runs `production-smoke`: up to five minutes waiting for that exact SHA, version, and schema at the canonical custom domain, followed by public GET checks. This relies on promoting the already-verified commit; the production job is not a replacement for CI and staging gates. Railway production follows the dedicated `production` release branch, currently at checked release commit `537c17443947694664499d91007c289bdfc2ac6d`. Advance that branch only after checking CI and staging for the exact candidate commit. This is a manual promotion procedure: Railway's Wait for CI was unavailable through the connector and `checkSuites` remains false. No automatic branch protection is claimed.
 
-The Batch 1 two-account walkthrough against remote staging was interrupted. Batch 2 makes this an automated staging gate, including theme changes, secret filtering, exports/imports, and access removal. It must pass on the exact release candidate before production promotion; source implementation alone is not a passed deployment check.
+The full automated Batch 2 staging journey passed on the recorded release commit, closing the interrupted Batch 1 authenticated walkthrough requirement. Main and staging CI also passed, including real PostgreSQL 18, backup/restore rehearsal, and the running production container. Exact run links and deployment evidence are in [STATUS.md](STATUS.md).
 
 Do not assume that a successful push proves deployment success. Inspect the workflow for the exact commit, then the Railway deployment result and readiness endpoint.
 
