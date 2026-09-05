@@ -1,0 +1,651 @@
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { VERSION } from "./config.js";
+import { checkSchema, transaction } from "./db.js";
+import {
+  digest,
+  hashPassword,
+  verifyPassword,
+  newToken,
+  inviteCode,
+  readCookie,
+  sessionCookie,
+  limit,
+} from "./security.js";
+
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+const fail = (status, message) => {
+  throw new HttpError(status, message);
+};
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const managers = new Set(["owner", "organizer"]);
+const transitions = {
+  draft: ["rehearsal"],
+  rehearsal: ["draft", "live"],
+  live: ["paused", "ended"],
+  paused: ["live", "ended"],
+  ended: ["archived"],
+  archived: [],
+};
+function text(value, label, min, max) {
+  if (
+    typeof value !== "string" ||
+    value.trim().length < min ||
+    value.trim().length > max
+  )
+    fail(400, `${label} must contain ${min}–${max} characters.`);
+  return value.trim();
+}
+function password(value) {
+  if (typeof value !== "string" || value.length < 12 || value.length > 128)
+    fail(400, "Use a password between 12 and 128 characters.");
+  return value;
+}
+function email(value) {
+  const v = text(value, "Email", 3, 254).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))
+    fail(400, "Enter a valid email address.");
+  return v;
+}
+function identifier(value) {
+  if (!UUID.test(value || "")) fail(404, "Not found.");
+  return value;
+}
+function date(value) {
+  if (!value) return null;
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T/.test(value) ||
+    !Number.isFinite(Date.parse(value))
+  )
+    fail(400, "Choose a valid event date.");
+  return new Date(value);
+}
+function positive(value, label, max) {
+  if (!Number.isInteger(value) || value < 1 || value > max)
+    fail(400, `${label} must be between 1 and ${max}.`);
+  return value;
+}
+async function body(req) {
+  if (!(req.headers["content-type"] || "").startsWith("application/json"))
+    fail(415, "Send JSON content.");
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 16384) fail(413, "Request is too large.");
+    chunks.push(chunk);
+  }
+  try {
+    const data = JSON.parse(Buffer.concat(chunks).toString());
+    if (!data || typeof data !== "object" || Array.isArray(data))
+      throw new Error();
+    return data;
+  } catch {
+    fail(400, "Invalid JSON request.");
+  }
+}
+function send(res, status, data) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  res.end(data === undefined ? undefined : JSON.stringify(data));
+}
+async function audit(db, eventId, actorId, action, details = {}) {
+  await db.query(
+    "INSERT INTO audit_entries(event_id,actor_id,action,details) VALUES($1,$2,$3,$4)",
+    [eventId, actorId, action, JSON.stringify(details)],
+  );
+}
+async function membership(db, eventId, userId, lock = false) {
+  const { rows } = await db.query(
+    `SELECT e.*,m.role FROM events e JOIN memberships m ON m.event_id=e.id WHERE e.id=$1 AND m.user_id=$2${lock ? " FOR UPDATE OF e,m" : ""}`,
+    [eventId, userId],
+  );
+  if (!rows[0]) fail(404, "Event not found or access has been removed.");
+  return rows[0];
+}
+function requireManager(event) {
+  if (!managers.has(event.role))
+    fail(403, "Only an organizer can make this change.");
+}
+async function setSession(db, res, config, userId, previous) {
+  const token = newToken();
+  if (previous)
+    await db.query("DELETE FROM sessions WHERE token_hash=$1", [
+      digest(previous),
+    ]);
+  await db.query(
+    "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '7 days')",
+    [digest(token), userId],
+  );
+  res.setHeader("Set-Cookie", sessionCookie(config, token));
+}
+function safeUser(row) {
+  return { id: row.id, email: row.email, displayName: row.display_name };
+}
+
+export function createApp({
+  pool,
+  config,
+  logger = (entry) => console.log(JSON.stringify(entry)),
+}) {
+  return async function handle(req, res) {
+    const requestId = randomUUID();
+    res.setHeader("X-Request-Id", requestId);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader(
+      "Permissions-Policy",
+      "camera=(), microphone=(), geolocation=()",
+    );
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    );
+    res.setHeader("Cache-Control", "no-store");
+    if (config.production)
+      res.setHeader("Strict-Transport-Security", "max-age=31536000");
+    try {
+      const path = new URL(req.url, config.origin).pathname;
+      const method = req.method;
+      if (path === "/health/live" && method === "GET")
+        return send(res, 200, { status: "ok", version: VERSION });
+      if (path === "/health/ready" && method === "GET") {
+        try {
+          const version = await checkSchema(pool);
+          return send(res, 200, {
+            status: "ready",
+            version: VERSION,
+            schemaVersion: version,
+          });
+        } catch {
+          return send(res, 503, { status: "unavailable", version: VERSION });
+        }
+      }
+      if (!path.startsWith("/api/")) {
+        if (!["GET", "HEAD"].includes(method)) fail(405, "Method not allowed.");
+        const assets = {
+          "/": ["index.html", "text/html"],
+          "/app.js": ["app.js", "text/javascript"],
+          "/style.css": ["style.css", "text/css"],
+          "/favicon.svg": ["favicon.svg", "image/svg+xml"],
+        };
+        const asset = assets[path];
+        if (!asset) fail(404, "Not found.");
+        const file = await readFile(
+          new URL(`../public/${asset[0]}`, import.meta.url),
+        );
+        res.writeHead(200, { "Content-Type": `${asset[1]}; charset=utf-8` });
+        return res.end(method === "HEAD" ? undefined : file);
+      }
+      if (
+        !["GET", "HEAD"].includes(method) &&
+        req.headers.origin !== config.origin
+      )
+        fail(403, "This request must come from the ORACLE application.");
+      const token = readCookie(req, config.cookieName);
+      const user = token
+        ? (
+            await pool.query(
+              "SELECT u.id,u.email,u.display_name FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()",
+              [digest(token)],
+            )
+          ).rows[0]
+        : null;
+      if (path === "/api/session" && method === "GET")
+        return send(res, 200, {
+          user: user ? safeUser(user) : null,
+          version: VERSION,
+          environment: config.appEnv,
+          registrationEnabled: config.registrationEnabled,
+        });
+
+      if (
+        ["/api/auth/register", "/api/auth/login"].includes(path) &&
+        method === "POST"
+      ) {
+        const input = await body(req);
+        const address = email(input.email);
+        const pass = password(input.password);
+        // The final forwarded address is the immediate proxy's client address; do not trust a caller-supplied first entry.
+        const ip = config.production
+          ? (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "")
+              .split(",")
+              .at(-1)
+              .trim()
+          : req.socket.remoteAddress;
+        if (
+          !(await limit(pool, `auth-address:${address}`, 10)) ||
+          !(await limit(pool, `auth-ip:${ip}`, 60))
+        ) {
+          res.setHeader("Retry-After", "900");
+          fail(429, "Too many attempts. Wait 15 minutes and try again.");
+        }
+        if (path.endsWith("/register")) {
+          if (!config.registrationEnabled)
+            fail(403, "New accounts are currently closed.");
+          const displayName = text(input.displayName, "Display name", 2, 80);
+          const hash = await hashPassword(pass);
+          const created = await transaction(pool, async (db) => {
+            const id = randomUUID();
+            const result = await db.query(
+              "INSERT INTO users(id,email,display_name,password_hash) VALUES($1,$2,$3,$4) ON CONFLICT(email) DO NOTHING RETURNING id,email,display_name",
+              [id, address, displayName, hash],
+            );
+            if (!result.rows[0])
+              fail(
+                409,
+                "Unable to create this account. Try signing in instead.",
+              );
+            await setSession(db, res, config, id, token);
+            return result.rows[0];
+          });
+          return send(res, 201, { user: safeUser(created) });
+        }
+        const existing = await transaction(pool, async (db) => {
+          const current = (
+            await db.query("SELECT * FROM users WHERE email=$1 FOR UPDATE", [
+              address,
+            ])
+          ).rows[0];
+          if (!(await verifyPassword(pass, current?.password_hash)))
+            fail(401, "Email or password is incorrect.");
+          await setSession(db, res, config, current.id, token);
+          return current;
+        });
+        return send(res, 200, { user: safeUser(existing) });
+      }
+      if (!user) fail(401, "Sign in to continue.");
+      if (path === "/api/auth/logout" && method === "POST") {
+        await pool.query("DELETE FROM sessions WHERE token_hash=$1", [
+          digest(token),
+        ]);
+        res.setHeader("Set-Cookie", sessionCookie(config, "", true));
+        return send(res, 204);
+      }
+      if (path === "/api/auth/password" && method === "POST") {
+        const input = await body(req);
+        password(input.currentPassword);
+        password(input.newPassword);
+        if (!(await limit(pool, `password:${user.id}`, 10)))
+          fail(429, "Too many attempts. Wait 15 minutes.");
+        await transaction(pool, async (db) => {
+          const current = (
+            await db.query(
+              "SELECT password_hash FROM users WHERE id=$1 FOR UPDATE",
+              [user.id],
+            )
+          ).rows[0];
+          if (
+            !(await verifyPassword(
+              input.currentPassword,
+              current.password_hash,
+            ))
+          )
+            fail(403, "Current password is incorrect.");
+          await db.query("UPDATE users SET password_hash=$1 WHERE id=$2", [
+            await hashPassword(input.newPassword),
+            user.id,
+          ]);
+          await db.query("DELETE FROM sessions WHERE user_id=$1", [user.id]);
+          await setSession(db, res, config, user.id);
+        });
+        return send(res, 200, { ok: true });
+      }
+      if (path === "/api/events" && method === "GET") {
+        const { rows } = await pool.query(
+          "SELECT e.*,m.role,(SELECT count(*)::int FROM memberships n WHERE n.event_id=e.id) AS member_count FROM events e JOIN memberships m ON m.event_id=e.id WHERE m.user_id=$1 ORDER BY e.updated_at DESC",
+          [user.id],
+        );
+        return send(res, 200, { events: rows });
+      }
+      if (path === "/api/events" && method === "POST") {
+        if (!(await limit(pool, `create-event:${user.id}`, 20, 60)))
+          fail(429, "Event creation limit reached. Try again later.");
+        const input = await body(req);
+        const event = await transaction(pool, async (db) => {
+          const id = randomUUID();
+          const result = await db.query(
+            "INSERT INTO events(id,owner_user_id,name,description,location,starts_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
+            [
+              id,
+              user.id,
+              text(input.name, "Event name", 2, 100),
+              text(input.description || "", "Description", 0, 2000),
+              text(input.location || "", "Location", 0, 200),
+              date(input.startsAt),
+            ],
+          );
+          await db.query(
+            "INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'owner')",
+            [id, user.id],
+          );
+          await audit(db, id, user.id, "event.created");
+          return { ...result.rows[0], role: "owner" };
+        });
+        return send(res, 201, { event });
+      }
+      if (path === "/api/events/join" && method === "POST") {
+        if (!(await limit(pool, `join:${user.id}`, 30)))
+          fail(429, "Too many join attempts. Wait 15 minutes.");
+        const input = await body(req);
+        const code = text(input.code, "Invitation code", 16, 24)
+          .replace(/[\s-]/g, "")
+          .toUpperCase();
+        if (!/^[A-HJ-NP-Z2-9]{16}$/.test(code))
+          fail(400, "Enter the 16-character invitation code.");
+        const event = await transaction(pool, async (db) => {
+          const found = (
+            await db.query(
+              "SELECT event_id FROM invitations WHERE token_hash=$1",
+              [digest(code)],
+            )
+          ).rows[0];
+          if (!found)
+            fail(
+              400,
+              "This invitation is invalid, expired, or no longer available.",
+            );
+          // Always lock event before invitation, matching all other event mutations.
+          const ev = (
+            await db.query("SELECT * FROM events WHERE id=$1 FOR UPDATE", [
+              found.event_id,
+            ])
+          ).rows[0];
+          const inv = (
+            await db.query(
+              "SELECT * FROM invitations WHERE token_hash=$1 FOR UPDATE",
+              [digest(code)],
+            )
+          ).rows[0];
+          if (
+            !ev ||
+            !inv ||
+            inv.revoked_at ||
+            new Date(inv.expires_at) <= new Date() ||
+            inv.uses >= inv.max_uses ||
+            ["ended", "archived"].includes(ev.status)
+          )
+            fail(
+              400,
+              "This invitation is invalid, expired, or no longer available.",
+            );
+          const issuer = (
+            await db.query(
+              "SELECT role FROM memberships WHERE event_id=$1 AND user_id=$2",
+              [ev.id, inv.created_by],
+            )
+          ).rows[0];
+          if (
+            !issuer ||
+            !managers.has(issuer.role) ||
+            (inv.role === "organizer" && issuer.role !== "owner")
+          )
+            fail(400, "This invitation is no longer available.");
+          const existing = (
+            await db.query(
+              "SELECT role FROM memberships WHERE event_id=$1 AND user_id=$2",
+              [ev.id, user.id],
+            )
+          ).rows[0];
+          if (existing)
+            return { ...ev, role: existing.role, alreadyMember: true };
+          await db.query(
+            "INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,$3)",
+            [ev.id, user.id, inv.role],
+          );
+          await db.query("UPDATE invitations SET uses=uses+1 WHERE id=$1", [
+            inv.id,
+          ]);
+          await audit(db, ev.id, user.id, "member.joined", { role: inv.role });
+          return { ...ev, role: inv.role };
+        });
+        return send(res, 200, { event });
+      }
+      const match = path.match(
+        /^\/api\/events\/([^/]+)(?:\/(members|invites|audit)(?:\/([^/]+))?)?$/,
+      );
+      if (!match) fail(404, "Not found.");
+      const [, rawId, section, rawTarget] = match;
+      const id = identifier(rawId),
+        target = rawTarget ? identifier(rawTarget) : null;
+      if (method === "GET") {
+        const event = await membership(pool, id, user.id);
+        if (!section) {
+          const members = (
+            await pool.query(
+              "SELECT m.user_id,m.role,m.joined_at,u.display_name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.event_id=$1 ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'organizer' THEN 1 WHEN 'staff' THEN 2 ELSE 3 END,u.display_name",
+              [id],
+            )
+          ).rows;
+          return send(res, 200, {
+            event,
+            members,
+            transitions: managers.has(event.role)
+              ? transitions[event.status]
+              : [],
+          });
+        }
+        requireManager(event);
+        if (section === "invites" && !target)
+          return send(res, 200, {
+            invitations: (
+              await pool.query(
+                "SELECT id,role,max_uses,uses,expires_at,revoked_at,created_at FROM invitations WHERE event_id=$1 ORDER BY created_at DESC LIMIT 100",
+                [id],
+              )
+            ).rows,
+          });
+        if (section === "audit" && !target)
+          return send(res, 200, {
+            entries: (
+              await pool.query(
+                "SELECT a.id,a.action,a.details,a.created_at,u.display_name AS actor FROM audit_entries a JOIN users u ON u.id=a.actor_id WHERE event_id=$1 ORDER BY a.id DESC LIMIT 100",
+                [id],
+              )
+            ).rows,
+          });
+        fail(404, "Not found.");
+      }
+      const input = method === "DELETE" ? {} : await body(req);
+      const result = await transaction(pool, async (db) => {
+        const event = await membership(db, id, user.id, true);
+        if (!section && method === "PATCH") {
+          requireManager(event);
+          if (event.status === "archived")
+            fail(409, "Archived events are read-only.");
+          if (input.version !== event.version)
+            fail(409, "This event changed. Refresh and try again.");
+          const status = input.status ?? event.status;
+          if (
+            status !== event.status &&
+            !transitions[event.status].includes(status)
+          )
+            fail(409, "That event status change is not available.");
+          const name =
+            input.name === undefined
+              ? event.name
+              : text(input.name, "Event name", 2, 100);
+          const description =
+            input.description === undefined
+              ? event.description
+              : text(input.description, "Description", 0, 2000);
+          const location =
+            input.location === undefined
+              ? event.location
+              : text(input.location, "Location", 0, 200);
+          const startsAt =
+            input.startsAt === undefined
+              ? event.starts_at
+              : date(input.startsAt);
+          const changed = (
+            await db.query(
+              "UPDATE events SET name=$1,description=$2,location=$3,starts_at=$4,status=$5,version=version+1,updated_at=now() WHERE id=$6 RETURNING *",
+              [name, description, location, startsAt, status, id],
+            )
+          ).rows[0];
+          await audit(
+            db,
+            id,
+            user.id,
+            status !== event.status ? "event.status_changed" : "event.updated",
+            status !== event.status ? { from: event.status, to: status } : {},
+          );
+          return { event: { ...changed, role: event.role } };
+        }
+        if (section === "invites" && method === "POST" && !target) {
+          requireManager(event);
+          if (["ended", "archived"].includes(event.status))
+            fail(409, "This event is closed to new members.");
+          const role = input.role || "player";
+          if (
+            !["player", "staff", "organizer"].includes(role) ||
+            (role === "organizer" && event.role !== "owner")
+          )
+            fail(403, "You cannot invite that role.");
+          const maxUses = positive(
+              input.maxUses ?? (role === "player" ? 20 : 1),
+              "Uses",
+              1000,
+            ),
+            hours = positive(input.expiresInHours ?? 48, "Expiry hours", 168);
+          if (role !== "player" && maxUses !== 1)
+            fail(400, "Staff and organizer invitations must be single-use.");
+          const code = inviteCode(),
+            inviteId = randomUUID();
+          await db.query(
+            "INSERT INTO invitations(id,event_id,token_hash,role,created_by,max_uses,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7)",
+            [
+              inviteId,
+              id,
+              digest(code),
+              role,
+              user.id,
+              maxUses,
+              new Date(Date.now() + hours * 3600000),
+            ],
+          );
+          await audit(db, id, user.id, "invitation.created", {
+            role,
+            maxUses,
+            expiresInHours: hours,
+          });
+          return {
+            invitation: {
+              id: inviteId,
+              code,
+              role,
+              maxUses,
+              expiresInHours: hours,
+            },
+          };
+        }
+        if (section === "invites" && target && method === "DELETE") {
+          requireManager(event);
+          const row = (
+            await db.query(
+              "SELECT role FROM invitations WHERE id=$1 AND event_id=$2",
+              [target, id],
+            )
+          ).rows[0];
+          if (!row) fail(404, "Invitation not found.");
+          if (row.role === "organizer" && event.role !== "owner")
+            fail(403, "Only the owner can revoke organizer invitations.");
+          await db.query(
+            "UPDATE invitations SET revoked_at=COALESCE(revoked_at,now()) WHERE id=$1 AND event_id=$2",
+            [target, id],
+          );
+          await audit(db, id, user.id, "invitation.revoked", {
+            invitationId: target,
+          });
+          return { ok: true };
+        }
+        if (
+          section === "members" &&
+          target &&
+          ["PATCH", "DELETE"].includes(method)
+        ) {
+          const member = (
+            await db.query(
+              "SELECT role FROM memberships WHERE event_id=$1 AND user_id=$2",
+              [id, target],
+            )
+          ).rows[0];
+          if (!member) fail(404, "Member not found.");
+          if (member.role === "owner")
+            fail(403, "The event owner cannot be removed or demoted.");
+          if (method === "PATCH") {
+            if (event.role !== "owner")
+              fail(403, "Only the event owner can change roles.");
+            if (!["organizer", "staff", "player"].includes(input.role))
+              fail(400, "Choose a valid membership role.");
+            await db.query(
+              "UPDATE memberships SET role=$1 WHERE event_id=$2 AND user_id=$3",
+              [input.role, id, target],
+            );
+            // Revoke outstanding invitations on any role change, avoiding resurrection after later re-promotion.
+            await db.query(
+              "UPDATE invitations SET revoked_at=now() WHERE event_id=$1 AND created_by=$2 AND revoked_at IS NULL",
+              [id, target],
+            );
+            await audit(db, id, user.id, "member.role_changed", {
+              userId: target,
+              from: member.role,
+              to: input.role,
+            });
+          } else {
+            if (
+              target !== user.id &&
+              (!managers.has(event.role) ||
+                (member.role === "organizer" && event.role !== "owner"))
+            )
+              fail(403, "You cannot remove this member.");
+            await db.query(
+              "DELETE FROM memberships WHERE event_id=$1 AND user_id=$2",
+              [id, target],
+            );
+            await db.query(
+              "UPDATE invitations SET revoked_at=now() WHERE event_id=$1 AND created_by=$2 AND revoked_at IS NULL",
+              [id, target],
+            );
+            await audit(db, id, user.id, "member.removed", { userId: target });
+          }
+          return { ok: true };
+        }
+        fail(404, "Not found.");
+      });
+      return send(
+        res,
+        section === "invites" && method === "POST" ? 201 : 200,
+        result,
+      );
+    } catch (error) {
+      const status =
+        error.status ||
+        (["23505", "23503", "23514"].includes(error.code) ? 409 : 500);
+      if (status >= 500)
+        logger({
+          level: "error",
+          event: "request_failed",
+          requestId,
+          code: error.code || "INTERNAL_ERROR",
+        });
+      if (!res.headersSent)
+        send(res, status, {
+          error:
+            status >= 500
+              ? "Something went wrong. Please try again."
+              : error.status
+                ? error.message
+                : "The request conflicts with existing data.",
+          requestId,
+        });
+      else res.end();
+    }
+  };
+}

@@ -1,0 +1,54 @@
+name: ORACLE checks
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: oracle-checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: oracle
+          POSTGRES_PASSWORD: ci-test-password-only
+          POSTGRES_DB: oracle_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oracle -d oracle_test"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://oracle:ci-test-password-only@127.0.0.1:5432/oracle_test
+      DATABASE_URL: postgresql://oracle:ci-test-password-only@127.0.0.1:5432/oracle_test
+      APP_ORIGIN: http://localhost:3000
+      APP_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - name: Rehearse backup and restore on disposable databases
+        env:
+          PG_TOOL_CONTAINER: ${{ job.services.postgres.id }}
+          RESTORE_DATABASE_URL: postgresql://oracle:ci-test-password-only@127.0.0.1:5432/oracle_test_restore
+        run: node scripts/recovery-rehearsal.js
+      - name: Reapply migration and check server startup paths
+        run: node scripts/startup-check.js
+      - name: Build the exact production image
+        run: docker build --tag oracle-ci:${{ github.sha }} .
+      - name: Verify the built image and production session configuration
+        env:
+          ORACLE_TEST_IMAGE: oracle-ci:${{ github.sha }}
+        run: node scripts/docker-check.js
