@@ -2,7 +2,7 @@
 
 Recorded September 6, 2026.
 
-Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Candidate application `0.8.0`; database schema `9`; briefing-pack format `1`; adventure format `1`. Production remains the verified Batch 7 release until this candidate passes its exact-commit CI, staging, and production gates. No Batch 8 deployment is claimed here yet.
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Application `0.8.0`; database schema `9`; briefing-pack format `1`; adventure format `1`. Release commit: `ef3d822c0e6a36fd0f1e3081b68f5d750d268106`. Both exact-commit PostgreSQL CI runs, Railway staging, the complete remote workflow, and Railway production passed. All 52 exact-commit production public checks passed. Batch 8 is fully deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com).
 
 ## Batch 8 implemented
 
@@ -17,21 +17,37 @@ Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Can
 
 Eleven gameplay instruments plus Briefing are implemented. STAGEHAND is the next planned instrument in Batch 9. Shared-device roles are in-person performer labels; they do not authorize other characters or imply coordinated multi-device timing. Format-1 briefing/adventure contracts stay unchanged.
 
-## Batch 8 candidate verification
+## Batch 8 release verification
 
 | Check | Recorded result |
 | --- | --- |
 | Legacy/foundation migration suite | 38 tests: 37 passed, zero failures, one existing TCP-only skip; complete operator row, all 13 populated schema-8 economy/agreement tables, and all eight old migration records preserved |
-| Populated recovery fixture | All 13 existing economy/agreement tables and all ten schema-9 tables contain valid constrained data; repeated schema-9 migration passed locally |
+| Populated recovery fixture | All 13 existing economy/agreement tables and all ten schema-9 tables contain valid constrained data; repeated schema-9 migration passed locally; actual dump/restore passed in both exact-candidate PostgreSQL CI runs |
 | Local full staging rehearsal | Passed 392 reads / 466 writes, including all previous workflows, every-theme cooperation/fictional signal, final component rollback, one-time deduction, staff controls, actual copied play/reset, source preservation, and cleanup |
 | Focused instrument HTTP suites | SIGIL 16 passed; STATIC 11 passed |
 | Focused browser modules | SIGIL UI 10 passed plus a bounded published/draft authoring check; STATIC UI 8 passed; shared prop/code helpers 7 passed |
 | Root integration and persistence checks | 35 existing integration checks passed; 29 kit/offline/component checks passed |
 | Full application DOM/API walkthrough | Ten checks passed with zero uncaught errors using actual modules, HTTP/PGlite and JSDOM |
-| Contention fixture workflows | Four new functional fixtures passed with PGlite; real PostgreSQL contention remains a CI gate |
-| Full application, PostgreSQL, Docker and release gates | Pending exact candidate verification |
+| Full local `npm run verify` | 217 tests: 209 passed, zero failures, eight deliberate TCP-only skips; syntax/version/static asset checks passed |
+| [Main CI 34009469012](https://github.com/GreenShoeGarage/Oracle/actions/runs/34009469012) | Passed exact release commit; [verification job 101422627294](https://github.com/GreenShoeGarage/Oracle/actions/runs/34009469012/job/101422627294) |
+| [Staging CI 34009469442](https://github.com/GreenShoeGarage/Oracle/actions/runs/34009469442) | Verification and complete remote workflow passed; [verification job 101422628280](https://github.com/GreenShoeGarage/Oracle/actions/runs/34009469442/job/101422628280) |
+| PostgreSQL 18 suite | 217 tests: 216 passed, zero failures, one PGlite-only snapshot skip; all eight TCP gates passed, including duplicate SIGIL completion, competing outcomes, and contention with QR trades/purchases |
+| Recovery/runtime gates | Actual populated schema-9 pg_dump/pg_restore, all ten new tables, repeated migration, startup, and production Docker image with secure cookies and graceful stop passed |
+| [Remote staging job 101422758430](https://github.com/GreenShoeGarage/Oracle/actions/runs/34009469442/job/101422758430) | Exact-release readiness, every prior workflow, all three SIGIL/STATIC themes, final component rollback/once-only consumption, staff controls, actual copied play/reset, and cleanup passed |
+| [Production CI 34009665773](https://github.com/GreenShoeGarage/Oracle/actions/runs/34009665773) | Passed exact release commit, v0.8.0/schema 9 readiness, and all 52 public GET checks; no production users, events, or mutations created |
 
-The recovery fixture includes distinct draft/publication snapshots, captured role/component records, completed and paused runs with frozen timer state, immutable result consumption evidence, conditional fictional readings, later staff overrides, and history/replay records. The real PostgreSQL dump/restore gate must compare all these tables before promotion. Local fixtures and HTTP checks are not remote-deployment claims.
+The recovery fixture includes distinct draft/publication snapshots, captured role/component records, completed and paused runs with frozen timer state, immutable result consumption evidence, conditional fictional readings, later staff overrides, and history/replay records. The real PostgreSQL dump/restore gate compared all these tables in both candidate CI runs. The local HTTP request counts are not remote-deployment claims. The authenticated DOM walkthrough verifies actual modules/API state but does not replace physical device testing.
+
+## Batch 8 deployment record
+
+| Target | Deployment ID | Result |
+| --- | --- | --- |
+| [Staging](https://oracle-production-488d.up.railway.app) | `e8817d54-0bb8-458e-b862-cdf194e614bb` | Exact release v0.8.0/schema 9 succeeded; complete remote workflow passed |
+| [Production](https://oracle.greenshoegarage.com) | `19c6b417-2e9d-4e74-9dc3-c7bc1ff34ec3` | Exact release v0.8.0/schema 9 succeeded; all 52 public checks passed |
+
+Staging logs confirmed migration 9 at 03:38:14 UTC and v0.8.0 `server_ready` in staging at 03:38:17 UTC on September 6. The remote workflow passed final component rollback/atomic consumption at 03:40:11, fantasy SIGIL/STATIC at 03:40:12 and copied reset at 03:40:20, cyberpunk at 03:40:38 and copied reset at 03:40:43, and wasteland at 03:40:58 and copied reset at 03:41:03. All three themes and disposable-event/session cleanup completed at 03:41:09 UTC. Staging and production use separate Railway projects and databases. Production passed its independent exact-commit public gate.
+
+Production logs confirmed `migrations_complete: 9` and `superuser_provisioned` with `matched: true` at 03:42:42 UTC on September 6. At 03:42:46 UTC, startup reported v0.8.0 in production and `superuser_status` with `accountExists: true`, `enabled: true`. The [production smoke job 101423150897](https://github.com/GreenShoeGarage/Oracle/actions/runs/34009665773/job/101423150897) verified the exact release commit/version/schema at 03:42:49 UTC and passed all 52 public GET checks through 03:42:57 UTC. Production checks created no accounts or event data. The matching existing operator remains enabled, with identity/password preserved by idempotent provisioning and the additive migration checks. Runtime branches retain the checked release commit; subsequent documentation commits are main-only.
 
 ## Current limits and recovery position
 
@@ -90,7 +106,7 @@ The local journey demonstrates corrected shop pricing, finite stock, purchase re
 
 Staging logs confirmed migration 8 at 02:48:08 UTC and v0.7.0 `server_ready` in staging at 02:48:14 UTC on September 6. The remote workflow verified exact-commit readiness at 02:48:56 UTC, passed BAZAAR at 02:50:00, QR barter at 02:50:04, OATHBOOK at 02:50:09, and economy reset at 02:50:18. All three adventure paths and disposable-event/session cleanup completed at 02:50:57 UTC. Staging and production remain separate Railway projects and databases.
 
-Production logs confirmed `migrations_complete: 8` and `superuser_provisioned` with `matched: true` at 02:52:35 UTC on September 6. At 02:52:39 UTC, startup reported v0.7.0 in production and `superuser_status` with `accountExists: true`, `enabled: true`. The [production smoke job 101417500630](https://github.com/GreenShoeGarage/Oracle/actions/runs/34007575785/job/101417500630) verified the exact release commit/version/schema at 02:52:43 UTC and passed all 43 public GET checks from 02:52:43 to 02:52:48 UTC. Production checks created no accounts or event data. Runtime branches retain the checked release commit; subsequent documentation commits do not change the deployed application. No private operator address, account identifier, setup secret, or password appears in these documents.
+Production logs confirmed `migrations_complete: 8` and `superuser_provisioned` with `matched: true` at 02:52:35 UTC on September 6. At 02:52:39 UTC, startup reported v0.7.0 in production and `superuser_status` with `accountExists: true`, `enabled: true`. The [production smoke job 101417500630](https://github.com/GreenShoeGarage/Oracle/actions/runs/34007575785/job/101417500630) verified the exact release commit/version/schema at 02:52:43 UTC and passed all 43 public GET checks from 02:52:43 to 02:52:48 UTC. Production checks created no accounts or event data. Runtime branches retain the checked release commit; subsequent documentation commits do not change the deployed application.
 
 ### Current limits and recovery position
 
@@ -150,7 +166,7 @@ The local staging script exercises differing private rumor accounts; explicit co
 
 Staging logs confirmed migration 7 at 01:34:32 UTC and v0.6.0 `server_ready` in staging at 01:34:38 UTC on September 6. The remote workflow finished all three adventure paths and archived its disposable events/signed out sessions at 01:36:33 UTC. These checks used the exact release commit. Staging and production remain separate Railway projects and databases.
 
-Production logs confirmed migration 7 and an existing matching superuser at 01:38:11 UTC on September 6. At 01:38:16 UTC, startup reported v0.6.0 in production and `accountExists: true`, `enabled: true`. Idempotent provisioning preserved the existing UUID/password. The [production smoke job 101408855825](https://github.com/GreenShoeGarage/Oracle/actions/runs/34004393610/job/101408855825) verified the exact commit/version/schema at 01:38:18 UTC and passed all 37 public checks between 01:38:19 and 01:38:23 UTC. Runtime branches retain the checked release commit; subsequent documentation commits do not change the deployed application. No private operator address, account identifier, setup secret, or password appears in these documents.
+Production logs confirmed migration 7 and an existing matching superuser at 01:38:11 UTC on September 6. At 01:38:16 UTC, startup reported v0.6.0 in production and `accountExists: true`, `enabled: true`. Idempotent provisioning preserved the existing UUID/password. The [production smoke job 101408855825](https://github.com/GreenShoeGarage/Oracle/actions/runs/34004393610/job/101408855825) verified the exact commit/version/schema at 01:38:18 UTC and passed all 37 public checks between 01:38:19 and 01:38:23 UTC. Runtime branches retain the checked release commit; subsequent documentation commits do not change the deployed application.
 
 ### Current limits and recovery position
 

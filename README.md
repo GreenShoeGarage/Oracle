@@ -6,7 +6,7 @@ ORACLE is a modular web application for Live Action Roleplaying events. Organize
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 8 (v0.8.0, database schema 9) is the current release candidate: SIGIL cooperative challenges, STATIC fictional readings, and immersive prop presentation are implemented and undergoing verification. Production remains the verified Batch 7 release until the exact candidate passes CI and staging. See [docs/STATUS.md](docs/STATUS.md) for deployment evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
+Batch 8 (v0.8.0, database schema 9), release commit `ef3d822c0e6a36fd0f1e3081b68f5d750d268106`, passed full local verification, both PostgreSQL CI runs, Railway staging, and the complete remote workflow. It is fully deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com); Railway production and all 52 exact-commit public checks passed. See [docs/STATUS.md](docs/STATUS.md) for evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
 
 ## What works in this release
 
