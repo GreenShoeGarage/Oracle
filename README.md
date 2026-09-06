@@ -6,7 +6,7 @@ ORACLE is a modular web application for Live Action Roleplaying events. Organize
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 9 (v0.9.0, database schema 10) implements STAGEHAND live event operations, completing all twelve gameplay instruments. The full local staging rehearsal passed 971 reads/1,035 writes across every instrument in all three themes. Exact-candidate GitHub/PostgreSQL and Railway staging/production gates are pending; the last verified live release remains Batch 8. See [docs/STATUS.md](docs/STATUS.md) for evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
+Batch 9 (v0.9.0, database schema 10), release commit `4133a6b51a9a4f2471723f88bd6d6f695a798b2a`, is fully deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). STAGEHAND completes all twelve gameplay instruments. Both exact-commit PostgreSQL CI runs, Railway staging, and the complete remote all-twelve/all-three-theme workflow passed; Railway production and all 56 exact-commit public GET checks passed. The existing operator remains enabled with identity/password preserved. See [docs/STATUS.md](docs/STATUS.md) for evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
 
 ## What works in this release
 

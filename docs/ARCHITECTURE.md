@@ -2,6 +2,8 @@
 
 Application v0.9.0 · Database schema 10 · Briefing-pack format 1 · Adventure format 1
 
+Verified release `4133a6b51a9a4f2471723f88bd6d6f695a798b2a` is deployed to staging and production. Exact CI, recovery, connected workflow, and production-readiness evidence is recorded in [STATUS.md](STATUS.md).
+
 **Identity and data ownership.** An account belongs to a person. Event membership grants a role within one event. Characters, inventories, and factions carry an event ID and authorize against current membership; future clues and encounters must follow the same contract. Copying content into another event creates new event-owned records. The client never decides ownership or privileges.
 
 **Authorization.** Event reads join membership with the requested event ID. A database-backed project superuser may manage all events; this is an explicit global role rather than a forged event membership. Disabled accounts fail session authorization. Event mutations lock the event, lock involved user rows where required, and recheck current membership before writing. Invitation redemption locks the event, then its invitation, in a consistent order. Event/subresource IDs are always checked together. Owner mutation is excluded until an explicitly designed transfer workflow exists.

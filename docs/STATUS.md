@@ -2,7 +2,7 @@
 
 Recorded September 6, 2026.
 
-Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Candidate application `0.9.0`; database schema `10`; briefing-pack format `1`; adventure format `1`. STAGEHAND is implemented and all twelve gameplay instruments are available. Exact-candidate GitHub/PostgreSQL, Railway staging/remote acceptance, and production promotion remain pending. The last verified live release is Batch 8, recorded below.
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Release commit `4133a6b51a9a4f2471723f88bd6d6f695a798b2a`; application `0.9.0`; database schema `10`; briefing-pack format `1`; adventure format `1`. STAGEHAND completes all twelve gameplay instruments. Both exact-commit GitHub/PostgreSQL CI runs, Railway staging, the complete remote all-twelve/all-three-theme workflow, and Railway production passed. All 56 exact-commit production public GET checks passed. Batch 9 is fully deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com).
 
 ## Batch 9 implemented
 
@@ -20,24 +20,38 @@ Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Can
 | Check | Recorded result |
 | --- | --- |
 | Legacy/foundation migration suite | 39 tests: 38 passed, zero failures, one existing TCP-only skip; full operator row, all nine prior migration records, all 23 populated schema-8/9 economy/instrument tables, and earlier data preserved |
-| Populated recovery fixture | All 28 economy/instrument/operations tables populated and repeat schema-10 migration passed locally; includes current scoped readiness, accepted overdue dispatch, a separate returned party with fallback replay receipt, and approved announcement revision link; real PostgreSQL dump/restore pending |
+| Populated recovery fixture | All 28 economy/instrument/operations tables populated and repeat schema-10 migration passed locally; includes current scoped readiness, accepted overdue dispatch, a separate returned party with fallback replay receipt, and approved announcement revision link; real PostgreSQL dump/restore passed in both exact-commit CI runs |
 | Local full staging rehearsal | Passed 971 reads / 1,035 writes with all twelve instruments in fantasy, cyberpunk, and wasteland; staff privacy, legacy capacity, consent, cancelled-scene redirect, readiness/event pauses, exact dispatch deadline/replay, approved/current news, real copied play/reset, source preservation, event-end release, and cleanup |
 | Focused STAGEHAND HTTP | Core 10 passed; party 10 passed |
 | Focused browser modules | Main player/prop UI 8 passed; manager/staff forms 14 passed |
 | Existing integration and storage | 35 existing integration checks passed; kit 11 and offline 16 passed |
 | Full application DOM/API walkthrough | Eight checks passed with zero uncaught errors using actual modules, HTTP/PGlite, and JSDOM |
-| Concurrency fixtures | Four functional race-fixture bodies passed with PGlite; actual forced PostgreSQL contention gates pending |
+| Concurrency fixtures | Four functional race-fixture bodies passed with PGlite; all four new forced PostgreSQL races and the existing eight TCP gates passed in both exact-commit CI runs |
 | Full local `npm run verify` | 242 tests: 230 passed, zero failures, 12 deliberate TCP-only skips; syntax/version/static asset checks passed |
-| Exact-candidate GitHub/PostgreSQL CI | Pending |
-| Railway staging and remote acceptance | Pending |
-| Railway production and public smoke | Pending; production scenarios remain read-only |
+| [Main CI 34011392141](https://github.com/GreenShoeGarage/Oracle/actions/runs/34011392141) | Exact-commit [verification job 101427741583](https://github.com/GreenShoeGarage/Oracle/actions/runs/34011392141/job/101427741583) passed |
+| [Staging CI 34011392922](https://github.com/GreenShoeGarage/Oracle/actions/runs/34011392922) | Exact-commit [verification job 101427743763](https://github.com/GreenShoeGarage/Oracle/actions/runs/34011392922/job/101427743763) passed; complete remote workflow passed |
+| PostgreSQL 18 suite | 242 tests: 241 passed, zero failures, one PGlite-only snapshot skip; all twelve TCP gates passed |
+| Recovery/runtime gates | Actual populated schema-10 pg_dump/pg_restore, all five new operations tables, repeated migration, startup, and production Docker image with secure cookies and graceful stop passed |
+| [Remote staging job 101427891417](https://github.com/GreenShoeGarage/Oracle/actions/runs/34011392922/job/101427891417) | Exact-commit readiness and the complete all-twelve/all-three-theme workflow passed, including cleanup |
+| [Production CI 34011709258](https://github.com/GreenShoeGarage/Oracle/actions/runs/34011709258) | Exact release commit, v0.9.0/schema 10 readiness, and all 56 public GET checks passed; no production accounts, events, or scenario mutations created |
 
-Local HTTP counts describe isolated disposable testing, not deployed acceptance. PGlite exercises PostgreSQL semantics through one connection and does not prove real concurrent lock waits. The four new TCP gates cover competing last-seat dispatch, redirect/consent revision, restrictive scene state versus dispatch, and account revocation/reassignment. The existing eight TCP gates remain required. Recovery compares all five new tables in a real dump/restore before release.
+Local HTTP counts describe isolated disposable testing, not deployed acceptance. PGlite exercises PostgreSQL semantics through one connection and does not prove real concurrent lock waits. The four new TCP gates cover competing last-seat dispatch, redirect/consent revision, restrictive scene state versus dispatch, and account revocation/reassignment. The existing eight TCP gates remain required. Both exact-commit CI runs compared all five new operations tables in a real dump/restore, including the captured consent, overdue dispatched party, separate returned party and fallback receipt, readiness actors, and approved-news link.
+
+## Batch 9 deployment record
+
+| Target | Deployment ID | Result |
+| --- | --- | --- |
+| [Staging](https://oracle-production-488d.up.railway.app) | `29d0f779-c261-40bd-b344-9feda10edf7d` | Exact release v0.9.0/schema 10 succeeded; complete remote workflow passed |
+| [Production](https://oracle.greenshoegarage.com) | `7ec0e7d5-0ea6-46e7-8d12-8ece92552fc2` | Exact release v0.9.0/schema 10 succeeded; all 56 public GET checks passed |
+
+Staging logs confirmed migration 10 at 04:24:11 UTC and v0.9.0 `server_ready` in staging at 04:24:17 UTC on September 6. Remote exact-commit readiness passed at 04:25:23 UTC. Fantasy operations/copy-reset/event-end passed at 04:26:56/04:27:07/04:27:09, cyberpunk at 04:28:23/04:28:34/04:28:37, and wasteland at 04:29:51/04:30:03/04:30:06. The complete all-twelve/all-three-theme workflow and cleanup finished at 04:30:13 UTC. Staging and production use separate Railway projects/databases and operator configuration. Production passed its independent exact-commit public gate.
+
+Production logs confirmed migration 10 and the matching existing operator (`matched: true`) at 04:31:37 UTC on September 6. At 04:31:42 UTC, startup reported v0.9.0 in production and `superuser_status` with `accountExists: true`, `enabled: true`. Railway deployment `7ec0e7d5-0ea6-46e7-8d12-8ece92552fc2` succeeded at 04:31:45 UTC. The [production smoke job 101428568828](https://github.com/GreenShoeGarage/Oracle/actions/runs/34011709258/job/101428568828) verified exact release SHA/version/schema at 04:31:46 UTC and passed all 56 public GET checks through 04:32:23 UTC. Production verification created no account or event. The existing enabled operator retained identity/password through idempotent provisioning and additive migration preservation. Both runtime branches retain `4133a6b51a9a4f2471723f88bd6d6f695a798b2a`; final documentation updates are main-only.
 
 ## Current limits and recovery position
 
 - Scheduled live backups remain unconfigured: Railway HOBBY reports `maxBackupsCount: 0` and no external runner is configured. Disposable restore rehearsals do not back up live event data.
-- Once migration 010 is applied, v0.8.0/schema-9 and earlier binaries are incompatible. Preserve upgraded data and use a tested schema-10-compatible roll-forward fix.
+- After migration 010, v0.8.0/schema-9 and earlier binaries are incompatible. Preserve upgraded data and use a tested schema-10-compatible roll-forward fix.
 - Live encounter readiness, queues, consent, deadlines, availability, cooperative controls, fictional signals, shops, exchanges, and agreement actions require server confirmation. Existing permitted journal archives remain bounded at 1,000 entries/3 MB; there is no offline action queue or real-world sensor integration.
 - Staff make the real in-person readiness, dispatch, and return decisions. Overdue never silently frees space, and shared prop views do not lower a signed-in organizer's privileges.
 - Coordinated multi-device timing, physical phones/cameras, authenticated real-browser/mobile workflows, service-worker inspection on real devices, load measurements, and a human field pilot remain outstanding. HTTP/DOM/storage checks do not replace those gates.
