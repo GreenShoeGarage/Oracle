@@ -171,8 +171,6 @@ export async function rehearseHttp({ pool, players = LOAD_TARGET, databaseKind =
     owner = await register(0);
     const setup = defaultSetup("fantasy", "council");
     setup.enabledInstruments = ["briefing", "relic", "whisper", "broadside", "bazaar"];
-    // Keep the disposable load event minimal; factions are not part of the measured player workload.
-    setup.factions = [];
     event = (await request(owner, "/api/events", { method: "POST", status: 201, body: { name: `Disposable load rehearsal ${randomUUID()}`, setup } })).event;
     const base = `/api/events/${event.id}`;
     const { invitation } = await request(owner, `${base}/invites`, { method: "POST", status: 201, body: { role: "player", maxUses: players, expiresInHours: 1 } });
