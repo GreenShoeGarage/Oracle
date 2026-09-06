@@ -1,14 +1,14 @@
 # ORACLE
 
-**LARP Field Kit** · v0.11.0 candidate · Green Shoe Garage
+**LARP Field Kit** · v0.11.0 · Green Shoe Garage
 
 ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. Shared screens can present selected briefings, cooperative procedures, and explicitly fictional prop readings.
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 11's v0.11.0 usability and pilot-preparation candidate is implemented; exact-release CI, the 100-player isolated load measurement, Railway staging, the complete remote event workflow, and production verification are pending. Batch 10 release `466b470eb6902fd84e903a0fbb1415b7f7a4fa8e` remains the last verified live version. Database schema 10, pack formats 1, browser archive version 2, and the information-only/account-binding API contract are unchanged. See [docs/STATUS.md](docs/STATUS.md).
+Batch 11's usability and pilot-preparation implementation is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com) as v0.11.0, release `6127db477f76f1c3b9f18ea6eb423e029c9dcaf7`. Both exact-commit PostgreSQL CI runs, separate 100-player isolated measurements, Railway staging, the complete all-twelve/all-three-theme remote workflow, and Railway production passed. Production exact readiness plus 70 public GET checks passed without gameplay writes. The existing `mike@greenshoegarage.com` superuser remains enabled with identity/password preserved. Schema 10, pack formats 1, browser archive version 2, and the information-only/account-binding API contract are unchanged. See [docs/STATUS.md](docs/STATUS.md).
 
-Full local verification passed 306 tests: 294 passed, zero failures, and 12 deliberate TCP-only skips. The actual human/device pilot remains unrun. [docs/PILOT.md](docs/PILOT.md) provides 58 required observations and a local report validator; automated checks do not satisfy those gates. Scheduled live backups and measured Railway capacity also remain outstanding.
+Full local verification before the load-cleanup fix passed 306 tests: 294 passed, zero failures, and 12 deliberate TCP-only skips. Both corrected exact-commit PostgreSQL suites passed 307 tests: 306 passed, zero failures, one PGlite-only skip. Human/device checks remain unrun and require actual participants and devices. [docs/PILOT.md](docs/PILOT.md) provides 58 required observations and a local report validator; automated checks do not satisfy those gates. Scheduled live backups and measured Railway capacity also remain outstanding. Next: record the actual pilot, then complete Batch 12 release handoff.
 
 ## What works in this release
 
@@ -127,7 +127,9 @@ Use Reading settings to adjust text size, outdoor readability, and reduced motio
 
 Follow [docs/PILOT.md](docs/PILOT.md) with actual iPhone, Android, desktop organizer, and shared-tablet users. `node scripts/pilot-report.js init /tmp/oracle-pilot.json` creates a private local report with every observation unrun. `check` validates the report; `check /tmp/oracle-pilot.json --require-ready` exits 2 until its recorded human/device, load, and finding gates are satisfied. The tool sends no telemetry and performs no pilot itself. An unresolved critical finding always blocks acceptance.
 
-The separate `node scripts/load-rehearsal.js --report=qa/load-rehearsal.json` requires the guarded disposable loopback test PostgreSQL configuration. It measures synthetic authenticated clients, latency, errors, integrity, and cleanup; it never load-tests Railway or establishes human usability. Do not point it at a live database.
+The separate `node scripts/load-rehearsal.js --report=qa/load-rehearsal.json` requires the guarded disposable loopback test PostgreSQL configuration. It measures synthetic authenticated clients, latency, errors, integrity, and cleanup; it never load-tests Railway or establishes human usability. Do not point it at a live database. The accepted main CI run measured 100 player connections and 1,800 successful requests in 4.772 seconds with no errors/timeouts (p95 462.87 ms); this is a short isolated burst, not sustained or Railway capacity.
+
+The unchanged shared-IP authentication limit is 60 combined registration/login attempts per 15 minutes. For a large group behind one network address, pre-register and sign in ahead of time or stagger arrivals; creating accounts in advance alone does not remove the sign-in limit. The isolated load runner uses two observed loopback source-address groups during setup, not a relaxed application limit.
 
 ## Run locally
 
