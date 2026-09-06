@@ -1,14 +1,14 @@
 # ORACLE
 
-**LARP Field Kit** · v0.6.0 candidate · Green Shoe Garage
+**LARP Field Kit** · v0.6.0 · Green Shoe Garage
 
 ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. A prop display presents selected briefing material on a shared screen.
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 6 (v0.6.0, database schema 7) is implemented and undergoing release verification. Production remains the verified Batch 5 release (v0.5.0/schema 6) until the exact candidate passes CI and staging and is promoted. See [docs/STATUS.md](docs/STATUS.md) for current evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
+Batch 6 (v0.6.0, database schema 7) is live. Local verification, real PostgreSQL CI, the complete remote staging workflow, Railway production, and all 37 exact-commit public checks passed. See [docs/STATUS.md](docs/STATUS.md) for evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
 
-## What works in this candidate
+## What works in this release
 
 - TRACE investigation notebooks for evidence, people, places, private theories, selected journal citations, and intentionally shared connections.
 - WHISPER organizer-authored rumors with alternate audiences and discovery conditions; collection preserves an explicitly unverified account while hidden truth stays in the staff workspace.

@@ -1,10 +1,10 @@
-# ORACLE v0.6.0 — Batch 6 candidate status
+# ORACLE v0.6.0 — Batch 6 release status
 
 Recorded September 6, 2026.
 
-Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Candidate application `0.6.0`; database schema `7`; briefing-pack format `1`; adventure format `1`. Exact release commit and deployment IDs are pending.
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Application `0.6.0`; database schema `7`; briefing-pack format `1`; adventure format `1`. Release commit: `9c14293bd6a13d5d5912070bdacda6b24308df43`. Railway staging and production both passed on this exact commit.
 
-Batch 6 is implemented and undergoing release verification. Production remains the verified Batch 5 commit `72cce5d6858c6b59b34b7c8c80bc874bb088e099` at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Candidate CI, remote staging, and production promotion are not yet recorded. The existing reserved operator account remains enabled in the verified production deployment; Batch 6 migration checks preserve its modeled identity, password, and enabled superuser privilege.
+Batch 6 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Local verification, real PostgreSQL CI, the complete remote staging workflow, Railway production, and exact-commit public smoke passed. Production migration/startup confirmed the existing reserved operator account is enabled, preserving its identity and password.
 
 ## Batch 6 implemented
 
@@ -17,26 +17,39 @@ Batch 6 is implemented and undergoing release verification. Production remains t
 - New starter stories are drafts awaiting review. Rehearsals remap authored character/faction/group audiences, exclude original collections and player investigations, and reset disposable play while preserving authored entries/publications/groups and the source event.
 - Migration 007 adds seven story/TRACE tables and a receipt lookup index. Populated schema-6 exchange/adventure/account records and prior migration files remain intact.
 
-Seven gameplay instruments are available in the candidate; five remain planned. Batch 7 is next. Format-1 briefing packs remain setup/material only and do not export story, investigation, exchange, character, or adventure state.
+Seven gameplay instruments are available; five remain planned. Batch 7 is next. Format-1 briefing packs remain setup/material only and do not export story, investigation, exchange, character, or adventure state.
 
-## Candidate verification
+## Batch 6 release verification
 
 | Check | Recorded result |
 | --- | --- |
 | Legacy/foundation migration suite | 36 tests: 35 passed, zero failures, one existing TCP-only skip; populated schema-6 exchanges and enabled superuser identity/password preserved |
-| Recovery fixture | Every new story/TRACE table populated with valid foreign keys; repeated schema-7 migration passed locally; real dump/restore pending CI |
+| Recovery fixture | Every new story/TRACE table populated with valid foreign keys; repeated schema-7 migration passed locally; actual PostgreSQL dump/restore passed in both candidate CI runs |
 | TRACE and story HTTP suites | Eleven TRACE and twelve story tests passed; final TRACE audience-validation alignment passed all eleven focused tests again |
 | Focused story UI checks | Fourteen checks passed, including current-role changes and semantic dirty-state tracking |
 | Focused TRACE UI checks | Ten checks passed, including semantically unchanged JSONB round trips |
 | Local HTTP staging rehearsal | 252 reads/287 writes passed, including every audience and prior three-theme adventure/exchange paths |
 | Full app DOM/API walkthrough | Ten end-to-end checks passed with zero uncaught JavaScript errors using actual modules, HTTP/PGlite, and JSDOM |
 | Full local `npm run verify` | 157 tests: 155 passed, zero failures, two deliberate existing TCP-only skips; syntax/assets passed |
-| Exact-commit main/staging CI | Pending |
-| Real PostgreSQL dump/restore, startup, production image | Pending for Batch 6 |
-| Exact-commit remote staging workflow | Pending |
-| Railway Batch 6 production deployment and public smoke | Pending |
+| [Main CI 34004234561](https://github.com/GreenShoeGarage/Oracle/actions/runs/34004234561) | Passed at the exact release commit |
+| [Staging CI 34004234793](https://github.com/GreenShoeGarage/Oracle/actions/runs/34004234793) | Verification and complete remote workflow passed |
+| PostgreSQL 18.6 suite | 157 tests: 156 passed, zero failures, one PGlite-only snapshot skip; both TCP races passed |
+| Recovery/runtime gates | Populated schema-7 dump/restore, both audit sequences, repeated migration, startup, and running production Docker/session/graceful-stop checks passed |
+| [Remote staging job 101408528522](https://github.com/GreenShoeGarage/Oracle/actions/runs/34004234793/job/101408528522) | Exact-release readiness, 37 public checks, story/TRACE/all-audience workflow, all three adventures/exchanges, rehearsal reset, and cleanup passed |
+| [Production CI 34004393610](https://github.com/GreenShoeGarage/Oracle/actions/runs/34004393610) | Exact release commit, v0.6.0/schema 7 readiness, and all 37 public GET checks passed; no production accounts/events/mutations created |
 
-The local staging script exercises differing private rumor accounts; explicit collection/retry; hidden truths; manager exclusion from private theories; canonical citations after confirmed QR sharing; private links; public/private/group/faction audiences; group/faction removal and actual character reapproval; player proposal review; separate draft/live corrections; withdrawal; exchange confirmation invalidation; real discovery-gated collection; and source-preserving rehearsal remapping/reset. The full-app DOM walkthrough also checks persisted notes, selected evidence, safe bulletin poster content, uncertain-response retry, exact UUID reuse, and account/character privacy boundaries. The full suite completed before a final bounded TRACE audience-validation alignment; all eleven focused TRACE tests passed afterward. The exact candidate's full PostgreSQL CI gate remains pending. Local request counts are not remote-deployment claims.
+The local staging script exercises differing private rumor accounts; explicit collection/retry; hidden truths; manager exclusion from private theories; canonical citations after confirmed QR sharing; private links; public/private/group/faction audiences; group/faction removal and actual character reapproval; player proposal review; separate draft/live corrections; withdrawal; exchange confirmation invalidation; real discovery-gated collection; and source-preserving rehearsal remapping/reset. The full-app DOM walkthrough also checks persisted notes, selected evidence, safe bulletin poster content, uncertain-response retry, exact UUID reuse, and account/character privacy boundaries. The full suite completed before a final bounded TRACE audience-validation alignment; all eleven focused TRACE tests passed afterward. Both exact-candidate PostgreSQL CI runs then passed the complete suite. Their sole skip is the PGlite-specific snapshot test, replaced by actual dump/restore. Local request counts are not remote-deployment claims.
+
+## Batch 6 deployment record
+
+| Target | Project ID | Deployment ID | Result |
+| --- | --- | --- | --- |
+| [Staging](https://oracle-production-488d.up.railway.app) | `4e75d5ec-f8e9-492d-ae75-e0d44428d24a` | `edf175c1-e090-47ab-b6a2-62813b3e20cd` | Exact release v0.6.0/schema 7 success; complete remote workflow passed |
+| [Production](https://oracle.greenshoegarage.com) | `d1989864-9a40-4176-a9d3-203a06c4bd72` | `04ebac6c-854e-4cab-b0be-2bb00f5ec689` | Exact release v0.6.0/schema 7 success; public smoke passed |
+
+Staging logs confirmed migration 7 at 01:34:32 UTC and v0.6.0 `server_ready` in staging at 01:34:38 UTC on September 6. The remote workflow finished all three adventure paths and archived its disposable events/signed out sessions at 01:36:33 UTC. These checks used the exact release commit. Staging and production remain separate Railway projects and databases.
+
+Production logs confirmed migration 7 and an existing matching superuser at 01:38:11 UTC on September 6. At 01:38:16 UTC, startup reported v0.6.0 in production and `accountExists: true`, `enabled: true`. Idempotent provisioning preserved the existing UUID/password. The [production smoke job 101408855825](https://github.com/GreenShoeGarage/Oracle/actions/runs/34004393610/job/101408855825) verified the exact commit/version/schema at 01:38:18 UTC and passed all 37 public checks between 01:38:19 and 01:38:23 UTC. Runtime branches retain the checked release commit; subsequent documentation commits do not change the deployed application. No private operator address, account identifier, setup secret, or password appears in these documents.
 
 ## Current limits and recovery position
 
