@@ -22,14 +22,16 @@ Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). App
 | Root DOM/API walkthrough | Nine groups passed with zero uncaught errors using actual modules and local HTTP state; does not establish physical-browser behavior |
 | Next-step guide | Five focused tests passed |
 | Pilot report validator | Eight focused tests passed; no actual human pilot was run |
-| Load tooling | Three focused tests passed, including a two-player lifecycle; 100-player capacity measurement pending exact CI |
+| Load tooling | Four focused tests passed, including a two-player lifecycle and bounded non-forced cleanup; 100-player capacity measurement pending exact CI |
 | Readability audit | 31 calculated color pairs passed; eleven kit checks passed; physical outdoor/assistive-device acceptance remains unrun |
-| Full local `npm run verify` | Passed: 306 tests, 294 passed, zero failures, 12 deliberate TCP-only skips; complete footer and exit 0 recorded, duration 145,383 ms; syntax/version/static asset checks passed |
-| Exact-release main PostgreSQL CI | Pending; must include all twelve TCP gates, 100-player isolated measurement, populated schema-10 recovery, startup, and production-image checks |
+| Full local `npm run verify` | Passed: 306 tests, 294 passed, zero failures, 12 deliberate TCP-only skips; complete footer and exit 0 recorded, duration 145,383 ms; syntax/version/static asset checks passed before the subsequent load-cleanup fix |
+| Exact-release main PostgreSQL CI | First attempt passed the 306-test PostgreSQL suite, then failed in load-runner cleanup; corrected-candidate CI remains pending, including accepted load, populated recovery, startup, and production-image checks |
 | Exact-release staging PostgreSQL CI | Pending after main succeeds |
 | Railway staging and remote workflow | Pending; retain all twelve instruments in all three themes, copied play/reset, current authorization, and cleanup |
 | Railway production and public smoke | Pending after staging succeeds; expect exact version/schema/commit readiness and 70 public GET routes, then record actual result |
 | Human and physical-device pilot | Not run; actual iPhone/Android/desktop/shared-tablet, camera/install/offline/update and organizer/new-player observations required by [PILOT.md](PILOT.md) |
+
+The first candidate (`9439760`) reached [main CI 34038258200](https://github.com/GreenShoeGarage/Oracle/actions/runs/34038258200), [verification job 101500202414](https://github.com/GreenShoeGarage/Oracle/actions/runs/34038258200/job/101500202414). Its PostgreSQL suite passed 306 tests (305 passed, zero failures, one PGlite-only skip), but the new isolated load runner failed during disposable database cleanup: the pool's end promise resolved before its backend connection fully closed, and forced database removal triggered an unhandled PostgreSQL `57P01`. No complete `LOAD_REHEARSAL_RESULT` was emitted, so this attempt provides no accepted capacity result. Recovery, startup, and Docker gates did not run. Staging and production were not advanced and remain on Batch 10. The corrected runner waits for owned database connections to drain before plain removal, records unexpected pool errors safely, and passed all four focused load-tool checks; corrected exact-candidate CI remains pending; the measured workload, environment guards, and release gates are unchanged.
 
 Main is checked first so a failing new load gate cannot trigger a staging release. Only the same exact verified candidate may advance to staging, then production after complete remote acceptance. A successful push is not deployment evidence.
 

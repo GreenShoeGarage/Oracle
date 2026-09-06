@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loadConfiguration, summarizeSamples, rehearseHttp, LOAD_TARGET } from "../scripts/load-rehearsal.js";
+import { loadConfiguration, summarizeSamples, drainAndDropOwnedDatabase, rehearseHttp, LOAD_TARGET } from "../scripts/load-rehearsal.js";
 import { testDatabase } from "./database.js";
 import { migrate } from "../src/db.js";
 
@@ -16,6 +16,29 @@ test("load summaries retain failed and timed-out requests in percentiles and cou
   const sample = Array.from({ length: 100 }, (_, index) => ({ durationMs: index + 1, status: index === 99 ? "timeout" : index === 98 ? 503 : 200, ok: index < 98 }));
   assert.deepEqual(summarizeSamples(sample), { requests: 100, errors: 2, timeouts: 1, p50Ms: 50, p95Ms: 95, maxMs: 100, statuses: { 200: 98, 503: 1, timeout: 1 } });
   assert.equal(summarizeSamples([]).p95Ms, null);
+});
+
+test("owned database cleanup waits for backend disconnects and never force-drops a busy database", async () => {
+  const name = `oracle_test_load_${"a".repeat(32)}`;
+  const calls = [], remaining = [2, 1, 0];
+  await drainAndDropOwnedDatabase({ async query(input) {
+    const sql = typeof input === "string" ? input : input.text;
+    calls.push(sql);
+    if (sql.startsWith("SELECT")) { assert.deepEqual(input.values, [name]); assert.ok(input.query_timeout > 0 && input.query_timeout <= 5000); return { rows: [{ n: remaining.shift() }] }; }
+    assert.equal(remaining.length, 0, "Drop must wait for every backend to disconnect.");
+    assert.equal(sql, `DROP DATABASE "${name}"`);
+    return { rows: [] };
+  } }, name);
+  assert.equal(calls.filter((sql) => sql.startsWith("SELECT")).length, 3);
+  assert.equal(calls.filter((sql) => sql.startsWith("DROP")).length, 1);
+  let busyDrop = false;
+  await assert.rejects(drainAndDropOwnedDatabase({ async query(input) {
+    const sql = typeof input === "string" ? input : input.text;
+    if (sql.startsWith("DROP")) busyDrop = true;
+    return { rows: [{ n: 1 }] };
+  } }, name, 20), /did not drain/);
+  assert.equal(busyDrop, false);
+  await assert.rejects(drainAndDropOwnedDatabase({ async query() { assert.fail("Invalid target must never reach PostgreSQL."); } }, "oracle_test"), /generated load rehearsal/);
 });
 
 test("rehearsal public HTTP lifecycle verifies replay, privacy, inventory and cleanup with a small non-capacity cohort", { timeout: 60000 }, async () => {

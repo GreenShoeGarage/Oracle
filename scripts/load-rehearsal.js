@@ -6,6 +6,7 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { cpus, platform, arch, totalmem } from "node:os";
 import { performance } from "node:perf_hooks";
+import { setTimeout as delay } from "node:timers/promises";
 import { createPool, migrate } from "../src/db.js";
 import { createApp } from "../src/app.js";
 import { readConfig, VERSION, SCHEMA_VERSION } from "../src/config.js";
@@ -44,6 +45,28 @@ export function summarizeSamples(samples) {
   return { requests: samples.length, errors: samples.filter((sample) => !sample.ok).length, timeouts: samples.filter((sample) => sample.status === "timeout").length, p50Ms: percentile(0.5), p95Ms: percentile(0.95), maxMs: percentile(1), statuses };
 }
 
+export async function drainAndDropOwnedDatabase(source, name, timeoutMs = 5000) {
+  assert.match(name, /^oracle_test_load_[a-f0-9]{32}$/, "Only a generated load rehearsal database may be removed.");
+  assert.ok(Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 5000, "Database drain must be bounded to five seconds.");
+  const deadline = performance.now() + timeoutMs;
+  // pg-pool can resolve end() after removing clients from its internal list
+  // but before their PostgreSQL backends have received the disconnect. Wait
+  // for the server to confirm that those connections actually closed. FORCE
+  // would race that graceful shutdown and emit an idle-pool error.
+  while (true) {
+    const queryBudget = Math.ceil(deadline - performance.now());
+    assert.ok(queryBudget > 0, "Disposable database connections did not drain within five seconds; it was not force-dropped.");
+    const count = (await source.query({ text: "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=$1", values: [name], query_timeout: queryBudget })).rows[0].n;
+    if (count === 0) {
+      await source.query(`DROP DATABASE "${name}"`);
+      return;
+    }
+    const remaining = deadline - performance.now();
+    assert.ok(remaining > 0, "Disposable database connections did not drain within five seconds; it was not force-dropped.");
+    await delay(Math.min(25, remaining));
+  }
+}
+
 function machine() {
   return { node: process.version, platform: platform(), architecture: arch(), cpuModel: cpus()[0]?.model || "unknown", logicalCpus: cpus().length, hostMemoryBytes: totalmem(), scope: "Load generator and application share one process and host; PostgreSQL runs separately on loopback. Host totals are not a resource allocation guarantee." };
 }
@@ -56,7 +79,7 @@ export async function rehearseHttp({ pool, players = LOAD_TARGET, databaseKind =
     formatVersion: 1, version: VERSION, schemaVersion: SCHEMA_VERSION,
     commit: process.env.GITHUB_SHA || null, startedAt: new Date().toISOString(), result: "running",
     target: { confirmedBeforeRun: LOAD_TARGET, actualPlayers: players, scope: "Simulated authenticated player sessions; not physical devices or human participants." },
-    hosting: { environment: process.env.CI ? "GitHub Actions isolated lab" : "Local isolated lab", databaseKind, appInstances: 1, applicationDatabasePoolMax: pool.options?.max ?? 1, databaseConnectionTimeoutMs: 5000, databaseStatementTimeoutMs: 10000, requestTimeoutMs: REQUEST_TIMEOUT_MS, overallWorkloadTimeoutMs: WORKLOAD_TIMEOUT_MS, cleanupTimeoutMs: 30000, sourceAddresses: SOURCE_ADDRESSES, ...machine() },
+    hosting: { environment: process.env.CI ? "GitHub Actions isolated lab" : "Local isolated lab", databaseKind, appInstances: 1, applicationDatabasePoolMax: pool.options?.max ?? 1, databaseConnectionTimeoutMs: 5000, databaseStatementTimeoutMs: 10000, requestTimeoutMs: REQUEST_TIMEOUT_MS, overallWorkloadTimeoutMs: WORKLOAD_TIMEOUT_MS, httpCleanupTimeoutMs: 30000, databaseDrainTimeoutMs: 5000, sourceAddresses: SOURCE_ADDRESSES, ...machine() },
     workload: { rounds: ROUNDS, eventCount: 1, theme: "fantasy", plannedRequests: players * ROUNDS * 6, readsPerPlayerPerRound: 5, writesPerPlayerPerRound: 1, write: "One permitted RELIC examination per player, retried with the identical request ID in the next two rounds.", reads: ["Own character and inventory", "Permitted adventure journal", "Story publications", "Information exchanges", "BAZAAR overview"], synchronization: "All player requests in each step begin together; each player has one HTTP keep-alive connection. There is no think time.", excluded: "Setup, integrity, closure and logout are outside latency samples. This is a short controlled burst, not a sustained soak, mobile network test, simultaneous registration test, full-event performance claim or Railway capacity claim." },
     constraints: ["The unchanged authentication limit permits 60 attempts per source address per 15 minutes. Account setup uses two real loopback source addresses (at most 51 registrations per address), without forwarded-header spoofing. Same-network arrivals exceeding the limit must register ahead of the event or wait for the window.", "The workload does not establish production capacity or prove human field usability."],
     cleanup: { eventArchived: false, sessionsSignedOut: 0, serverClosed: false, databaseDropped: false },
@@ -259,12 +282,16 @@ export async function main(env = process.env, args = process.argv.slice(2)) {
   const source = createPool({ databaseUrl: database.href, ssl: false });
   const name = `oracle_test_load_${randomUUID().replaceAll("-", "")}`;
   const report = { result: "failed", cleanup: { databaseDropped: false } };
+  const poolErrors = [];
+  const capturePoolError = (poolName) => (error) => poolErrors.push({ pool: poolName, code: /^[A-Z0-9]{5}$/.test(error?.code || "") ? error.code : "unknown" });
+  source.on("error", capturePoolError("source"));
   let owned = false, pool, failure;
   try {
     assert.equal((await source.query("SELECT current_database() AS name")).rows[0].name, database.pathname.slice(1), "Disposable connection database must match its configured name.");
     await source.query(`CREATE DATABASE "${name}"`); owned = true;
     const target = new URL(database); target.pathname = `/${name}`;
     pool = createPool({ databaseUrl: target.href, ssl: false });
+    pool.on("error", capturePoolError("application"));
     await migrate(pool);
     await rehearseHttp({ pool, report, progress: (message) => console.log(message) });
     report.hosting.postgresqlVersion = (await pool.query("SHOW server_version")).rows[0].server_version;
@@ -280,10 +307,12 @@ export async function main(env = process.env, args = process.argv.slice(2)) {
   } finally {
     if (pool) await pool.end().catch(() => { report.result = "failed"; });
     if (owned) {
-      try { await source.query(`DROP DATABASE "${name}" WITH (FORCE)`); report.cleanup.databaseDropped = true; }
+      try { await drainAndDropOwnedDatabase(source, name); report.cleanup.databasePoolDrained = true; report.cleanup.databaseDropped = true; }
       catch { report.result = "failed"; report.cleanup.databaseDropped = false; }
     }
-    await source.end();
+    await source.end().catch(() => { report.result = "failed"; });
+    report.cleanup.unexpectedPoolErrors = poolErrors;
+    if (poolErrors.length) report.result = "failed";
     if (!report.cleanup.databaseDropped) report.result = "failed";
     if (report.result !== "passed") report.capacityTargetMet = false;
     if (reportPath) { await mkdir(dirname(reportPath), { recursive: true }); await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 }); }
