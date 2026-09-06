@@ -4,7 +4,7 @@
 
 Development roadmap · Planning revision: 2.3 · September 6, 2026
 
-Status: Batch 11's usability and pilot-preparation implementation is deployed as v0.11.0, release `6127db477f76f1c3b9f18ea6eb423e029c9dcaf7`, at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Both exact-commit PostgreSQL CI runs, separate isolated 100-player measurements, Railway staging, the complete all-twelve/all-three-theme remote workflow, and Railway production passed. Exact production readiness plus 70 public GET checks passed; the existing enabled operator retained identity/password. Human/device checks remain unrun and require actual participants and devices. Schema 10, pack formats 1, browser archive version 2, and existing gameplay contracts are preserved. See [STATUS.md](STATUS.md).
+Status: Batch 12 v1.0.0 handoff is deployed as release `782671590b3ea3547f0bd3a24a7a98ed5af76dd4`, at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Both exact-commit PostgreSQL CI runs, separate isolated 100-player measurements, Railway staging, the complete all-twelve/all-three-theme remote workflow, and Railway production passed. Exact production readiness plus 72 public GET checks passed; the existing enabled operator retained identity/password. Human/device checks remain unrun and require actual participants and devices. Schema 10, pack formats 1, browser archive version 2, and existing gameplay contracts are preserved. See [STATUS.md](STATUS.md).
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
@@ -184,7 +184,7 @@ Completion gate: No unresolved critical defects in access control, data integrit
 
 **Batch 12 — v1.0: Production release and handoff**
 
-Implementation status: Handoff documentation, public Help & guides, install-menu layout correction, live-event reset regression coverage, and a schema-compatible rollback rehearsal are implemented in the working tree. Exact-release CI and deployments are next.
+Implementation status: Handoff documentation, public Help & guides, install-menu layout correction, live-event reset regression coverage, and schema-compatible recovery tooling are deployed and verified.
 
 Finalize the organizer quick start, player guide, comprehensive GitHub README, theme/event-pack documentation, migration and backup instructions, troubleshooting, and release notes. Ship the three starter adventures and clean sample-data/reset workflows that cannot accidentally reset a live event.
 
@@ -223,4 +223,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next: run and record the actual Batch 11 human/device pilot, resolve or explicitly schedule its findings, then complete Batch 12 production release and handoff. Batch 11 implementation/deployment is complete; its human acceptance remains an explicit dependency. Scheduled live backups and measured Railway capacity remain outstanding. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next: run and record the actual Batch 11 human/device pilot, resolve or explicitly schedule its findings, and maintain the v1.0 handoff. Batch 11 implementation/deployment is complete; its human acceptance remains an explicit dependency. Scheduled live backups and measured Railway capacity remain outstanding. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
