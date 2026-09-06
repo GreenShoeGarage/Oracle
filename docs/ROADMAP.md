@@ -4,7 +4,7 @@
 
 Development roadmap · Planning revision: 2.4 · September 6, 2026
 
-Status: v1.1.0 feedback and field-preparation work is in progress; exact-candidate verification and deployment are pending. The last verified production release is Batch 12 v1.0.0, commit `782671590b3ea3547f0bd3a24a7a98ed5af76dd4`, at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Its CI, complete remote journey, Railway deployment, readiness, and 72 public GET checks passed. Actual device/human acceptance, application rollback rehearsal, scheduled live backups, and sustained Railway capacity remain open. See [STATUS.md](STATUS.md).
+Status: v1.1.0 is deployed as release `da681123a25141b47893cba794fc7738b34a5c6d` at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Both exact PostgreSQL verification jobs, Railway staging, the complete remote all-twelve/all-three-theme journey with cleanup, and Railway production passed. Independent production verification confirmed exact version/schema/commit readiness and all 78 public GET paths. Actual device/human acceptance, application rollback rehearsal, scheduled live backups, and sustained Railway capacity remain open. See [STATUS.md](STATUS.md).
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
@@ -196,9 +196,9 @@ Completion gate: All twelve instruments meet their acceptance criteria; each sta
 
 **v1.1 — Field preparation and public entry improvements**
 
-Implementation status: In progress following feedback. Add **Prepare for the field** for an approved player's permitted briefing/rules, character snapshot, and journal, with durable read-back checks, preparation time, and visible failures. Keep public-shell readiness separate from event-data preparation. Preserve account/event clearing and the existing explicit information-request replay contract; server-authoritative game actions remain online.
+Implementation status: Release `da681123a25141b47893cba794fc7738b34a5c6d` is deployed to staging and production. Both exact PostgreSQL suites passed 332 tests (331 passed, zero failures, one expected skip), plus load, populated recovery, startup, and image gates. Complete remote staging/cleanup, Railway production, and exact readiness plus 78 public GET checks passed. **Prepare for the field** provides permitted briefing/rules, own approved character snapshots, and journal copies with durable read-back checks, preparation time, and visible failures. Keep public-shell readiness separate from event-data preparation. Preserve account/event clearing and the existing explicit information-request replay contract; server-authoritative game actions remain online.
 
-Give the signed-out homepage a real static description, feature list, theme examples, and help/catalog links. Align initial browser color with the loading screen and saved display setting, add compatible mobile metadata, and provide guarded startup focus plus a persistent loading/completion announcement. Index only intentional public pages; publishing metadata does not prove search indexing.
+Give the signed-out homepage a real static description, feature list, theme examples, and help/catalog links. Align initial browser color with the loading screen and saved display setting, add compatible mobile metadata, and provide guarded startup focus on the main content plus a persistent loading/completion announcement. Index only intentional public pages; publishing metadata does not prove search indexing.
 
 Completion gate: Relevant storage/privacy, offline fallback, loading/focus, and static-page checks pass on the exact candidate, followed by existing PostgreSQL/recovery/image, complete staging, and independent production gates. Record actual iPhone/Android airplane-mode cold starts and return-to-connectivity behavior separately when devices are available. SQL schema 10, briefing/adventure formats 1, and journal archive version 2 remain unchanged. Upgrade only the browser Field desk database to IndexedDB version 2, preserve existing stores and records, and block old version-1 writers from discarding prepared material. Guide users to save work and close or update older tabs when needed.
 
@@ -231,4 +231,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next: verify and deploy v1.1.0, then record the actual device/human pilot and resolve its findings. Complete the application rollback rehearsal and configure verified live backups. Sustained Railway capacity remains unmeasured. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next: record the actual device/human pilot and resolve its findings, including airplane-mode cold starts and reconnect behavior for prepared field material. Complete the application rollback rehearsal and configure verified live backups. Sustained Railway capacity remains unmeasured. Public branding uses ORACLE with the subtitle “LARP Field Kit.”

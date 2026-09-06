@@ -2,17 +2,34 @@
 
 Recorded September 6, 2026.
 
-The v1.1.0 changes are in progress. Exact-candidate verification, staging acceptance, and production deployment have not yet been recorded here. The last verified production release is v1.0.0, commit `782671590b3ea3547f0bd3a24a7a98ed5af76dd4`, at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com).
+Version 1.1.0 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com), release `da681123a25141b47893cba794fc7738b34a5c6d` (tree `3bde1901ac6ee54d9fc84ac11212afbbbdbfc7e8`). Exact main/staging verification, the complete remote all-twelve-instrument/all-three-theme journey with cleanup, and Railway production passed. Independent production verification confirmed the exact version/schema/commit and all 78 public GET paths without gameplay writes.
 
 ## Current release scope
 
 - Explicit **Prepare for the field**: permission-filtered briefing/rules, the player's own approved character sheet, saved journal readings, read-back verification, preparation time, and visible storage failures.
 - Separate status for the installed public app and saved event material. Prepared information remains historical and read-only; live game actions still need the server.
 - A public homepage with an app description, features, help/catalog links, and public-page indexing metadata.
-- Compatible mobile installation metadata, early application of the saved display setting, browser color aligned with the actual display, and an accessible startup announcement/focus handoff.
+- Compatible mobile installation metadata, early application of the saved display setting, browser color aligned with the actual display, and an accessible startup announcement with guarded focus on the main content.
 - Documentation corrected to distinguish briefing packs from gameplay/database backups and automated recovery from the still-unrun application rollback rehearsal.
 
 SQL schema 10, briefing/adventure formats 1, and journal archive version 2 are retained. The separate browser Field desk database advances to IndexedDB version 2, preserving its stores, contexts, notes, and queued requests. Preparation is an optional context field. Old version-1 writers are blocked from overwriting prepared data; save open work and close or update older tabs if they block the upgrade. The information-only/account-binding API and explicit replay contract remain unchanged.
+
+## v1.1.0 verification
+
+| Check | Recorded result |
+| --- | --- |
+| Exact main PostgreSQL verification | [Run 34067465384](https://github.com/GreenShoeGarage/Oracle/actions/runs/34067465384), [job 101578650801](https://github.com/GreenShoeGarage/Oracle/actions/runs/34067465384/job/101578650801), passed the candidate: 332 tests, 331 passed, zero failures, one expected PGlite-only skip; all TCP, isolated load, populated recovery, startup, and production-image gates passed |
+| Exact staging PostgreSQL verification | [Run 34067581062](https://github.com/GreenShoeGarage/Oracle/actions/runs/34067581062), [job 101578962165](https://github.com/GreenShoeGarage/Oracle/actions/runs/34067581062/job/101578962165), passed the same candidate and gates with 332 tests, 331 passed, zero failures, one expected PGlite-only skip |
+| Isolated load | Main: 100 players, 1,800 HTTP responses, zero errors, 4.920 seconds, p95 477.65 ms. Staging verification repeated 100 players/1,800 responses with zero errors and disposable-database cleanup. These short CI bursts do not establish sustained Railway capacity |
+| Local verification | Full suite before the final added regression: 331 tests, 319 passed, zero failures, 12 deliberate TCP-only skips. Final focused suite: 28 passed |
+| Preparation integration | Three real-API/local-storage groups passed: authorized preparation, cold reopen of saved material, and account purge. This is automated storage/API evidence, not a physical airplane-mode test |
+| Railway staging | Deployment `619f7111-8c8e-4dff-9d92-e97b4eff8080` succeeded on the candidate at 23:41:37 UTC on September 6 |
+| Public desktop browser | Staging homepage and help checked at 1363 × 936 with no horizontal overflow. Startup reported ready with `aria-busy=false`; the entry link focused the main content and the next Tab reached the email field |
+| Complete remote staging journey | [Job 101579179833](https://github.com/GreenShoeGarage/Oracle/actions/runs/34067581062/job/101579179833) passed all twelve instruments in all three themes and cleanup at 23:48:39 UTC on September 6; the overall staging run succeeded |
+| Production deployment and public smoke | Deployment `0a3a2b8a-94d5-4a95-b5d4-27ec6ab24270` succeeded on the exact release at 23:50:04 UTC on September 6. [Run 34067963685](https://github.com/GreenShoeGarage/Oracle/actions/runs/34067963685), [job 101579976100](https://github.com/GreenShoeGarage/Oracle/actions/runs/34067963685/job/101579976100), passed exact v1.1.0/schema-10/commit readiness at 23:50:03 UTC and all 78 public GET paths through 23:50:22 UTC (79 PASS lines including readiness); no gameplay writes |
+| Production desktop browser | Canonical homepage loaded the new public introduction and “Welcome back” main content. Startup reported “Sign-in is ready.” with `aria-busy=false`; no horizontal overflow or ORACLE console errors were observed |
+
+Production startup matched the existing operator at 23:49:57 UTC. At 23:50:01 UTC, `server_ready` reported v1.1.0 in production and `superuser_status` confirmed `accountExists: true`, `enabled: true`. The runtime release remains the exact tested commit; final evidence documentation is published to main separately.
 
 ## Acceptance still outstanding
 

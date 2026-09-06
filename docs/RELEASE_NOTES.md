@@ -2,15 +2,17 @@
 
 ## v1.1.0 — feedback and field preparation
 
-Candidate work is in progress; see [release status](STATUS.md) for verification and deployment evidence.
+Release `da681123a25141b47893cba794fc7738b34a5c6d` is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Exact main/staging PostgreSQL verification, the complete remote all-twelve/all-three-theme journey with cleanup, Railway production, and all 78 public GET checks passed. See [release status](STATUS.md) for evidence.
 
 - **Prepare for the field** saves the permitted event briefing/rules and the player's own approved character, checks saved journal data, and reports preparation time and storage failures.
 - Separate public-app and event-data readiness makes offline availability clearer. Shared game actions still require connectivity and server confirmation.
 - A static public introduction, feature list, help/catalog links, and public-page metadata make the app understandable before JavaScript loads.
-- Mobile metadata, initial display/color handling, and guarded startup focus and announcements address installation and accessibility feedback.
+- Mobile metadata, initial display/color handling, and guarded startup focus on the main content and announcements address installation and accessibility feedback.
 - Documentation now accurately limits briefing packs to setup/briefing material and distinguishes database restoration from the unrun application rollback rehearsal.
 
 SQL schema 10, briefing/adventure formats 1, and journal archive version 2 are retained. The browser Field desk database upgrades to IndexedDB version 2, preserving its stores, contexts, notes, and requests while blocking older version-1 writers from discarding prepared material. Save open work and close or update older tabs if the upgrade is blocked. Existing information-only requests retain their account scope, identifiers, and explicit replay behavior.
+
+Verification: both PostgreSQL suites passed 332 tests (331 passed, zero failures, one expected skip), plus isolated load, populated recovery, startup, and Docker gates. Three preparation/API/local-storage integration groups passed. Desktop staging checks covered the homepage/help, startup status, and keyboard entry without claiming mobile, physical-device, or assistive-technology acceptance. Complete remote staging and cleanup passed. Production deployment `0a3a2b8a-94d5-4a95-b5d4-27ec6ab24270` and [production CI 34067963685](https://github.com/GreenShoeGarage/Oracle/actions/runs/34067963685) confirmed the exact release and all 78 public GET paths on September 6, 2026.
 
 ## v1.0.0 — Batch 12
 

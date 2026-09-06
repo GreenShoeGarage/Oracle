@@ -1,14 +1,16 @@
 # ORACLE
 
-**LARP Field Kit** · v1.1.0 candidate · Green Shoe Garage
+**LARP Field Kit** · v1.1.0 · Green Shoe Garage
 
 ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. Shared screens can present selected briefings, cooperative procedures, and explicitly fictional prop readings.
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Help & guides](https://oracle.greenshoegarage.com/help.html) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-The v1.1.0 feedback and field-preparation changes are in progress. The last verified production release is v1.0.0, commit `782671590b3ea3547f0bd3a24a7a98ed5af76dd4`, at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Its exact main/staging PostgreSQL CI, all-twelve-instrument/all-three-theme remote journey, and Railway production passed; exact production readiness and 72 public GET checks passed without gameplay writes. The existing project superuser remains enabled with identity/password preserved. See [docs/STATUS.md](docs/STATUS.md) for release evidence.
+Version 1.1.0 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com), release `da681123a25141b47893cba794fc7738b34a5c6d`. Both exact main/staging PostgreSQL verification jobs, the complete all-twelve-instrument/all-three-theme remote journey with cleanup, and Railway production passed. Independent production verification confirmed the exact commit/version/schema and all 78 public GET paths without gameplay writes. See [docs/STATUS.md](docs/STATUS.md) for release evidence.
 
-The v1.0.0 PostgreSQL suite passed 309 tests: 308 passed, zero failures, one PGlite-only skip. Current-candidate results will be recorded after verification. Human/device checks remain unrun: [docs/PILOT.md](docs/PILOT.md) provides 58 required observations and a local report validator. Scheduled live backups, sustained Railway capacity, and the application rollback rehearsal remain outstanding. SQL schema 10, pack formats 1, journal archive version 2, and the information-only/account-binding API contract are retained. The separate browser Field desk database advances to version 2 while preserving existing records and blocking old version-1 writers.
+Both exact-candidate PostgreSQL suites passed 332 tests: 331 passed, zero failures, one expected PGlite-only skip. Isolated 100-player load, populated recovery, startup, and production-image gates passed. Three real-API/local-storage integration groups covered preparation, a cold reopen, and account clearing. A desktop staging check covered the public homepage/help, layout, startup status, and keyboard entry. Physical-device and human checks remain unrun; [docs/PILOT.md](docs/PILOT.md) records those required observations. Scheduled live backups, sustained Railway capacity, and the application rollback rehearsal remain outstanding.
+
+SQL schema 10, pack formats 1, journal archive version 2, and the information-only/account-binding API contract are retained. The separate browser Field desk database advances to version 2 while preserving existing records and blocking old version-1 writers.
 
 ## What works in this release
 
