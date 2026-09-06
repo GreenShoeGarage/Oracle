@@ -1,0 +1,85 @@
+/* The same public introduction is present before and after authentication loads. */
+.public-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(19rem, .85fr);
+  min-height: 100vh;
+  max-width: 1300px;
+  margin-inline: auto;
+}
+.public-entry > * { min-width: 0; }
+.public-intro {
+  padding: clamp(1.5rem, 4vw, 3.5rem);
+  border-inline-end: 1px solid var(--line);
+  background: var(--bg);
+}
+.public-intro[hidden] { display: none; }
+.landing-brand .eyebrow { font-size: .72rem; }
+.landing-brand .wordmark {
+  font-family: inherit;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  letter-spacing: .14em;
+  margin-top: .8rem;
+}
+.landing-subtitle { color: var(--accent); margin-top: .3rem; letter-spacing: .05em; }
+.landing-pitch { margin-top: 1.7rem; max-width: 36rem; }
+.landing-pitch h2 { font-size: clamp(1.65rem, 2.7vw, 2.3rem); line-height: 1.15; }
+.landing-pitch p { color: var(--muted); margin-top: .8rem; }
+.landing-themes { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.1rem; }
+.landing-themes span {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: .18rem .6rem;
+  font-size: .8rem;
+  color: var(--text);
+}
+.landing-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1.1rem; margin-top: 1.3rem; }
+.landing-button, .landing-help {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-weight: 650;
+  font-size: .9rem;
+}
+.landing-button { background: var(--accent); color: var(--bg); border: 1px solid var(--accent); border-radius: 5px; padding: .6rem .85rem; text-decoration: none; }
+.landing-button:hover { text-decoration: underline; }
+.landing-join { margin-top: .5rem; color: var(--muted); font-size: .85rem; }
+.landing-features { display: grid; gap: .9rem; list-style: none; padding: 0; margin: 1.5rem 0; }
+.landing-features li { padding-inline-start: .85rem; border-inline-start: 2px solid var(--accent); }
+.landing-features strong, .landing-features span { display: block; }
+.landing-features strong { font-size: .94rem; }
+.landing-features span { color: var(--muted); font-size: .87rem; margin-top: .15rem; }
+.landing-offline { color: var(--muted); font-size: .84rem; }
+.landing-offline strong { color: var(--text); }
+.landing-catalogs { display: flex; flex-wrap: wrap; gap: 0 1rem; border-top: 1px solid var(--line); margin-top: 1.4rem; padding-top: .7rem; font-size: .8rem; }
+.landing-catalogs span { flex-basis: 100%; color: var(--muted); }
+.landing-catalogs a { display: inline-flex; align-items: center; min-height: 44px; }
+.public-entry .auth-wrap { display: block; min-height: 100%; }
+.public-entry .auth-intro { display: none; }
+.public-entry .auth-form { min-height: 100%; padding: clamp(1.5rem, 3.5vw, 3rem); }
+.public-entry .boot { text-align: start; padding: clamp(1.5rem, 3.5vw, 3rem); background: var(--panel); min-height: 100%; display: flex; flex-direction: column; justify-content: center; }
+.startup-status { padding: .5rem 1rem; color: var(--muted); background: var(--panel); font-size: .85rem; text-align: center; }
+.startup-status[data-state="ready"], .startup-status[data-state="offline"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.public-entry #main { scroll-margin-top: 1rem; }
+@media (max-width: 760px) {
+  .public-entry { display: block; min-height: 0; }
+  .public-intro { border-inline-end: 0; border-bottom: 1px solid var(--line); padding: 1.5rem; }
+  .landing-brand .wordmark { font-size: 2.4rem; }
+  .landing-pitch { margin-top: 1.2rem; }
+  .public-entry .auth-form, .public-entry .boot { min-height: 0; padding: 1.8rem 1.5rem; }
+}
+@media (forced-colors: active) {
+  .landing-button { background: ButtonFace; color: ButtonText; border-color: ButtonText; }
+  .landing-features li, .landing-themes span, .public-intro, .landing-catalogs { border-color: CanvasText; }
+}

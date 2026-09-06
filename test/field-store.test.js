@@ -16,7 +16,7 @@ async function fixture(t) {
   return { ...environment, options, store, accountId, eventId, characterId, scope, input, queue, advance: ms => { time += ms; } };
 }
 async function rows(factory) {
-  const db = await new Promise((resolve, reject) => { const request = factory.open('oracle-field-desk', 1); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+  const db = await new Promise((resolve, reject) => { const request = factory.open('oracle-field-desk', 2); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
   return new Promise((resolve, reject) => { const result = {}, tx = db.transaction(['meta', 'contexts', 'drafts', 'requests']); for (const name of ['meta', 'contexts', 'drafts', 'requests']) { const read = tx.objectStore(name).getAll(); read.onsuccess = () => { result[name] = read.result; }; } tx.oncomplete = () => { db.close(); resolve(result); }; tx.onerror = () => reject(tx.error); });
 }
 

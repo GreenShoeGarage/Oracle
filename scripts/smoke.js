@@ -46,7 +46,13 @@ for (const path of [
   "/health/ready",
   "/api/session",
   "/",
+  "/robots.txt",
+  "/sitemap.xml",
   "/style.css",
+  "/landing.css",
+  "/display.js",
+  "/startup.js",
+  "/preparation-model.js",
   "/app.js",
   "/builder.js",
   "/characters-ui.js",
@@ -139,6 +145,16 @@ for (const path of [
   }
   if (path.endsWith(".js"))
     assert.match(response.headers.get("content-type") || "", /^text\/javascript\b/);
+  if (path === "/robots.txt") {
+    const robots = await response.text();
+    assert.match(robots, /User-agent: \*/);
+    if (process.env.EXPECTED_ENVIRONMENT === "production") assert.ok(robots.includes(`Sitemap: ${origin}/sitemap.xml`));
+  }
+  if (path === "/sitemap.xml") {
+    const sitemap = await response.text();
+    assert.match(response.headers.get("content-type") || "", /^application\/xml\b/);
+    if (process.env.EXPECTED_ENVIRONMENT === "production") assert.ok(sitemap.includes(`<loc>${origin}/help.html</loc>`));
+  }
   if (path.endsWith(".css"))
     assert.match(response.headers.get("content-type") || "", /^text\/css\b/);
   if (path.endsWith(".png")) {

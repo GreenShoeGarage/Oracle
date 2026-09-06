@@ -1,4 +1,5 @@
 import { parseExchangeInput } from './exchange-code.js';
+import { projectPreparation, preparationReadiness } from './preparation-model.js';
 
 const emptyLocal = () => ({ accountId: null, scope: null, contexts: [], drafts: [], requests: [], lastChecked: null });
 const when = value => value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Not checked';
@@ -9,6 +10,7 @@ export function createFieldUI(ctx) {
   const { state, api, shell, esc, openModal, closeModal, toast, loadEvent, store, sync, offline } = ctx;
   let local = emptyLocal(), accountId = null, selected = null, draftText = '', savedText = '', savedAt = null, savedRevision = null, draftConflict = null, joinCode = '', reviewAcknowledged = false;
   let epoch = 0, loading = false, busy = false, feedback = '', feedbackError = false, reviewId = null, printData = null, printSelection = new Set(), printEpoch = 0, queueBusy = false;
+  let archive = { accountId: null, records: [] }, preparationTarget = null;
   const connected = () => navigator.onLine !== false;
   const signedIn = () => Boolean(state.session?.user?.id);
   const disabled = value => value ? 'disabled' : '';
@@ -24,7 +26,7 @@ export function createFieldUI(ctx) {
     const review = document.querySelector('#field-send-form'); if (review?.dataset.id === reviewId) reviewAcknowledged = Boolean(review.querySelector('[name="acknowledged"]')?.checked);
   }
   function cleanupModal() { printEpoch++; printData = null; printSelection.clear(); document.body.classList.remove('field-printing'); }
-  function reset() { epoch++; cleanupModal(); local = emptyLocal(); accountId = null; selected = null; draftText = ''; savedText = ''; savedAt = null; savedRevision = null; draftConflict = null; joinCode = ''; reviewAcknowledged = false; loading = false; busy = false; feedback = ''; feedbackError = false; reviewId = null; }
+  function reset() { epoch++; cleanupModal(); local = emptyLocal(); archive = { accountId: null, records: [] }; preparationTarget = null; accountId = null; selected = null; draftText = ''; savedText = ''; savedAt = null; savedRevision = null; draftConflict = null; joinCode = ''; reviewAcknowledged = false; loading = false; busy = false; feedback = ''; feedbackError = false; reviewId = null; }
   function confirmDiscard(destination) {
     if (destination === 'modal') return true;
     capture(); if (busy || queueBusy || sync?.busy) { toast('Wait for the current Field desk action to finish.'); return false; }
@@ -39,12 +41,12 @@ export function createFieldUI(ctx) {
     draftText = entry?.text || ''; savedText = draftText; savedAt = entry?.updatedAt || null; savedRevision = entry?.revision || null; draftConflict = null;
   }
   async function load({ preserve = true } = {}) {
-    capture(); const before = token(), next = await store.loadLocal();
+    capture(); const before = token(), [next, savedArchive] = await Promise.all([store.loadLocal(), offline.loadArchive?.().catch(() => ({ accountId: null, records: [] })) || Promise.resolve({ accountId: null, records: [] })]);
     if (before.epoch !== epoch || state.view !== 'field') return;
     const liveAccount = state.session?.user?.id || null;
     if (liveAccount && next.accountId && next.accountId !== liveAccount) { local = emptyLocal(); accountId = liveAccount; selected = null; draftText = savedText = ''; savedAt = null; savedRevision = null; draftConflict = null; joinCode = ''; reviewId = null; reviewAcknowledged = false; return; }
     if (accountId && next.accountId !== accountId) { draftText = savedText = ''; selected = null; savedAt = null; savedRevision = null; draftConflict = null; joinCode = ''; reviewId = null; reviewAcknowledged = false; cleanupModal(); }
-    local = next; accountId = next.accountId || liveAccount;
+    local = next; accountId = next.accountId || liveAccount; archive = savedArchive.accountId === accountId ? savedArchive : { accountId: null, records: [] };
     let nextScope = selected && characterFor(selected.eventId, selected.characterId) ? selected : null;
     if (!nextScope) { const context = local.contexts.find(row => row.event.id === state.event?.id && row.characters.length) || local.contexts.find(row => row.characters.length); if (context) nextScope = { eventId: context.event.id, characterId: context.characters[0].id }; }
     selectScope(nextScope, preserve && scopeKey(nextScope) === scopeKey(selected));
@@ -67,9 +69,70 @@ export function createFieldUI(ctx) {
     if (state.session?.user?.id !== who || state.event?.id !== id) return;
     await store.saveContext({ scope, accountId: who, event: { id: result.event.id, name: result.event.name }, characters: result.characters.map(row => ({ id: row.id, name: row.name })) });
   }
+  const preparationEvents = () => [...new Map([...local.contexts.map(row => row.event), ...(state.event?.id ? [state.event] : [])].map(event => [event.id, { id: event.id, name: event.name }])).values()];
+  const preparationEventId = () => preparationTarget || state.event?.id || local.contexts[0]?.event.id;
+  async function prepareField() {
+    if (busy || !signedIn() || !connected()) return;
+    const eventId = preparationEventId(); if (!eventId) throw new Error('Open an event before preparing its field kit.');
+    capture(); busy = true; feedback = 'Checking your access and saving field reference material…'; feedbackError = false;
+    const who = state.session.user.id, context = token(); render();
+    const stillCurrent = () => current(context) && state.session?.user?.id === who;
+    try {
+      const session = await api('/api/session', 'GET', undefined, { expectedAccount: who });
+      if (!stillCurrent() || session.user?.id !== who) return;
+      await store.setAccount(who); if (!stillCurrent()) return;
+      await offline.setAccount(who); if (!stillCurrent()) return;
+      const scope = await store.captureScope();
+      if (!scope || scope.accountId !== who) throw new Error('This device’s account changed. Reconnect before preparing again.');
+      const options = { expectedAccount: who }, base = `/api/events/${eventId}`;
+      const [eventResult, roster] = await Promise.all([api(base, 'GET', undefined, options), api(`${base}/characters`, 'GET', undefined, options)]);
+      if (!stillCurrent()) return;
+      if (eventResult.event?.id !== eventId) throw new Error('The event response could not be verified.');
+      const own = roster.characters.filter(row => row.userId === who && row.eventId === eventId && row.visibility === 'private' && row.status === 'approved');
+      const characters = [], journals = [], problems = [];
+      for (const character of own) {
+        const detail = await api(`${base}/characters/${character.id}`, 'GET', undefined, options);
+        if (!stillCurrent()) return;
+        if (detail.character?.id !== character.id || detail.character?.userId !== who || detail.character?.eventId !== eventId || detail.character?.status !== 'approved' || detail.character?.visibility !== 'private') throw new Error('A character assignment changed. Check your characters and prepare again.');
+        characters.push({ ...detail.character, inventory: detail.inventory });
+        try {
+          const readScope = await offline.captureReadScope();
+          if (!readScope || readScope.accountId !== who) throw new Error('Journal storage is unavailable.');
+          const reading = await api(`${base}/adventure/play?${new URLSearchParams({ characterId: character.id })}`, 'GET', undefined, options);
+          if (!stillCurrent()) return;
+          if (reading.preview || reading.event?.id !== eventId || reading.character?.id !== character.id || !reading.characters?.some(row => row.id === character.id)) throw new Error('This journal could not be checked for your assigned character.');
+          const saved = await offline.cacheJournal({ ...reading, scope: readScope, accountId: who });
+          if (!saved) throw new Error('The journal could not be saved on this device.');
+          const checked = await offline.loadArchive(), copy = checked.accountId === who && checked.records.find(row => row.event.id === eventId && row.character.id === character.id);
+          if (!copy || copy.journal.length !== reading.journal.length || reading.journal.some(row => !copy.journal.some(saved => String(saved.id) === String(row.id) && saved.title === row.title && saved.text === row.text && saved.audio === (row.audio || null)))) throw new Error('The saved journal could not be read back completely.');
+          journals.push({ characterId: character.id, readingIds: copy.journal.map(row => String(row.id)), verifiedAt: copy.lastChecked });
+        } catch (error) {
+          if (!stillCurrent()) return;
+          if ([401, 403, 404, 409].includes(error.status)) throw error;
+          problems.push(`${character.profile.name}: ${error.message || 'Journal preparation did not complete.'}`);
+        }
+      }
+      if (!stillCurrent()) return;
+      const event = eventResult.event;
+      const preparation = projectPreparation({ event: { id: event.id, name: event.name, description: event.description, location: event.location, startsAt: event.starts_at }, setup: event.setup, factions: roster.factions, characters, journals, preparedAt: new Date().toISOString() }, who);
+      if (!await store.savePreparation({ scope, accountId: who, preparation })) throw new Error('A newer account or character check replaced this preparation. Reopen the Field desk and try again.');
+      if (!stillCurrent()) return;
+      await load(); if (!stillCurrent()) return;
+      const saved = contextFor(eventId)?.preparation;
+      if (!saved || saved.preparedAt !== preparation.preparedAt) throw new Error('The saved field kit could not be read back. Check storage permissions and free space, then prepare again.');
+      const shellReady = await ctx.checkOfflineShell?.().catch(() => false);
+      if (!stillCurrent()) return;
+      const readiness = preparationReadiness(saved, archive, accountId);
+      feedbackError = Boolean(problems.length || readiness.missing.length || !shellReady);
+      feedback = `${event.name}: briefing, rules, and ${characters.length} own character sheet${characters.length === 1 ? '' : 's'} saved and read back. ${problems.join(' ')} ${readiness.missing.join(' ')} ${shellReady ? 'The installed app shell is ready.' : 'The app shell is not yet verified for offline opening. Check Install ORACLE while connected.'}`;
+    } catch (error) {
+      if (stillCurrent()) { feedback = `Preparation did not complete: ${error.message || 'Check your connection and browser storage, then try again.'} Any earlier saved kit keeps its original timestamp.`; feedbackError = true; }
+    } finally { if (current(context)) { busy = false; render(); } }
+  }
   async function open(options = {}) {
     if (state.view === 'field' && !confirmDiscard()) return;
     epoch++; cleanupModal(); state.view = 'field'; loading = true; feedback = ''; feedbackError = false;
+    preparationTarget = state.event?.id || options.eventId || local.contexts[0]?.event.id || null;
     if (options.eventId && options.characterId) selected = { eventId: options.eventId, characterId: options.characterId };
     render();
     try { await load({ preserve: false }); loading = false; render(); }
@@ -110,6 +173,25 @@ export function createFieldUI(ctx) {
     if (!selected) return '';
     return `<details class="panel field-compose"><summary>Save an information request for reconnecting</summary><p class="hint">These requests prepare an information exchange. Both players must still review and confirm online. Nothing sends automatically.</p><button type="button" class="mt" data-action="field-queue-create" ${disabled(busy || queueBusy)}>Save invitation request</button><form id="field-join-form" data-scope="${esc(scopeKey(selected))}" class="mt"><label>Temporary exchange code or ORACLE link<input name="code" value="${esc(joinCode)}" maxlength="500" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX"></label><button type="submit" class="mt" ${disabled(busy || queueBusy)}>Save join request</button></form><p class="hint mt">Invitation codes can expire before reconnecting. Reading-only offers can be saved from a currently opened exchange. Item trades, confirmations, timers, scene admission, and staff actions require a live connection.</p></details>`;
   }
+  function preparedMaterial(pack) {
+    const ruleList = (rows, numeric = false) => rows.length ? `<ul>${rows.map(row => `<li><strong>${esc(row.name)}</strong>${numeric ? ` · range ${row.min}–${row.max}, default ${row.default}` : ''}${row.description ? `<p class="field-copy">${esc(row.description)}</p>` : ''}</li>`).join('')}</ul>` : '<p class="hint">None defined in this event’s rules.</p>';
+    const equipment = rows => rows.length ? `<ul>${rows.map(row => `<li><strong>${esc(row.name)}</strong> × ${row.quantity}${row.notes ? `<p class="field-copy">${esc(row.notes)}</p>` : ''}</li>`).join('')}</ul>` : '<p class="hint">No items recorded.</p>';
+    const rules = pack.setup.rules;
+    return `<p class="field-notice">Historical reference saved ${esc(when(pack.preparedAt))}. Access, character assignments, inventory, and rules may have changed. This copy does not authorize new discoveries, trades, or scene admission.</p>${pack.event.description ? `<p class="field-copy">${esc(pack.event.description)}</p>` : ''}${pack.event.location ? `<p><strong>Location:</strong> ${esc(pack.event.location)}</p>` : ''}${pack.event.startsAt ? `<p><strong>Starts:</strong> ${esc(when(pack.event.startsAt))}</p>` : ''}<details class="field-reference"><summary>Player briefing · ${pack.setup.content.length} entries</summary>${pack.setup.content.map(row => `<article><h4>${esc(row.title)}</h4><p class="field-copy">${esc(row.body)}</p></article>`).join('') || '<p class="hint">No player briefing entries were published when this kit was prepared.</p>'}</details><details class="field-reference"><summary>Event rules · saved version ${rules.version}</summary><h4>Attributes</h4>${ruleList(rules.attributes, true)}<h4>Skills and expertise</h4>${ruleList(rules.expertise)}<h4>Resources</h4>${ruleList(rules.resources, true)}<h4>Outcomes</h4>${ruleList(rules.outcomes)}</details>${pack.characters.map(character => {
+      const profile = character.profile;
+      const faction = pack.factions.find(row => row.id === profile.factionId);
+      return `<details class="field-reference"><summary>Your character · ${esc(profile.name)}</summary>${profile.portrait ? `<img class="field-prepared-portrait" src="${esc(profile.portrait)}" alt="Portrait of ${esc(profile.name)}">` : ''}${profile.pronouns ? `<p>${esc(profile.pronouns)}</p>` : ''}${faction ? `<p><strong>Faction:</strong> ${esc(faction.name)}</p>` : ''}<h4>Biography</h4><p class="field-copy">${esc(profile.biography || 'No biography recorded.')}</p><h4>Attributes</h4>${rules.attributes.length ? `<dl class="field-attributes">${rules.attributes.map(row => `<div><dt>${esc(row.name)}</dt><dd>${profile.attributes[row.id]}</dd></div>`).join('')}</dl>` : '<p class="hint">No attributes defined.</p>'}<h4>Skills</h4><p>${profile.skills.map(id => esc(rules.expertise.find(row => row.id === id)?.name || id)).join(', ') || 'No skills selected.'}</p><h4>Private objectives</h4><p class="field-copy">${esc(profile.privateObjectives || 'No private objectives recorded.')}</p><h4>Starting equipment</h4>${equipment(profile.startingEquipment)}<h4>Inventory when prepared</h4>${equipment(character.inventory)}<p class="hint">Inventory is a dated reference. Transfers still need online confirmation.</p></details>`;
+    }).join('')}`;
+  }
+  function preparationView() {
+    const eventId = preparationEventId(), name = contextFor(eventId)?.event.name || (eventId && state.event?.id === eventId ? state.event.name : 'this event');
+    const contexts = local.contexts.filter(row => row.preparation || row.preparationError);
+    return `<section class="panel field-preparation" aria-labelledby="field-preparation-heading"><div class="panel-head"><div><h2 id="field-preparation-heading">Prepare for the field</h2><p class="hint">Save ${esc(name)} before heading into the field.</p></div><button type="button" class="primary" data-action="field-prepare" ${disabled(busy || !signedIn() || !connected() || !eventId)}>Prepare for the field</button></div>${preparationEvents().length > 1 ? `<form id="field-preparation-event-form" class="field-scope-picker"><label>Event to prepare<select name="eventId" ${disabled(busy)}>${preparationEvents().map(event => `<option value="${esc(event.id)}" ${event.id === eventId ? 'selected' : ''}>${esc(event.name)}</option>`).join('')}</select></label><button type="submit" ${disabled(busy)}>Use this event</button></form>` : ''}<p>Download the player briefing, rules, and your approved character sheets. ORACLE also saves and reads back your revealed journal entries. Notes and queued requests stay on this device.</p><p class="hint">${ctx.isOfflineShellReady?.() ? 'Offline app shell verified on this device.' : 'Offline app shell has not been verified in this session. Prepare while connected, then check Install ORACLE if needed.'} Saved reference material does not make shared gameplay available offline.</p>${!signedIn() || !connected() ? '<p class="hint">Reconnect and sign in to prepare or update a kit. Earlier saved material remains readable below.</p>' : ''}${local.storageError ? `<p class="field-notice" role="alert">${esc(local.storageError)}</p>` : ''}${contexts.map(row => {
+      if (!row.preparation) return `<p class="field-notice" role="alert">${esc(row.event.name)}: ${esc(row.preparationError)}</p>`;
+      const ready = preparationReadiness(row.preparation, archive, accountId);
+      return `<details class="field-prepared-event"><summary>${esc(row.event.name)} · Saved ${esc(when(row.preparation.preparedAt))}</summary><p class="field-prepared-status" role="status">${ready.missing.length ? 'Preparation needs attention.' : 'Saved reference material and journal copies are available.'} ${ready.journalCount} verified reading${ready.journalCount === 1 ? '' : 's'}.</p>${ready.missing.length ? `<ul class="field-notice">${ready.missing.map(message => `<li>${esc(message)}</li>`).join('')}</ul>` : ''}${preparedMaterial(row.preparation)}<button type="button" class="mt" data-action="offline-open">Read saved journal entries</button></details>`;
+    }).join('') || '<p class="hint mt">No event reference material has been prepared on this device yet.</p>'}</section>`;
+  }
   function requestView(row) {
     const context = contextFor(row.eventId), character = characterFor(row.eventId, row.characterId), canSend = !row.stopped && ['pending', 'uncertain'].includes(row.state), reviewing = reviewId === row.id;
     return `<article class="field-request" data-request-id="${esc(row.id)}"><div class="panel-head"><h3>${esc(row.label || kindName(row.kind))}</h3><span class="badge">${esc(stateName(row))}</span></div><p>${esc(context?.event.name || 'Saved event')} · ${esc(character?.name || 'Saved character')}</p><p class="hint">Saved ${esc(when(row.createdAt))} · Local review deadline ${esc(when(row.expiresAt))}</p>${row.attemptedAt ? `<p class="hint">First transmission attempt ${esc(when(row.attemptedAt))}</p>` : '<p class="hint">No transmission has been recorded on this device.</p>'}${row.kind === 'join' ? `<p>Invitation code: <code>${esc(row.payload.code)}</code></p>` : row.kind === 'offer' ? `<p>${row.payload.readingIds.length} selected reading${row.payload.readingIds.length === 1 ? '' : 's'} · Offer revision ${row.payload.version}. No items or resources are included.</p>` : '<p>Creates a temporary information-exchange invitation after authorization is checked.</p>'}${row.message ? `<p class="field-notice">${esc(row.message)}</p>` : ''}${row.state === 'uncertain' || row.stopped ? '<p class="field-notice">ORACLE may already have received this request. Its original identifier is retained; stopping local retries does not cancel anything on the server.</p>' : ''}${row.state === 'needs_review' ? '<p class="hint">Open current exchanges to review expiry, access, or changed terms. This saved payload will not be repaired or confirmed automatically.</p>' : ''}${reviewing ? `<form id="field-send-form" data-id="${esc(row.id)}" class="field-send-review"><h4>Review this saved request</h4><p>ORACLE will check your current signed-in account, event access, character assignment, and exchange policy before sending this exact stored request. The selected payload will remain unchanged.</p><label class="check-line"><input type="checkbox" name="acknowledged" required ${reviewAcknowledged ? 'checked' : ''} ${disabled(busy || Boolean(sync?.busy))}><span>I reviewed this request and want to ${row.state === 'uncertain' ? 'retry its original transmission' : 'send it now'}.</span></label><div class="actions mt"><button type="submit" class="primary" ${disabled(!connected() || !signedIn() || busy || Boolean(sync?.busy) || !canSend)}>Check access and ${row.state === 'uncertain' ? 'retry' : 'send'}</button><button type="button" data-action="field-close-review">Close review</button></div></form>` : ''}<div class="actions mt">${canSend && !reviewing ? `<button type="button" class="primary" data-action="field-review" data-id="${esc(row.id)}" ${disabled(!connected() || !signedIn() || busy || Boolean(sync?.busy))}>${row.state === 'uncertain' ? 'Review exact retry' : 'Review and send'}</button>` : ''}${row.state !== 'sending' && !row.stopped ? `<button type="button" class="quiet" data-action="field-cancel-request" data-id="${esc(row.id)}" ${disabled(busy || Boolean(sync?.busy))}>${row.state === 'completed' ? 'Remove local receipt' : row.attemptedAt ? 'Stop local retries' : 'Discard unsent request'}</button>` : ''}${connected() && signedIn() ? `<button type="button" class="quiet" data-action="field-exchanges" data-event-id="${esc(row.eventId)}" data-character-id="${esc(row.characterId)}">Open current exchanges</button>` : ''}</div></article>`;
@@ -118,7 +200,7 @@ export function createFieldUI(ctx) {
     if (state.view !== 'field') return;
     const mismatch = state.session?.user?.id && accountId && state.session.user.id !== accountId;
     if (mismatch) { reset(); accountId = state.session.user.id; }
-    shell(`<section class="field-workspace"><header class="page-head"><div><p class="eyebrow">ORACLE · LARP Field Kit</p><h1>Field desk</h1><p class="muted">Keep local notes and review information requests when you reconnect.</p></div><div class="actions"><button type="button" data-action="field-refresh" ${disabled(busy)}>Refresh local view</button><button type="button" class="primary" data-action="offline-refresh" ${disabled(busy)}>Reconnect to ORACLE</button></div></header><p class="field-notice" role="status">${signedIn() && connected() ? 'Local device workspace. Saved contexts are historical; sending checks your current access again.' : 'Local view for the last checked account on this device. This is not an authenticated session and cannot confirm current event access.'} No queued request sends automatically.</p>${loading ? '<p role="status">Opening local field data…</p>' : ''}${feedback ? `<p class="field-feedback ${feedbackError ? 'error' : ''}" role="${feedbackError ? 'alert' : 'status'}">${esc(feedback)}</p>` : ''}<div class="actions mt">${signedIn() ? `<button type="button" data-action="field-check-context" ${disabled(!connected() || busy || !state.event?.id)}>Check my characters in this event</button>` : ''}<button type="button" data-action="offline-open">Open saved journal readings</button><button type="button" class="quiet" data-action="field-clear-device" ${disabled(busy || Boolean(sync?.busy))}>Clear device data</button></div>${scopePicker()}<div class="field-layout"><div class="field-stack">${noteView()}${queueComposer()}<details class="panel field-print-options"><summary>Prepare paper fallback aids</summary><p class="hint">A fresh online permission check is required. The paper is timestamped and historical; it does not authorize new inventory transfers, scene places, or discoveries.</p><div class="actions mt"><button type="button" data-action="field-player-aid" ${disabled(!selected || !connected() || !signedIn() || busy)}>Prepare player aid</button>${ctx.isManager?.() ? `<button type="button" data-action="field-organizer-aid" ${disabled(!state.event?.id || !connected() || !signedIn() || busy)}>Prepare organizer fallback list</button>` : ''}</div></details></div><section class="panel field-requests"><div class="panel-head"><h2>Saved information requests</h2><span class="hint">${local.requests.length} of 50</span></div><p class="hint">Pending, uncertain, review-needed, and confirmed requests remain separate. Each transmission uses its original request identifier.</p>${local.requests.map(requestView).join('') || '<p class="hint mt">No information requests are saved on this device.</p>'}</section></div></section>`);
+    shell(`<section class="field-workspace"><header class="page-head"><div><p class="eyebrow">ORACLE · LARP Field Kit</p><h1>Field desk</h1><p class="muted">Keep local notes and review information requests when you reconnect.</p></div><div class="actions"><button type="button" data-action="field-refresh" ${disabled(busy)}>Refresh local view</button><button type="button" class="primary" data-action="offline-refresh" ${disabled(busy)}>Reconnect to ORACLE</button></div></header><p class="field-notice" role="status">${signedIn() && connected() ? 'Local device workspace. Saved contexts are historical; sending checks your current access again.' : 'Local view for the last checked account on this device. This is not an authenticated session and cannot confirm current event access.'} No queued request sends automatically.</p>${loading ? '<p role="status">Opening local field data…</p>' : ''}${feedback ? `<p class="field-feedback ${feedbackError ? 'error' : ''}" role="${feedbackError ? 'alert' : 'status'}">${esc(feedback)}</p>` : ''}<div class="actions mt">${signedIn() ? `<button type="button" data-action="field-check-context" ${disabled(!connected() || busy || !state.event?.id)}>Check my characters in this event</button>` : ''}<button type="button" data-action="offline-open">Open saved journal readings</button><button type="button" class="quiet" data-action="field-clear-device" ${disabled(busy || Boolean(sync?.busy))}>Clear device data</button></div>${scopePicker()}${preparationView()}<div class="field-layout"><div class="field-stack">${noteView()}${queueComposer()}<details class="panel field-print-options"><summary>Prepare paper fallback aids</summary><p class="hint">A fresh online permission check is required. The paper is timestamped and historical; it does not authorize new inventory transfers, scene places, or discoveries.</p><div class="actions mt"><button type="button" data-action="field-player-aid" ${disabled(!selected || !connected() || !signedIn() || busy)}>Prepare player aid</button>${ctx.isManager?.() ? `<button type="button" data-action="field-organizer-aid" ${disabled(!state.event?.id || !connected() || !signedIn() || busy)}>Prepare organizer fallback list</button>` : ''}</div></details></div><section class="panel field-requests"><div class="panel-head"><h2>Saved information requests</h2><span class="hint">${local.requests.length} of 50</span></div><p class="hint">Pending, uncertain, review-needed, and confirmed requests remain separate. Each transmission uses its original request identifier.</p>${local.requests.map(requestView).join('') || '<p class="hint mt">No information requests are saved on this device.</p>'}</section></div></section>`);
   }
   async function sendRequest(id) {
     const row = local.requests.find(item => item.id === id); if (!row || busy || !connected() || !signedIn()) return;
@@ -178,8 +260,9 @@ export function createFieldUI(ctx) {
     try {
       if (name === 'field-open') await open();
       else if (name === 'field-refresh') { await load(); render(); }
+      else if (name === 'field-prepare') await prepareField();
       else if (name === 'field-check-context') { await checkContext(); await load(); feedback = 'Own character labels checked and saved on this device.'; feedbackError = false; render(); }
-      else if (name === 'field-clear-device') { if (confirmDiscard() && window.confirm('Clear saved journal readings, local field notes, and queued request records from this device? This does not cancel requests already received by ORACLE.')) { sync.reset(); await Promise.all([store.clearAll({ keepAccount: signedIn() }), offline.clearArchive({ keepAccount: signedIn() })]); reset(); state.view = 'field'; await load({ preserve: false }); feedback = 'Device copies cleared. No server records were cancelled.'; render(); } }
+      else if (name === 'field-clear-device') { if (confirmDiscard() && window.confirm('Clear prepared event kits, saved journal readings, local field notes, and queued request records from this device? This does not cancel requests already received by ORACLE.')) { sync.reset(); await Promise.all([store.clearAll({ keepAccount: signedIn() }), offline.clearArchive({ keepAccount: signedIn() })]); reset(); state.view = 'field'; await load({ preserve: false }); feedback = 'Device copies cleared. No server records were cancelled.'; render(); } }
       else if (name === 'field-delete-note' && selected && !busy) { if (window.confirm('Delete this saved local note?')) { const scope = await store.captureScope(); await store.removeDraft({ scope, accountId, ...selected, expectedRevision: savedRevision }); draftText = savedText = ''; savedAt = null; savedRevision = null; draftConflict = null; await load({ preserve: false }); render(); } }
       else if (name === 'field-use-saved' && draftConflict) { draftText = savedText = draftConflict.text; savedAt = draftConflict.updatedAt; savedRevision = draftConflict.revision; draftConflict = null; render(); }
       else if (name === 'field-keep-note' && draftConflict) { savedText = draftConflict.text; savedAt = draftConflict.updatedAt; savedRevision = draftConflict.revision; draftConflict = null; render(); }
@@ -201,6 +284,7 @@ export function createFieldUI(ctx) {
     if (!form.reportValidity()) return true;
     try {
       if (form.id === 'field-note-form') await saveNote();
+      else if (form.id === 'field-preparation-event-form' && !busy) { const eventId = String(data.get('eventId')); if (preparationEvents().some(event => event.id === eventId)) { preparationTarget = eventId; render(); } }
       else if (form.id === 'field-scope-form') { if (confirmDiscard()) { const [eventId, characterId] = String(data.get('scope')).split('/'); if (characterFor(eventId, characterId)) { selectScope({ eventId, characterId }); render(); } } }
       else if (form.id === 'field-join-form' && selected) { const parsed = parseExchangeInput(String(data.get('code')), location.origin, selected.eventId); if (parsed.eventId !== selected.eventId) throw new Error('Choose the event named by this exchange link before saving the request.'); await queue({ ...selected, kind: 'join', payload: { characterId: selected.characterId, code: parsed.code }, label: 'Join an information exchange' }); joinCode = ''; render(); }
       else if (form.id === 'field-send-form' && data.get('acknowledged') === 'on') await sendRequest(form.dataset.id);
@@ -216,6 +300,9 @@ export function createFieldUI(ctx) {
   store.subscribe?.(event => {
     if (event.type === 'invalidate') { const visible = state.view === 'field'; sync.reset(); reset(); if (visible) { feedback = 'Local access changed. Device copies are hidden until their current scope is checked.'; render(); } return; }
     if (state.view === 'field' && !busy && !queueBusy) { void load().then(() => { if (state.view === 'field') render(); }).catch(() => {}); }
+  });
+  offline.subscribeArchive?.(event => {
+    if (event.type === 'change' && state.view === 'field' && !busy && !queueBusy) void load().then(() => { if (state.view === 'field') render(); }).catch(() => {});
   });
   function canUpdate() { if (busy || queueBusy || sync?.busy) { toast('Wait for the Field desk save or transmission to finish before updating.'); return false; } return true; }
   return { open, render, action, submit, reset, confirmDiscard, cleanupModal, queue, rememberContext, captureContextScope: () => store.captureScope(), canUpdate, beforeUpdate: async () => confirmDiscard(), isDirty: () => { capture(); return dirty() || Boolean(joinCode) || busy; } };

@@ -216,6 +216,8 @@ export function createApp({
       const url = new URL(req.url, config.origin);
       const path = url.pathname;
       const method = req.method;
+      if (config.appEnv !== "production" || path.startsWith("/api/") || path.startsWith("/health/"))
+        res.setHeader("X-Robots-Tag", "noindex, nofollow");
       if (path === "/health/live" && method === "GET")
         return send(res, 200, { status: "ok", version: VERSION, deploymentCommit: config.deploymentCommit || null });
       if (path === "/health/ready" && method === "GET") {
@@ -233,9 +235,23 @@ export function createApp({
       }
       if (!path.startsWith("/api/")) {
         if (!["GET", "HEAD"].includes(method)) fail(405, "Method not allowed.");
+        if (path === "/robots.txt" || path === "/sitemap.xml") {
+          const discoverable = config.appEnv === "production";
+          const content = path === "/robots.txt"
+            ? discoverable
+              ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /health/\nSitemap: ${config.origin}/sitemap.xml\n`
+              : "User-agent: *\nDisallow: /\n"
+            : `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${discoverable ? ["/", "/help.html"].map(page => `<url><loc>${config.origin}${page}</loc></url>`).join("") : ""}</urlset>\n`;
+          res.writeHead(200, { "Content-Type": path === "/robots.txt" ? "text/plain; charset=utf-8" : "application/xml; charset=utf-8", "X-ORACLE-Shell-Version": VERSION });
+          return res.end(method === "HEAD" ? undefined : content);
+        }
         const assets = {
           "/": ["index.html", "text/html"],
           "/app.js": ["app.js", "text/javascript"],
+          "/display.js": ["display.js", "text/javascript"],
+          "/startup.js": ["startup.js", "text/javascript"],
+          "/landing.css": ["landing.css", "text/css"],
+          "/preparation-model.js": ["preparation-model.js", "text/javascript"],
           "/adventure-model.js": ["adventure-model.js", "text/javascript"],
           "/adventure-player.js": ["adventure-player.js", "text/javascript"],
           "/adventure-organizer.js": ["adventure-organizer.js", "text/javascript"],

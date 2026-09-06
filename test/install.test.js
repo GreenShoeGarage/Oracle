@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createInstallUI } from '../public/install.js';
+import { createInstallUI, SHELL_VERSION } from '../public/install.js';
 
 function fixture(t, options = {}) {
   const events = new Map(), workerEvents = new Map();
@@ -14,9 +14,9 @@ function fixture(t, options = {}) {
   }
   const worker = version => ({ state: 'activated', addEventListener() {}, postMessage(data, ports) {
     if (data.type === 'ORACLE_APPLY_UPDATE') calls.apply++;
-    ports[0].postMessage({ ok: true, version }); ports[0].close();
+    ports[0].postMessage({ ok: options.incomplete !== true, version }); ports[0].close();
   } });
-  const active = worker('0.10.0'), next = worker('0.11.0');
+  const active = worker(SHELL_VERSION), next = worker('1.2.0');
   const registration = { active, waiting: options.waiting ? next : null, installing: null, addEventListener() {}, update: async () => { calls.update++; await options.update?.(); } };
   const serviceWorker = { controller: active, addEventListener: (name, fn) => workerEvents.set(name, fn), register: async () => { calls.register++; return options.failFirst && calls.register === 1 ? Promise.reject(new Error('Offline')) : registration; } };
   const values = {
@@ -85,4 +85,18 @@ test('an update check keeps its button focusable while ignoring repeated activat
   finish(); await check;
   assert.match(f.ui.render(), /data-action="install-check" aria-disabled="false" aria-busy="false"/);
   assert.equal(f.calls.apply, 0); assert.equal(f.calls.reload, 0);
+});
+
+
+test('field preparation verifies the running public shell instead of inferring readiness from installation', async t => {
+  const f = fixture(t); await f.ui.init();
+  assert.equal(await f.ui.verifyOfflineReady(), true);
+  assert.equal(f.ui.offlineReady, true);
+});
+
+test('an incomplete waiting shell cannot report the device ready for the field', async t => {
+  const f = fixture(t, { waiting: true, incomplete: true }); await f.ui.init();
+  assert.equal(await f.ui.verifyOfflineReady(), false);
+  assert.equal(f.ui.offlineReady, false);
+  assert.doesNotMatch(f.ui.render(), /Complete public app available offline/);
 });

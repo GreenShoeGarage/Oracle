@@ -1,6 +1,6 @@
 // Public, immutable application builds only. No API response or private game data
 // enters the shell cache. Browser-client/build IDs keep active tabs on one build.
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const CACHE_NAME = `oracle-static-v${VERSION}`;
 const CONTROL_CACHE = 'oracle-shell-control-v1';
 const COMPLETE_PATH = '/__oracle_shell_complete__';
@@ -9,6 +9,7 @@ const INSTALL_TIMEOUT_MS = 12000;
 const MAX_ASSET_BYTES = 2_000_000;
 const STATIC_ASSETS = [
   '/', '/app.js', '/style.css', '/themes.css', '/favicon.svg', '/kit.js', '/builder.js',
+  '/display.js', '/startup.js', '/landing.css', '/preparation-model.js',
   '/characters-ui.js', '/characters-model.js', '/characters.css', '/admin-ui.js', '/qr.js',
   '/vendor/qrcode-generator-2.0.4.js', '/vendor/jsqr-1.4.0.js',
   '/adventure-model.js', '/adventure-player.js', '/adventure-organizer.js',

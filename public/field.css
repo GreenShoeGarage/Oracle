@@ -6,6 +6,20 @@
 .field-notice, .field-feedback { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: .5rem; padding: .8rem 1rem; margin: 1rem 0; overflow-wrap: anywhere; }
 .field-notice p + p { margin-top: .65rem; }
 .field-copy { white-space: pre-wrap; overflow-wrap: anywhere; }
+.field-preparation { margin-top: 1.2rem; min-width: 0; overflow-wrap: anywhere; }
+.field-preparation > .panel-head { flex-wrap: wrap; gap: 1rem; }
+.field-preparation > p { margin-top: .75rem; }
+.field-prepared-event { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .7rem; }
+.field-prepared-event > summary, .field-reference > summary { min-height: 44px; padding: .65rem 0; }
+.field-prepared-status { margin: .7rem 0; font-weight: 700; }
+.field-reference { margin: .8rem 0; padding: .5rem 1rem; border: 1px solid var(--line); border-radius: .5rem; }
+.field-reference h4 { margin: 1rem 0 .5rem; }
+.field-reference article { margin-bottom: 1rem; }
+.field-reference ul { padding-left: 1.3rem; }
+.field-reference li { margin: .5rem 0; }
+.field-prepared-portrait { width: 100px; max-width: 100%; height: auto; border-radius: .4rem; margin: .7rem 0; }
+.field-attributes { display: flex; flex-wrap: wrap; gap: 1rem; margin: .7rem 0; }
+.field-attributes dd { margin: .25rem 0 0; font-weight: 700; }
 .field-request { padding: 1.2rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 .field-request .panel-head, .field-note .panel-head { flex-wrap: wrap; gap: .5rem; }
 .field-request p { margin-top: .55rem; }

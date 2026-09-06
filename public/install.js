@@ -1,6 +1,6 @@
 import { registerOfflineShell } from './offline.js';
 
-export const SHELL_VERSION = '1.0.0';
+export const SHELL_VERSION = '1.1.0';
 
 /** Public install/update controls. They never reload another tab or transmit game actions. */
 export function createInstallUI({ getDirty = () => false, confirmDiscard = () => true, onChange = () => {}, toast = () => {} } = {}) {
@@ -23,17 +23,20 @@ export function createInstallUI({ getDirty = () => false, confirmDiscard = () =>
   }
   async function bind(worker = navigator.serviceWorker?.controller) {
     const result = await message(worker, { type: 'ORACLE_CLIENT_VERSION', version: SHELL_VERSION });
-    if (result.ok) { offlineReady = true; if (result.version !== SHELL_VERSION) availableVersion = result.version; }
+    offlineReady = result.ok === true;
+    if (result.ok && result.version !== SHELL_VERSION) availableVersion = result.version;
     changed(); return result;
   }
   function watch(worker) {
     if (!worker) return;
     const inspect = () => {
       if (['installed', 'activated'].includes(worker.state)) {
-        offlineReady = true;
-        if (registration?.waiting) void bind(registration.waiting);
-        status = registration?.waiting ? 'An update is ready. Apply it when your group can pause.' : 'The complete public app is available offline.';
-        changed();
+        void bind(registration?.waiting || worker).then(result => {
+          status = result.ok
+            ? registration?.waiting ? 'An update is ready. Apply it when your group can pause.' : 'The complete public app is available offline.'
+            : 'Offline opening has not been verified. Keep ORACLE connected and check for app updates.';
+          changed();
+        });
       } else if (worker.state === 'redundant') { status = 'The app update did not complete. Reconnect and check again; the current app stays in place.'; changed(); }
     };
     worker.addEventListener('statechange', inspect); inspect();
@@ -44,7 +47,7 @@ export function createInstallUI({ getDirty = () => false, confirmDiscard = () =>
       registration = await registerOfflineShell();
       if (!registration) { status = 'Use this site in a secure browser tab. Saved device data depends on available browser storage.'; changed(); return null; }
       registration.addEventListener('updatefound', () => watch(registration.installing));
-      watch(registration.installing); if (registration.waiting) { offlineReady = true; await bind(registration.waiting); }
+      watch(registration.installing); if (registration.waiting) { await bind(registration.waiting); }
       else if (navigator.serviceWorker.controller) await bind();
       changed(); return registration;
     })();
@@ -52,12 +55,18 @@ export function createInstallUI({ getDirty = () => false, confirmDiscard = () =>
     if (!result) registering = null;
     return result;
   }
+  async function verifyOfflineReady() {
+    try {
+      if (!registration) await init();
+      return (await bind(navigator.serviceWorker?.controller || registration?.active || registration?.waiting)).ok === true;
+    } catch { offlineReady = false; changed(); return false; }
+  }
   async function applyUpdate() {
     if (applying || !needsUpdate()) return;
     if (navigator.onLine === false) { toast('Reconnect before applying an app update.'); return; }
     const hasDraft = Boolean(getDirty());
     if (!await confirmDiscard()) return;
-    if (!window.confirm(`Apply the ready app update and reload this tab?${hasDraft ? ' Unsaved forms and unsubmitted answers will be lost.' : ''} Saved Field desk notes and queued requests stay on this device. Finish any active camera scan or group procedure first. Other ORACLE tabs will keep their current app version.`)) return;
+    if (!window.confirm(`Apply the ready app update and reload this tab?${hasDraft ? ' Unsaved forms and unsubmitted answers will be lost.' : ''} Saved Field desk notes and queued requests stay on this device, along with prepared event kits. Finish any active camera scan or group procedure first. Save and close older ORACLE tabs before updating local field storage.`)) return;
     const worker = waiting();
     if (!worker) { window.location.reload(); return; }
     applying = true; reloadDeadline = Date.now() + 10000; status = 'Preparing the update for this tab…'; changed();
@@ -95,7 +104,7 @@ export function createInstallUI({ getDirty = () => false, confirmDiscard = () =>
     return true;
   }
   function render() {
-    return `<details class="install-controls" data-oracle-install ${(panelOpen ?? (helpOpen || needsUpdate())) ? 'open' : ''}><summary>${needsUpdate() ? 'App update ready' : installed ? 'ORACLE app' : 'Install ORACLE'}</summary><div class="install-options" aria-label="Install and update ORACLE"><p><strong>ORACLE · LARP Field Kit</strong></p><p class="hint">${offlineReady ? 'Complete public app available offline. Live actions still need a connection; only saved readings, Field desk notes, and explicitly queued information requests are kept.' : 'Open ORACLE while connected to prepare the complete offline app. Only explicitly saved device data is available without a connection.'}</p>${!installed ? `<button type="button" data-action="install-open">${promptEvent ? 'Install ORACLE' : 'How to install'}</button>` : ''}${needsUpdate() ? `<button type="button" class="primary" data-action="install-update" aria-disabled="${applying}" aria-busy="${applying}">${applying ? 'Preparing update…' : 'Apply update and reload this tab'}</button>` : ''}<button type="button" data-action="install-check" aria-disabled="${checking}" aria-busy="${checking}" ${!supported() ? 'disabled' : ''}>Check for app updates</button>${helpOpen ? '<p class="hint">On Android or desktop, use the browser’s Install app command. On iPhone or iPad, open ORACLE in Safari, use Share, then Add to Home Screen. Browser wording and support may vary.</p><button type="button" class="quiet" data-action="install-close-help">Close install instructions</button>' : '<button type="button" class="quiet" data-action="install-help">Install instructions</button>'}${status ? `<p class="hint" role="status">${escaped(status)}</p>` : ''}</div></details>`;
+    return `<details class="install-controls" data-oracle-install ${(panelOpen ?? (helpOpen || needsUpdate())) ? 'open' : ''}><summary>${needsUpdate() ? 'App update ready' : installed ? 'ORACLE app' : 'Install ORACLE'}</summary><div class="install-options" aria-label="Install and update ORACLE"><p><strong>ORACLE · LARP Field Kit</strong></p><p class="hint">${offlineReady ? 'Complete public app available offline. Use Prepare for the field in Field desk to save your briefing and character sheets and verify saved readings. Live actions still need a connection.' : 'Open ORACLE while connected to prepare the complete offline app. Only explicitly saved device data is available without a connection.'}</p>${!installed ? `<button type="button" data-action="install-open">${promptEvent ? 'Install ORACLE' : 'How to install'}</button>` : ''}${needsUpdate() ? `<button type="button" class="primary" data-action="install-update" aria-disabled="${applying}" aria-busy="${applying}">${applying ? 'Preparing update…' : 'Apply update and reload this tab'}</button>` : ''}<button type="button" data-action="install-check" aria-disabled="${checking}" aria-busy="${checking}" ${!supported() ? 'disabled' : ''}>Check for app updates</button>${helpOpen ? '<p class="hint">On Android or desktop, use the browser’s Install app command. On iPhone or iPad, open ORACLE in Safari, use Share, then Add to Home Screen. Browser wording and support may vary.</p><button type="button" class="quiet" data-action="install-close-help">Close install instructions</button>' : '<button type="button" class="quiet" data-action="install-help">Install instructions</button>'}${status ? `<p class="hint" role="status">${escaped(status)}</p>` : ''}</div></details>`;
   }
   function refresh(target) {
     const previous = target.querySelector('[data-oracle-install]');
@@ -123,5 +132,5 @@ export function createInstallUI({ getDirty = () => false, confirmDiscard = () =>
       else { clearTimeout(applyTimer); applying = false; reloadDeadline = 0; status = 'A complete app update is available. Apply it when you are ready; this tab has kept its current version.'; changed(); }
     });
   });
-  return { init, render, refresh, action, reset() { clearTimeout(applyTimer); applying = false; reloadDeadline = 0; helpOpen = false; panelOpen = null; }, get registration() { return registration; } };
+  return { init, render, refresh, action, verifyOfflineReady, reset() { clearTimeout(applyTimer); applying = false; reloadDeadline = 0; helpOpen = false; panelOpen = null; }, get registration() { return registration; }, get offlineReady() { return offlineReady; } };
 }

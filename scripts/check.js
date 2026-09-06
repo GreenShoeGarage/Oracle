@@ -15,7 +15,12 @@ const pkg = JSON.parse(await readFile("package.json", "utf8"));
 assert.equal(VERSION, pkg.version, "App/package versions must match.");
 const workerSource = await readFile("public/sw.js", "utf8");
 assert.ok(workerSource.includes(`const VERSION = '${VERSION}';`), "The cached public shell must match the server version.");
+assert.ok((await readFile("public/install.js", "utf8")).includes(`export const SHELL_VERSION = '${VERSION}';`), "The install controller must identify this shell version.");
 const html = await readFile("public/index.html", "utf8");
+for (const asset of ["/landing.css", "/display.js", "/startup.js", "/preparation-model.js"]) {
+  await readFile(`public${asset}`);
+  assert.ok(workerSource.includes(`'${asset}'`), `${asset} must be included in offline installation.`);
+}
 for (const asset of ["/style.css", "/themes.css", "/characters.css", "/adventure.css", "/adventure-organizer.css", "/exchanges.css", "/sharing.css", "/story.css", "/trace.css", "/economy.css", "/oath.css", "/sigil.css", "/static.css", "/stagehand.css", "/props.css", "/field.css", "/guide.css", "/app.js", "/favicon.svg", "/manifest.webmanifest", "/apple-touch-icon.png"]) {
   assert.ok(html.includes(asset));
   await readFile(`public${asset}`);

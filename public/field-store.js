@@ -1,4 +1,6 @@
-// Local drafts and information-only intentions. This store never authenticates
+import { projectPreparation } from './preparation-model.js';
+
+// Local reference snapshots, drafts and information-only intentions. This store never authenticates
 // a user, persists API responses, or authorizes gameplay while disconnected.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STATES = ['pending', 'sending', 'uncertain', 'needs_review', 'completed'];
@@ -89,7 +91,8 @@ export function createFieldStore(options = {}) {
   async function transaction(mode, operation) {
     if (!factory || closed) fail('Local field storage is unavailable in this browser.', 503);
     const database = await new Promise((resolve, reject) => {
-      let settled = false; const request = factory.open(dbName, 1);
+      // Version 2 preserves these stores and fences old tabs that overwrite preparation fields.
+      let settled = false; const request = factory.open(dbName, 2);
       request.onupgradeneeded = () => { for (const name of ['meta', 'contexts', 'drafts', 'requests']) if (!request.result.objectStoreNames.contains(name)) request.result.createObjectStore(name, { keyPath: 'id' }); };
       request.onerror = () => { settled = true; reject(request.error); };
       request.onblocked = () => { settled = true; reject(new Error('Close other ORACLE tabs before updating local field storage.')); };
@@ -179,11 +182,34 @@ export function createFieldStore(options = {}) {
       const id = `${accountId}:${safe.event.id}`, existing = await idb(stores.contexts.get(id));
       if (existing && existing.generation === input.scope.generation && existing.sequence > input.scope.sequence) return false;
       const all = await idb(stores.contexts.getAll()); if (!existing && all.length >= 30) fail('This device already has thirty saved event contexts. Clear an event before adding another.', 429);
-      stores.contexts.put({ id, accountId, ...safe, generation: input.scope.generation, sequence: integer(input.scope.sequence, 0, Number.MAX_SAFE_INTEGER), lastChecked: new Date(now()).toISOString() });
       const ids = new Set(safe.characters.map(character => character.id));
+      let preparation = null;
+      try { if (existing?.preparation) preparation = projectPreparation(existing.preparation, accountId); } catch { /* A damaged reference pack cannot block a fresh own-character check. */ }
+      // A fresh assignment check removes former characters from device copies.
+      // Preserved material remains timestamped at its original preparation time.
+      if (preparation) preparation = { ...preparation, characters: preparation.characters.filter(row => ids.has(row.id)), journals: preparation.journals.filter(row => ids.has(row.characterId)) };
+      stores.contexts.put({ id, accountId, ...safe, ...(preparation ? { preparation } : {}), generation: input.scope.generation, sequence: integer(input.scope.sequence, 0, Number.MAX_SAFE_INTEGER), lastChecked: new Date(now()).toISOString() });
       for (const name of ['drafts', 'requests']) for (const row of await idb(stores[name].getAll())) if (row.accountId === accountId && row.eventId === safe.event.id && !ids.has(row.characterId)) stores[name].delete(row.id);
       return true;
     })).then(result => { if (result) notify({ type: 'change', reason: 'write', eventId: safe.event.id }); return result; });
+  }
+  function savePreparation(input) {
+    data(input, ['scope', 'accountId', 'preparation']);
+    const accountId = uuid(input.accountId), scope = scopeFor(input.scope), safe = projectPreparation(input.preparation, accountId), callRevision = revision;
+    if (verifiedAccount !== accountId) return Promise.resolve(false);
+    return serial(() => transaction('readwrite', async stores => {
+      const saved = await scoped(stores, scope, accountId);
+      if (revision !== callRevision || verifiedAccount !== accountId || scope.sequence > saved.sequence) return false;
+      const id = `${accountId}:${safe.event.id}`, existing = await idb(stores.contexts.get(id));
+      if (existing && existing.generation === scope.generation && existing.sequence > scope.sequence) return false;
+      const all = await idb(stores.contexts.getAll());
+      if (!existing && all.length >= 30) fail('This device already has thirty saved event contexts. Clear an event before adding another.', 429);
+      if (revision !== callRevision || !matches(saved, scope)) return false;
+      stores.contexts.put({ id, accountId, event: { id: safe.event.id, name: safe.event.name }, characters: safe.characters.map(row => ({ id: row.id, name: row.profile.name })), preparation: safe, generation: scope.generation, sequence: scope.sequence, lastChecked: safe.preparedAt });
+      const ids = new Set(safe.characters.map(row => row.id));
+      for (const name of ['drafts', 'requests']) for (const row of await idb(stores[name].getAll())) if (row.accountId === accountId && row.eventId === safe.event.id && !ids.has(row.characterId)) stores[name].delete(row.id);
+      return true;
+    })).then(result => { if (result) notify({ type: 'change', reason: 'prepare', eventId: safe.event.id }); return result; });
   }
   function draftInput(input, withText) {
     data(input); const required = ['scope', 'accountId', 'eventId', 'characterId', ...(withText ? ['text'] : [])];
@@ -225,14 +251,25 @@ export function createFieldStore(options = {}) {
       try { return await transaction('readonly', async stores => {
         const saved = await idb(stores.meta.get('scope')); if (!matches(saved)) return empty();
         const contexts = [], drafts = [], requests = [];
-        for (const row of await idb(stores.contexts.getAll())) if (row.accountId === saved.accountId) { try { const safe = contextProjection(row); if (Number.isFinite(Date.parse(row.lastChecked))) contexts.push({ ...safe, lastChecked: row.lastChecked }); } catch { /* Reject damaged local data. */ } }
+        for (const row of await idb(stores.contexts.getAll())) if (row.accountId === saved.accountId) {
+          try {
+            const safe = contextProjection(row); let preparation = null, preparationError = null;
+            if (row.preparation) {
+              try {
+                preparation = projectPreparation(row.preparation, saved.accountId);
+                if (preparation.event.id !== safe.event.id || preparation.characters.some(character => !safe.characters.some(own => own.id === character.id))) throw new Error('Prepared character scope no longer matches.');
+              } catch { preparation = null; preparationError = 'Saved field material is damaged or incomplete. Reconnect and prepare this event again.'; }
+            }
+            if (Number.isFinite(Date.parse(row.lastChecked))) contexts.push({ ...safe, lastChecked: row.lastChecked, ...(preparation ? { preparation } : {}), ...(preparationError ? { preparationError } : {}) });
+          } catch { /* Reject damaged local data. */ }
+        }
         const allowed = row => contexts.some(context => context.event.id === row.eventId && context.characters.some(character => character.id === row.characterId));
         for (const row of await idb(stores.drafts.getAll())) if (row.accountId === saved.accountId && allowed(row)) { try { if (Number.isFinite(Date.parse(row.updatedAt))) drafts.push({ id: plain(row.id, 120, true), eventId: uuid(row.eventId), characterId: uuid(row.characterId), text: plain(row.text, 12000), revision: integer(row.revision, 1, Number.MAX_SAFE_INTEGER), updatedAt: row.updatedAt }); } catch { /* Reject damaged local data. */ } }
         for (const row of await idb(stores.requests.getAll())) if (row.accountId === saved.accountId && allowed(row)) { try { const safe = requestProjection(row, now()); if (safe.id === safe.requestId) requests.push(safe); } catch { /* No malformed request can reach send. */ } }
         if (!matches(saved)) return empty();
         contexts.sort((a, b) => b.lastChecked.localeCompare(a.lastChecked)); drafts.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)); requests.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
         return { accountId: saved.accountId, scope: scopeOf(saved), contexts: contexts.slice(0, 30), drafts, requests: requests.slice(0, 50), lastChecked: contexts[0]?.lastChecked || null };
-      }); } catch { return empty(); }
+      }); } catch { return { ...empty(), storageError: 'Local field storage could not be opened. Check browser storage permissions and available space.' }; }
     });
   }
   async function requestRow(stores, id, scope = null) {
@@ -287,7 +324,7 @@ export function createFieldStore(options = {}) {
     })).then(result => { notify({ type: 'change', reason: 'write' }); return result; });
   }
   function close() { closed = true; invalidated = true; revision++; channel?.close?.(); if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage); listeners.clear(); }
-  return { setAccount, clearAll, purgeEvent, captureScope, saveContext, loadLocal, saveDraft, removeDraft, enqueueRequest, cancelRequest, claimRequest, assertLease, beginTransmission, markRequest, subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); }, close };
+  return { setAccount, clearAll, purgeEvent, captureScope, saveContext, savePreparation, loadLocal, saveDraft, removeDraft, enqueueRequest, cancelRequest, claimRequest, assertLease, beginTransmission, markRequest, subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); }, close };
 }
 
 const store = createFieldStore();
@@ -296,6 +333,7 @@ export const clearAll = (...args) => store.clearAll(...args);
 export const purgeEvent = (...args) => store.purgeEvent(...args);
 export const captureScope = (...args) => store.captureScope(...args);
 export const saveContext = (...args) => store.saveContext(...args);
+export const savePreparation = (...args) => store.savePreparation(...args);
 export const loadLocal = (...args) => store.loadLocal(...args);
 export const saveDraft = (...args) => store.saveDraft(...args);
 export const removeDraft = (...args) => store.removeDraft(...args);

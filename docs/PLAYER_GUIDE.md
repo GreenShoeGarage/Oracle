@@ -2,7 +2,7 @@
 
 ORACLE · LARP Field Kit carries your event briefing, character, and discoveries. Your organizer prepares the story; you use the app for short actions while playing with the people and props around you.
 
-This guide describes v1.0.0. The [release status](STATUS.md) records what is deployed. Your organizer chooses which instruments and character options appear.
+This guide describes v1.1.0. The [release status](STATUS.md) records verification and deployment. Your organizer chooses which instruments and character options appear.
 
 ## Join and choose your character
 
@@ -62,7 +62,16 @@ Use **More tools for this event** for tools outside the main adventure. Availabi
 
 Load ORACLE while connected before going into the field. Expand **Install ORACLE** for the supported browser's install command or instructions. On iPhone/iPad, the app's guidance uses Safari's **Share → Add to Home Screen**. Installation wording and support vary; you can continue in the browser when installation is unavailable.
 
-The install panel reports when the complete public app is available offline. That means its interface is cached, not that the live event is downloaded. After a successfully loaded journal is retained, **Saved readings** can show its previously authorized text/audio with a last-check time. Open and check that view before disconnecting. Storage restrictions, clearing browser data, or an oversized journal may prevent a local copy.
+The install panel reports whether the public app interface is cached. Prepare your event material separately:
+
+1. Open your event, then **Field desk**, while signed in and connected. Preparation defaults to the event you opened. If several events are available, choose **Event to prepare** and select **Use this event**. Check the event name above the preparation button. This choice is separate from the character scope used for notes and requests.
+2. Select **Prepare for the field**. ORACLE downloads the player briefing and rules, your own approved character sheets, and already revealed journal entries. It checks that saved material can be read back from this device.
+3. Expand the event under the preparation panel. Check the saved time and any **Preparation needs attention** messages. Briefing/rules can be saved before a character is approved, but the missing-character notice remains until you have an approved sheet and prepare again. Failed journal downloads and blocked/full storage also need attention before leaving connectivity. The app-shell status is shown separately.
+4. Open **Player briefing**, **Event rules**, and **Your character** to inspect the saved references. Select **Read saved journal entries** to check the saved text/audio. Return here after disconnecting to read the same material. Prepare again while connected when the organizer changes the event or your character.
+
+Character references include your biography, abilities, private objectives, starting equipment, and inventory when prepared. They exclude other players, staff/review notes, and badge credentials. Inventory is a dated reference; it cannot prove current ownership or authorize a transfer. Briefing references exclude organizer-only material and unrevealed instrument answers.
+
+Preparation does not save live scenes, timers, shops, balances, trade terms, investigations, or staff operations. Storage restrictions, clearing browser data, an oversized preparation, or an oversized journal can prevent a usable local copy. A saved confirmation describes this browser/device, not another phone or an independent backup. Actual iPhone/Android airplane-mode cold starts remain part of the device acceptance work recorded in [PILOT.md](PILOT.md).
 
 For a durable local note:
 
@@ -93,6 +102,8 @@ Offline readings and notes cannot sign you in or prove current permissions, bala
 
 When an update is ready, save Field desk notes and finish or preserve other open work first. Use **Apply update and reload this tab** when your group can pause. If older tabs block it, finish and close them, then apply again. A compatible update preserves supported saved device data; it does not automatically save unsaved form text or force other active tabs to reload.
 
-Sign out before handing a device to another person. Signing out or switching accounts clears local private scope. Leaving an event clears its local readings, notes, and queued requests. **Clear device data** in Field desk and **Clear all local data** in Saved readings both delete saved readings, notes, and requests from this device after confirmation. They do not undo already received server requests or delete the live event.
+Version 1.1 upgrades this browser's Field desk storage while keeping saved contexts, notes, and requests. Older ORACLE versions can no longer write to that upgraded store. If an older tab reports that local storage needs an update, save or copy any open unsaved text, then close or update that tab. This browser update does not change the live event database.
+
+Sign out before handing a device to another person. Signing out or switching accounts clears local private scope. Leaving an event clears its prepared references, readings, notes, and queued requests. **Clear device data** in Field desk and **Clear all local data** in Saved readings both delete prepared kits, saved readings, notes, and requests from this device after confirmation. They do not undo already received server requests or delete the live event.
 
 During a disconnection the app cannot learn that an organizer changed your access. Previously saved material is historical; protect the device accordingly. For blocked actions, installation, cameras, or failed saves, see [troubleshooting](TROUBLESHOOTING.md).

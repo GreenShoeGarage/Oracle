@@ -1,24 +1,26 @@
 # ORACLE
 
-**LARP Field Kit** · v1.0.0 · Green Shoe Garage
+**LARP Field Kit** · v1.1.0 candidate · Green Shoe Garage
 
 ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. Shared screens can present selected briefings, cooperative procedures, and explicitly fictional prop readings.
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Help & guides](https://oracle.greenshoegarage.com/help.html) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 12's usability and pilot-preparation implementation is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com) as v1.0.0, release `782671590b3ea3547f0bd3a24a7a98ed5af76dd4`. Both exact-commit PostgreSQL CI runs, separate 100-player isolated measurements, Railway staging, the complete all-twelve/all-three-theme remote workflow, and Railway production passed. Production exact readiness plus 72 public GET checks passed without gameplay writes. The existing `mike@greenshoegarage.com` superuser remains enabled with identity/password preserved. Schema 10, pack formats 1, browser archive version 2, and the information-only/account-binding API contract are unchanged. See [docs/STATUS.md](docs/STATUS.md).
+The v1.1.0 feedback and field-preparation changes are in progress. The last verified production release is v1.0.0, commit `782671590b3ea3547f0bd3a24a7a98ed5af76dd4`, at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Its exact main/staging PostgreSQL CI, all-twelve-instrument/all-three-theme remote journey, and Railway production passed; exact production readiness and 72 public GET checks passed without gameplay writes. The existing project superuser remains enabled with identity/password preserved. See [docs/STATUS.md](docs/STATUS.md) for release evidence.
 
-Full local verification before the load-cleanup fix passed 306 tests: 294 passed, zero failures, and 12 deliberate TCP-only skips. Both corrected exact-commit PostgreSQL suites passed 307 tests: 306 passed, zero failures, one PGlite-only skip. Human/device checks remain unrun and require actual participants and devices. [docs/PILOT.md](docs/PILOT.md) provides 58 required observations and a local report validator; automated checks do not satisfy those gates. Scheduled live backups and measured Railway capacity also remain outstanding. Next: record the actual pilot and maintain the v1.0 handoff with the documented recovery and backup limits.
+The v1.0.0 PostgreSQL suite passed 309 tests: 308 passed, zero failures, one PGlite-only skip. Current-candidate results will be recorded after verification. Human/device checks remain unrun: [docs/PILOT.md](docs/PILOT.md) provides 58 required observations and a local report validator. Scheduled live backups, sustained Railway capacity, and the application rollback rehearsal remain outstanding. SQL schema 10, pack formats 1, journal archive version 2, and the information-only/account-binding API contract are retained. The separate browser Field desk database advances to version 2 while preserving existing records and blocking old version-1 writers.
 
 ## What works in this release
 
-Version 1.0.0 is the production handoff release. See [organizer guide](docs/ORGANIZER_GUIDE.md), [player guide](docs/PLAYER_GUIDE.md), [theme and event packs](docs/THEME_AND_EVENT_PACKS.md), [troubleshooting](docs/TROUBLESHOOTING.md), and [release notes](docs/RELEASE_NOTES.md).
+See [organizer guide](docs/ORGANIZER_GUIDE.md), [player guide](docs/PLAYER_GUIDE.md), [theme and event packs](docs/THEME_AND_EVENT_PACKS.md), [troubleshooting](docs/TROUBLESHOOTING.md), and [release notes](docs/RELEASE_NOTES.md). Version 1.1.0 adds explicit field preparation, a public app description, and startup display/accessibility fixes; deployment status is recorded above.
 
 - Clear player and organizer entry paths, a next-step event guide, and explanations of invitation, badge, prop, and exchange codes.
 - Three immediate event actions with specialist tools under collapsed sections; existing instruments and permissions remain available.
 - Larger touch targets, adjustable text, mobile wrapping, outdoor/forced-colors support, visible focus, and recoverable loading/error states.
 - Confirmed clearing of saved device data, protected unsaved Field desk navigation, and removal of both local stores when leaving an event.
 - A local pilot report/checklist and a bounded isolated PostgreSQL load rehearsal, with physical observations and automated evidence kept separate.
+- **Prepare for the field** saves permitted briefing/rules and your approved character sheets, checks saved journal copies, and displays preparation time, missing material, and storage failures.
+- A public description and feature list remain available before JavaScript and on the signed-out page, with help and Green Shoe/mbparks catalog links.
 
 - Field desk notes saved explicitly on this device for a previously checked own character; account/event clearing protects local scope.
 - Saved invitation, join, and reading-only offer requests with visible pending/uncertain/review states, explicit review before sending, original request identifiers, and fresh authorization. Both players still confirm online.
@@ -68,7 +70,7 @@ Version 1.0.0 is the production handoff release. See [organizer guide](docs/ORGA
 - Authored material with player or organizer visibility, plus a separate flag for inclusion in prop display.
 - Organizer workspace, player preview, player reading view, and fullscreen prop display.
 - Bounded rules definitions for attributes, expertise, resources, and named outcomes.
-- Versioned JSON event packs: private organizer backups and player material with organizer-only content removed.
+- Versioned JSON briefing packs: event setup and briefing material, with separate organizer/private-note and filtered player exports. Characters, instrument definitions, gameplay state, and account records are not included; these are not complete event or database backups.
 - Dark and outdoor reading settings, reduced motion, collapsible navigation, and clear manual-save status.
 
 **Briefing** and twelve gameplay instruments—**RELIC**, **DEAD DROP**, **CIPHERBOX**, **WAYFINDER**, **TRACE**, **WHISPER**, **BROADSIDE**, **BAZAAR**, **OATHBOOK**, **SIGIL**, **STATIC**, and **STAGEHAND**—are available optional instruments. Character badges identify people; prop labels open event instruments. Temporary exchange QR codes support mutually confirmed introductions, selected reading copies, and atomic item/resource barter. Coordinated multi-device timing remains later work. Field desk supports only the explicitly reviewed information requests described below; it does not queue trades or live instrument actions. Conditions and outcomes are bounded data; they do not run arbitrary scripts.
@@ -101,6 +103,7 @@ Node.js 22 (22.9 or newer) or 24, a small native HTTP server, PostgreSQL, and pl
 | `public/adventure-*.js`, `public/prop-code.js` | Organizer/player workflows and printed prop identity |
 | `public/offline.js`, `public/sw.js` | Account-scoped saved readings and complete versioned public static caching |
 | `public/field-store.js`, `public/field-sync.js` | Scoped local field notes and explicitly reviewed information-only requests |
+| `public/preparation-model.js` | Bounded player-only event/character preparation and saved-journal readiness |
 | `public/field-ui.js`, `public/field.css` | Field desk, visible request states, and authorized paper fallback aids |
 | `public/connection.js`, `public/install.js`, `public/manifest.webmanifest` | Bounded transport, install guidance, and protected app updates |
 | `public/characters-ui.js`, `public/qr.js` | Character workflow, portraits, printable badges, and local scanning |
@@ -239,6 +242,10 @@ SIGIL timing is server-authoritative. A visible active host renews a 20-second c
 Load ORACLE while connected first. **Install ORACLE** provides browser install instructions, including Safari's Share → Add to Home Screen. The install panel reports when the complete public app is available offline. Installation support depends on the browser; actual iPhone/Android installation and physical-device testing remain outstanding. The service worker caches only allowlisted public assets, never API responses or credentials. **Apply update and reload this tab** asks you to review unsaved work; it does not force other active tabs to reload. Save Field desk notes first and finish camera/cooperative interactions before applying an update. Other authoring forms remain in page memory.
 
 A successfully loaded player journal can be saved automatically on this device. **Saved readings** shows previously authorized text/audio with its last-check time and read-only status. Each snapshot retains the 1,000-entry/3 MB limit; larger journals require connectivity. Completed exchange receipts and authorized WHISPER, SIGIL, and STATIC journal text can be included. Current inventories, balances, shops, trade terms, agreements, TRACE notebooks, staff rosters, hidden answers, live scenes/timers, and current fictional signals are excluded.
+
+In **Field desk**, use **Prepare for the field** while signed in and connected. Preparation defaults to the currently open event. With several events available, choose **Event to prepare → Use this event**; this choice is independent of the character scope for notes/requests. Preparation stores the player-only briefing/rules and your own approved character sheets, including private objectives and a dated inventory reference. Briefing/rules can be saved before character approval, with an explicit missing-character notice. Preparation excludes staff/review notes, badges, other players, and unrevealed instrument definitions. Saved journal text/audio is downloaded and read back through the existing archive. Expand the prepared event to inspect its timestamp, verification count, and any **Preparation needs attention** messages, then open the briefing, rules, character, and **Read saved journal entries** before disconnecting. App-shell readiness is reported separately.
+
+Prepared references remain readable in Field desk after a disconnected restart with a previously cached app. They never establish current permissions, balances, ownership, or game outcomes. Refresh preparation while connected after relevant changes. Field desk retains at most 30 event contexts; a preparation is limited to ten own approved sheets and 4 MB of projected material. Journal limits remain separate. Storage failures are visible, and account/event clearing also removes prepared material. The browser Field desk database advances to IndexedDB version 2 using the same stores and preserving contexts, notes, and queued requests. Preparation is an optional context field; old version-1 writers are blocked so they cannot overwrite it. Save open work, then close or update older ORACLE tabs if they block the upgrade. Queued requests keep their original identifiers and replay semantics. SQL schema 10 is unchanged.
 
 To keep a field note or prepare an information request:
 
@@ -425,7 +432,7 @@ Follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Staging and production use sepa
 - **Adventure editing is locked:** Make a rehearsal copy. Only a dedicated copy in Rehearsal can have its progress reset before editing.
 - **A saved request needs review:** Sign in to the original account and open current exchanges. Check current character access, expiry, terms, and sharing policy. Do not create a replacement UUID to guess whether an uncertain request succeeded.
 - **An app update is waiting for other tabs:** Finish and close older ORACLE tabs, then apply the update explicitly. Save Field desk notes before reloading; other unsaved forms are not durable drafts.
-- **No readings appear offline:** Open the adventure and reveal its readings while connected first. Browser storage may be unavailable or have been cleared.
+- **Missing field material or readings offline:** Open the intended event and use **Field desk → Prepare for the field** while connected. Inspect the saved references and journal count/errors before leaving connectivity. Unrevealed readings cannot be downloaded, and browser storage limits or clearing can remove saved copies.
 - **A badge is unavailable:** Sign in to the correct event. Only approved characters resolve; an edit, retirement, removed membership, or replaced code may invalidate an old badge.
 - **A character cannot be created or assigned:** Check that player creation is enabled and the current event member has room under the active-character limit.
 - **Inventory did not refill after reapproval:** This is expected. Starting equipment initializes once; an organizer must change current inventory separately.

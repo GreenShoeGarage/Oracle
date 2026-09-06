@@ -3,17 +3,31 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#101716" />
+    <meta name="theme-color" content="#0d1211" />
     <meta
       name="description"
-      content="ORACLE — LARP Field Kit. Prepare your event, assemble your crew, and bring your world to life."
+      content="ORACLE is a LARP field kit for players and organizers: themed events, character sheets, QR discoveries, player exchanges, and saved materials for the field."
     />
     <title>ORACLE · LARP Field Kit</title>
+    <link rel="canonical" href="https://oracle.greenshoegarage.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ORACLE" />
+    <meta property="og:title" content="ORACLE · LARP Field Kit" />
+    <meta property="og:description" content="Bring your people into the story. Create characters, discover clues, and run themed live action roleplaying events." />
+    <meta property="og:url" content="https://oracle.greenshoegarage.com/" />
+    <meta property="og:image" content="https://oracle.greenshoegarage.com/icon-512.png" />
+    <meta property="og:image:alt" content="ORACLE field kit emblem" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="ORACLE · LARP Field Kit" />
+    <meta name="twitter:description" content="Character sheets, discoveries, and event tools for fantasy, cyberpunk, and wasteland LARP worlds." />
+    <meta name="twitter:image" content="https://oracle.greenshoegarage.com/icon-512.png" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="ORACLE" />
+    <script src="/display.js"></script>
     <link rel="stylesheet" href="/style.css" />
     <link rel="stylesheet" href="/themes.css" />
     <link rel="stylesheet" href="/characters.css" />
@@ -31,18 +45,52 @@
     <link rel="stylesheet" href="/props.css" />
     <link rel="stylesheet" href="/field.css" />
     <link rel="stylesheet" href="/guide.css" />
+    <link rel="stylesheet" href="/landing.css" />
     <script src="/app.js" type="module"></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
     <div id="connection-status" class="connection-status" role="status" aria-live="polite" hidden></div>
     <div id="operation-status" class="operation-status" role="status" aria-live="polite" hidden></div>
-    <div id="app">
-      <main class="boot" id="main" tabindex="-1">
-        <div class="wordmark">ORACLE</div>
-        <p>LARP Field Kit</p>
-        <p role="status">Opening your field kit…</p>
-      </main>
+    <p id="startup-status" class="startup-status" data-state="opening" role="status" aria-live="polite" aria-atomic="true">Opening your field kit…</p>
+    <div id="entry-shell" class="public-entry">
+      <section id="public-intro" class="public-intro" aria-labelledby="oracle-title">
+        <header class="landing-brand">
+          <p class="eyebrow">A Green Shoe Garage field instrument</p>
+          <h1 class="wordmark" id="oracle-title">ORACLE</h1>
+          <p class="landing-subtitle">LARP Field Kit</p>
+        </header>
+        <div class="landing-pitch">
+          <h2>Bring your people into the story.</h2>
+          <p>A shared field kit for live action roleplaying. Organizers prepare the world; players carry their characters, discoveries, and next steps into it.</p>
+        </div>
+        <p class="landing-themes"><span>Fantasy</span><span>Cyberpunk</span><span>Wasteland</span></p>
+        <nav class="landing-actions" aria-label="Get started">
+          <a class="landing-button" href="#main">Sign in or create an account</a>
+          <a class="landing-help" href="/help.html">Help &amp; guides →</a>
+        </nav>
+        <p class="landing-join">Joining a game? Sign in, then enter your organizer’s invitation code.</p>
+        <ul class="landing-features" aria-label="Inside the field kit">
+          <li><strong>Your character, ready to play</strong><span>Create a sheet, carry your public badge, and keep private objectives separate.</span></li>
+          <li><strong>A story you discover together</strong><span>Scan prop codes, collect readings, and choose what to share with other players.</span></li>
+          <li><strong>Your event, your world</strong><span>Choose a theme, prepare a briefing, and rehearse before opening play.</span></li>
+        </ul>
+        <p class="landing-offline"><strong>Prepare before you leave.</strong> Prepared briefings, character sheets, saved readings, and local field notes work without a connection. New discoveries, exchanges, and shared game actions need a connection. <a href="/help.html#offline">Plan for offline use.</a></p>
+        <footer class="landing-catalogs">
+          <span>More from the workbench</span>
+          <a href="https://greenshoegarage.com/">Green Shoe Garage</a>
+          <a href="https://greenshoegarage.com/tools/">Toolkits</a>
+          <a href="https://mbparks.com/fieldinstruments">Field Instruments</a>
+        </footer>
+      </section>
+      <div id="app" aria-busy="true">
+        <main class="boot" id="main" tabindex="-1">
+          <h2>Your field kit</h2>
+          <p>The sign-in form will appear here.</p>
+          <p class="hint">You can read the <a href="/help.html">help and event guides</a> while ORACLE opens.</p>
+          <noscript><p>Enable JavaScript to sign in and use the field kit. The description and help guides are available without it.</p></noscript>
+        </main>
+      </div>
     </div>
     <div
       id="notice"
@@ -54,6 +102,5 @@
     <dialog id="modal" aria-labelledby="modal-title">
       <div id="modal-content"></div>
     </dialog>
-    <noscript>Enable JavaScript to use ORACLE.</noscript>
   </body>
 </html>

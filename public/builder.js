@@ -3,14 +3,14 @@ import { THEMES, TEMPLATES, INSTRUMENTS, defaultSetup, validateSetup, validateEv
 const clone = (value) => structuredClone(value);
 const icons = { sigil: '✦', chip: '◈', compass: '✥' };
 const fonts = { serif: 'Georgia, Cambria, serif', sans: 'system-ui, sans-serif', mono: 'ui-monospace, SFMono-Regular, Consolas, monospace' };
-const readPreference = (key, fallback) => { try { return localStorage.getItem(key) || fallback; } catch { return fallback; } };
+const readPreference = (key, fallback, allowed) => { try { const value = localStorage.getItem(key); return allowed.includes(value) ? value : fallback; } catch { return fallback; } };
 const savePreference = (key, value) => { try { localStorage.setItem(key, value); } catch {} };
 
 export function createKitUI(ctx) {
   const { state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err } = ctx;
   let draft = null, step = 0, editing = false, dirty = false, importPack = null, preview = null;
   let eventId = null, mode = 'organizer';
-  const preferences = { display: readPreference('oracle-display', 'dark'), motion: readPreference('oracle-motion', 'system'), collapsed: readPreference('oracle-controls', 'open') };
+  const preferences = { display: readPreference('oracle-display', 'dark', ['dark', 'outdoor']), motion: readPreference('oracle-motion', 'system', ['system', 'reduce']), collapsed: readPreference('oracle-controls', 'open', ['open', 'closed']) };
   const root = document.documentElement;
 
   function applyTheme(theme) {
@@ -22,7 +22,8 @@ export function createKitUI(ctx) {
     root.dataset.motion = preferences.motion;
     root.dataset.controls = preferences.collapsed;
     root.dataset.prop = String(state.view === 'detail' && mode === 'prop');
-    document.querySelector('meta[name="theme-color"]').content = preferences.display === 'outdoor' ? '#ffffff' : t.background;
+    const chrome = document.querySelector('meta[name="theme-color"]');
+    if (chrome) chrome.content = preferences.display === 'outdoor' ? '#ffffff' : t.background;
   }
   function apply() { applyTheme(['detail', 'characters', 'adventure', 'adventure-manage', 'exchanges', 'sharing', 'story', 'trace', 'bazaar', 'oaths', 'sigil', 'static', 'stagehand'].includes(state.view) ? state.event?.setup?.theme : THEMES[0]); document.querySelector('[data-action="kit-collapse"]')?.setAttribute("aria-expanded", String(preferences.collapsed === "open")); }
   function controls() {

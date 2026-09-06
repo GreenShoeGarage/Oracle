@@ -2,16 +2,16 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 2.3 · September 6, 2026
+Development roadmap · Planning revision: 2.4 · September 6, 2026
 
-Status: Batch 12 v1.0.0 handoff is deployed as release `782671590b3ea3547f0bd3a24a7a98ed5af76dd4`, at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Both exact-commit PostgreSQL CI runs, separate isolated 100-player measurements, Railway staging, the complete all-twelve/all-three-theme remote workflow, and Railway production passed. Exact production readiness plus 72 public GET checks passed; the existing enabled operator retained identity/password. Human/device checks remain unrun and require actual participants and devices. Schema 10, pack formats 1, browser archive version 2, and existing gameplay contracts are preserved. See [STATUS.md](STATUS.md).
+Status: v1.1.0 feedback and field-preparation work is in progress; exact-candidate verification and deployment are pending. The last verified production release is Batch 12 v1.0.0, commit `782671590b3ea3547f0bd3a24a7a98ed5af76dd4`, at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Its CI, complete remote journey, Railway deployment, readiness, and 72 public GET checks passed. Actual device/human acceptance, application rollback rehearsal, scheduled live backups, and sustained Railway capacity remain open. See [STATUS.md](STATUS.md).
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
 
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
-The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are delivered in v0.9 and field resilience in v0.10; a beta pilot and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–11 implementations are deployed; Batch 11 actual device/human acceptance remains open. Batch 12 v1.0 production handoff is now implemented in the checked working tree; its exact-release CI, staging, rollback rehearsal, and production deployment gates remain to be run. Human/device acceptance remains the separate Batch 11 dependency. Automated results cannot close the human field acceptance dependency.
+The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are delivered in v0.9 and field resilience in v0.10. Versions express dependency order and completion gates, not calendar commitments. Batches 1–12 software releases are deployed; the Batch 11 actual device/human pilot remains open, and Batch 12 did not complete application rollback rehearsal. Automated results cannot close those acceptance dependencies.
 
 **Product commitments**
 
@@ -184,7 +184,7 @@ Completion gate: No unresolved critical defects in access control, data integrit
 
 **Batch 12 — v1.0: Production release and handoff**
 
-Implementation status: Handoff documentation, public Help & guides, install-menu layout correction, live-event reset regression coverage, and schema-compatible recovery tooling are deployed and verified.
+Implementation status: v1.0.0 release `782671590b3ea3547f0bd3a24a7a98ed5af76dd4` deployed handoff documentation, public Help & guides, an install-menu layout correction, and live-event reset regression coverage. Exact main/staging CI, populated database restoration, the remote all-twelve/all-three-theme journey, and production readiness plus 72 public GET checks passed. The application rollback helper was added but not integrated or run; rollback is still an open gate. Actual device/human acceptance also remains open.
 
 Finalize the organizer quick start, player guide, comprehensive GitHub README, theme/event-pack documentation, migration and backup instructions, troubleshooting, and release notes. Ship the three starter adventures and clean sample-data/reset workflows that cannot accidentally reset a live event.
 
@@ -193,6 +193,14 @@ Rehearse backup restoration and application rollback against a compatible databa
 Deploy the checked release commit through staging to Railway production and the selected custom domain. Verify readiness, authenticated access, a disposable test-event workflow, and the deployed version. Record the actual deployment result and retain the last known good release.
 
 Completion gate: All twelve instruments meet their acceptance criteria; each starter adventure works; compatibility and recovery procedures are exercised; documentation matches the deployed version; release checks pass. Development upgrades preserve existing event data within the documented compatibility policy.
+
+**v1.1 — Field preparation and public entry improvements**
+
+Implementation status: In progress following feedback. Add **Prepare for the field** for an approved player's permitted briefing/rules, character snapshot, and journal, with durable read-back checks, preparation time, and visible failures. Keep public-shell readiness separate from event-data preparation. Preserve account/event clearing and the existing explicit information-request replay contract; server-authoritative game actions remain online.
+
+Give the signed-out homepage a real static description, feature list, theme examples, and help/catalog links. Align initial browser color with the loading screen and saved display setting, add compatible mobile metadata, and provide guarded startup focus plus a persistent loading/completion announcement. Index only intentional public pages; publishing metadata does not prove search indexing.
+
+Completion gate: Relevant storage/privacy, offline fallback, loading/focus, and static-page checks pass on the exact candidate, followed by existing PostgreSQL/recovery/image, complete staging, and independent production gates. Record actual iPhone/Android airplane-mode cold starts and return-to-connectivity behavior separately when devices are available. SQL schema 10, briefing/adventure formats 1, and journal archive version 2 remain unchanged. Upgrade only the browser Field desk database to IndexedDB version 2, preserve existing stores and records, and block old version-1 writers from discarding prepared material. Guide users to save work and close or update older tabs when needed.
 
 **Theme mechanism**
 
@@ -206,7 +214,7 @@ Completion gate: All twelve instruments meet their acceptance criteria; each sta
 | Trade | Guild quartermaster | Black-market exchange | Trading post |
 | News | Town crier's broadsheet | Underground newswire | Settlement bulletin |
 
-Theme packs affect presentation and vocabulary. Event packs supply the story and content. Rules profiles define game data and, as gameplay instruments arrive, their supported behavior. In v0.2 they are bounded definitions only. Theme presentation can change vocabulary, but accepted economic resource IDs and names remain fixed; a theme change cannot silently change balances, ability requirements, or outcomes. Every interface retains understandable actions and accessibility overrides.
+Theme packs affect presentation and vocabulary. Current format-1 briefing packs contain setup, rules definitions, and briefing text; they do not contain characters, instrument definitions, gameplay progress, or a database backup. Rules profiles define supported, bounded game data. Theme presentation can change vocabulary, but accepted economic resource IDs and names remain fixed; a theme change cannot silently change balances, ability requirements, or outcomes. Every interface retains understandable actions and accessibility overrides.
 
 **Checks required throughout development**
 
@@ -223,4 +231,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next: run and record the actual Batch 11 human/device pilot, resolve or explicitly schedule its findings, and maintain the v1.0 handoff. Batch 11 implementation/deployment is complete; its human acceptance remains an explicit dependency. Scheduled live backups and measured Railway capacity remain outstanding. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next: verify and deploy v1.1.0, then record the actual device/human pilot and resolve its findings. Complete the application rollback rehearsal and configure verified live backups. Sustained Railway capacity remains unmeasured. Public branding uses ORACLE with the subtitle “LARP Field Kit.”

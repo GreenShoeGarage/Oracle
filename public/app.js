@@ -20,9 +20,11 @@ import { createOathUI } from "./oath-ui.js";
 import { createSigilUI } from "./sigil-ui.js";
 import { createStaticUI } from "./static-ui.js";
 import { createStagehandUI } from "./stagehand-ui.js";
+import { createStartupUI } from "./startup.js";
 const app = document.querySelector("#app");
 const modal = document.querySelector("#modal");
 const modalContent = document.querySelector("#modal-content");
+const startup = createStartupUI({ document, window });
 const state = {
   session: null,
   events: [],
@@ -113,7 +115,11 @@ const sigil = createSigilUI({ state, api, shell, esc, openModal, closeModal, loa
 const signals = createStaticUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openJournal: (characterId) => { signals.reset(); return adventure.open({ characterId }); } });
 const stagehand = createStagehandUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openStory: () => story.open({ manage: true }), openAdventure: (options) => adventure.open(options) });
 const fieldSync = createFieldSync({ api, store: fieldStore });
-const field = createFieldUI({ state, api, shell: (html) => state.session?.user ? shell(html) : (app.innerHTML = `<main class="workspace" id="main" tabindex="-1">${html}</main>`), esc, openModal, closeModal, loadEvent, toast, isManager, err, render, offline, store: fieldStore, sync: fieldSync, openExchanges: (characterId) => exchanges.open({ characterId }) });
+const field = createFieldUI({ state, api, shell: (html) => {
+  publicIntroduction(false);
+  if (state.session?.user) shell(html);
+  else app.innerHTML = `<main class="workspace" id="main" tabindex="-1">${html}</main>`;
+}, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, offline, store: fieldStore, sync: fieldSync, checkOfflineShell: () => install.verifyOfflineReady(), isOfflineShellReady: () => install.offlineReady, openExchanges: (characterId) => exchanges.open({ characterId }) });
 const install = createInstallUI({ getDirty: () => true, confirmDiscard: () => {
   if (pendingApiWrites || fieldSync.busy) { toast("Wait for the current server request to finish before applying an app update."); return false; }
   return field.canUpdate ? field.canUpdate() : true;
@@ -209,6 +215,7 @@ function openModal(heading, content) {
 }
 function closeModal(force = false) {
   if (!force && (!kit.confirmDiscard() || !characters.confirmDiscard() || !adventureOrganizer.confirmDiscard("modal") || !exchanges.confirmDiscard("modal") || !story.confirmDiscard("modal") || !trace.confirmDiscard("modal") || !economy.confirmDiscard("modal") || !oaths.confirmDiscard("modal") || !sigil.confirmDiscard("modal") || !signals.confirmDiscard("modal") || !stagehand.confirmDiscard("modal") || !field.confirmDiscard("modal"))) return;
+  const wasOpen = modal.open;
   adventure.cleanupModal();
   adventureOrganizer.cleanupModal();
   characters.cleanupModal();
@@ -229,7 +236,7 @@ function closeModal(force = false) {
   const opener = modalOpener, epoch = authEpoch;
   modalOpener = null;
   window.requestAnimationFrame(() => {
-    if (epoch !== authEpoch || modal.open) return;
+    if (!wasOpen || epoch !== authEpoch || modal.open) return;
     if (opener?.isConnected && !opener.disabled) opener.focus({ preventScroll: true });
     else if (document.activeElement === document.body) focusMain();
   });
@@ -268,17 +275,25 @@ function setError(form, error) {
     el.focus({ preventScroll: true });
   } else toast(error.message || "Unable to connect.");
 }
+function publicIntroduction(visible) {
+  const intro = document.querySelector("#public-intro");
+  if (intro) intro.hidden = !visible;
+  document.querySelector("#entry-shell")?.classList.toggle("public-entry", visible);
+}
 function auth() {
+  publicIntroduction(true);
   kit.apply();
   const signup = state.authMode === "register";
-  app.innerHTML = `<div class="auth-wrap"><section class="auth-intro"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><h1>Bring your people<br>into the story.</h1><p>Join an event, create your character, and carry your discoveries into the story. Organizers can prepare a world for their crew.</p><p class="auth-footer">Green Shoe Garage · v${esc(state.session?.version || "1.0.0")}</p></section><main id="main" class="auth-form" tabindex="-1"><p class="eyebrow">Your field kit</p><h2>${signup ? "Create your account" : "Welcome back"}</h2><p>${signup ? "Create an account, then join with your organizer’s invitation code or start your own event." : "Sign in to open your events."}</p><form id="auth-form">${err}${signup ? '<div><label for="displayName">Display name</label><input id="displayName" name="displayName" minlength="2" maxlength="80" required autocomplete="nickname"><p class="hint">Shown to the people in your events.</p></div>' : ""}<div><label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"></div><div><label for="password">Password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" required autocomplete="${signup ? "new-password" : "current-password"}">${signup ? '<p class="hint">At least 12 characters. A passphrase works well.</p>' : ""}</div>${signup ? '<details><summary>Have an operator setup code?</summary><label for="setupCode">Operator setup code</label><input id="setupCode" name="setupCode" type="password" maxlength="512" autocomplete="off"><p class="hint">Only needed for an account reserved by the project operator.</p></details>' : ""}<button class="primary" type="submit">${signup ? "Create account" : "Sign in"}</button></form>${state.session?.registrationEnabled ? `<button class="switch" data-action="auth-switch">${signup ? "Already have an account? Sign in" : "New to ORACLE? Create an account"}</button>` : ""}<p class="auth-footer">${state.session?.environment === "staging" ? "Staging environment — use test accounts and events." : "Your email is kept private. Events are visible to their members."}</p></main></div>`;
+  app.innerHTML = `<div class="auth-wrap"><section class="auth-intro"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><h1>Bring your people<br>into the story.</h1><p>Join an event, create your character, and carry your discoveries into the story. Organizers can prepare a world for their crew.</p><p class="auth-footer">Green Shoe Garage · v${esc(state.session?.version || "1.1.0")}</p></section><main id="main" class="auth-form" tabindex="-1"><p class="eyebrow">Your field kit</p><h2>${signup ? "Create your account" : "Welcome back"}</h2><p>${signup ? "Create an account, then join with your organizer’s invitation code or start your own event." : "Sign in to open your events."}</p><form id="auth-form">${err}${signup ? '<div><label for="displayName">Display name</label><input id="displayName" name="displayName" minlength="2" maxlength="80" required autocomplete="nickname"><p class="hint">Shown to the people in your events.</p></div>' : ""}<div><label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"></div><div><label for="password">Password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" required autocomplete="${signup ? "new-password" : "current-password"}">${signup ? '<p class="hint">At least 12 characters. A passphrase works well.</p>' : ""}</div>${signup ? '<details><summary>Have an operator setup code?</summary><label for="setupCode">Operator setup code</label><input id="setupCode" name="setupCode" type="password" maxlength="512" autocomplete="off"><p class="hint">Only needed for an account reserved by the project operator.</p></details>' : ""}<button class="primary" type="submit">${signup ? "Create account" : "Sign in"}</button></form>${state.session?.registrationEnabled ? `<button class="switch" data-action="auth-switch">${signup ? "Already have an account? Sign in" : "New to ORACLE? Create an account"}</button>` : ""}<p class="auth-footer">${state.session?.environment === "staging" ? "Staging environment — use test accounts and events." : "Your email is kept private. Events are visible to their members."}</p></main></div>`;
 }
 function shell(content) {
+  publicIntroduction(false);
   app.innerHTML = `<div class="layout"><aside class="sidebar"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><nav aria-label="Main navigation"><button class="nav-button ${!["account", "admin"].includes(state.view) ? "active" : ""}" data-action="events">${state.session.user.isSuperuser ? "All events" : "My events"}</button><button class="nav-button ${state.view === "account" ? "active" : ""}" data-action="account">Account</button><button class="nav-button" data-action="offline-open">Saved readings</button><button class="nav-button ${state.view === "field" ? "active" : ""}" data-action="field-open">Field desk</button><a class="nav-link" href="/help.html" target="_blank" rel="noopener">Help &amp; guides ↗</a>${state.session.user.isSuperuser ? `<button class="nav-button ${state.view === "admin" ? "active" : ""}" data-action="admin-open">Administration</button>` : ""}</nav><div class="sidebar-footer"><div><p class="account-name">${esc(state.session.user.displayName)}</p>${state.session.user.isSuperuser ? '<p class="hint">Project superuser</p>' : ""}<p class="version">ORACLE / v${esc(state.session.version)}</p></div><div data-install-controls>${install.render()}</div><button class="quiet" data-action="logout">Sign out</button></div></aside><main class="workspace" id="main" tabindex="-1"><div class="topbar"><button class="quiet menu-toggle" data-action="kit-collapse" aria-label="Toggle navigation" aria-expanded="true">☰ Menu</button><span class="eyebrow">Green Shoe Garage / Field instruments</span>${kit.controls()}${state.session.environment !== "production" ? `<span class="environment">${esc(state.session.environment)}</span>` : ""}</div>${content}</main></div>`;
   kit.apply();
 }
 function render() {
   connectionBanner();
+  publicIntroduction(!state.session?.user && !["field", "offline"].includes(state.view));
   if (state.view === "field") return field.render();
   if (state.view === "offline") { app.innerHTML = offline.renderArchive({ esc, archive: state.offlineArchive }); document.querySelector(".page-head .actions")?.insertAdjacentHTML("beforeend", '<button data-action="field-open">Field desk</button>'); return; }
   if (!state.session?.user) return auth();
@@ -448,7 +463,7 @@ async function action(button) {
       await start();
       break;
     case "offline-clear": {
-      if (!window.confirm("Delete all saved readings, Field desk notes, and queued requests on this device? Requests already sent may have reached the server; clearing this device does not cancel them.")) break;
+      if (!window.confirm("Delete all prepared event kits, saved readings, Field desk notes, and queued requests on this device? Requests already sent may have reached the server; clearing this device does not cancel them.")) break;
       const epoch = authEpoch, accountId = state.session?.user?.id;
       const archiveClear = offline.clearArchive({ keepAccount: Boolean(accountId) }), fieldClear = fieldStore.clearAll();
       await Promise.all([archiveClear, fieldClear]);
@@ -456,7 +471,7 @@ async function action(button) {
       if (accountId) await fieldStore.setAccount(accountId);
       if (epoch !== authEpoch) return;
       await openOffline();
-      toast("Saved readings, local drafts, and pending requests cleared from this device.");
+      toast("Prepared kits, saved readings, local drafts, and pending requests cleared from this device.");
       break;
     }
     case "close":
@@ -902,4 +917,8 @@ async function start() {
   }
 }
 install.init().catch(() => {});
-start();
+start().then(() => startup.finish({ offline: state.view === "offline", signedIn: Boolean(state.session?.user) })).catch(() => {
+  publicIntroduction(true);
+  app.innerHTML = '<main id="main" class="auth-form" tabindex="-1"><h1>Unable to open your field kit</h1><p>Check your connection, then reload ORACLE to try again.</p><p><a href="/">Reload ORACLE</a> · <a href="/help.html">Help &amp; guides</a></p></main>';
+  startup.finish({ error: true });
+});
