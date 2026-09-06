@@ -177,6 +177,33 @@ test("definition editing is optimistic and freezes once state exists; rehearsal 
   assert.equal((await pool.query("SELECT count(*)::int AS n FROM invitations WHERE event_id=$1", [copied.id])).rows[0].n, 0);
 });
 
+test("a dedicated rehearsal promoted to live cannot reset its progress or return to rehearsal", async () => {
+  const f = await fixture();
+  const copied = ok(await request(path(f.event, "rehearsal"), "POST", {}), 201).event;
+  const managed = ok(await request(path(copied, "manage")));
+  assert.equal(managed.isRehearsal, true);
+  const character = managed.characters[0];
+  ok(await request(path(copied, "override"), "POST", { requestId: randomUUID(), version: managed.version, characterId: character.id, nodeId: "relic", kind: "release" }));
+  const live = ok(await request(`/api/events/${copied.id}`, "PATCH", { version: copied.version, status: "live" })).event;
+  assert.equal(live.status, "live");
+  const snapshot = async () => ({
+    event: ok(await request(`/api/events/${copied.id}`)).event,
+    adventure: ok(await request(path(copied, "manage"))),
+    journal: (await pool.query("SELECT * FROM adventure_journal WHERE event_id=$1 ORDER BY id", [copied.id])).rows,
+    runs: (await pool.query("SELECT * FROM adventure_runs WHERE event_id=$1 ORDER BY character_id", [copied.id])).rows,
+    requests: (await pool.query("SELECT * FROM adventure_requests WHERE event_id=$1 ORDER BY character_id,request_id", [copied.id])).rows,
+    inventory: (await pool.query("SELECT * FROM character_inventory WHERE event_id=$1 ORDER BY id", [copied.id])).rows,
+    audit: (await pool.query("SELECT * FROM audit_entries WHERE event_id=$1 ORDER BY id", [copied.id])).rows,
+  });
+  const before = await snapshot();
+  assert.equal(before.journal.length, 1, "The live copy must contain real progress before reset is attempted.");
+  assert.equal(before.runs.length, 1);
+  assert.equal(before.adventure.version, managed.version, "The reset request uses the current adventure version.");
+  assert.equal((await request(path(copied, "reset"), "POST", { version: before.adventure.version, confirm: true })).status, 409);
+  assert.equal((await request(`/api/events/${copied.id}`, "PATCH", { version: live.version, status: "rehearsal" })).status, 409);
+  assert.deepEqual(await snapshot(), before, "Rejected reset and lifecycle requests must preserve all live progress, replay records, inventory, event versions, and audit history.");
+});
+
 test("all three server-only templates create isolated ready-to-assign character adventures", async () => {
   assert.equal((await request("/api/adventure-templates", "GET", undefined, null)).status, 401);
   const catalog = ok(await request("/api/adventure-templates")); assert.equal(catalog.templates.length, 3);

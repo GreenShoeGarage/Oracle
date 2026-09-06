@@ -4,7 +4,7 @@ import { createInstallUI } from '../public/install.js';
 
 function fixture(t, options = {}) {
   const events = new Map(), workerEvents = new Map();
-  const calls = { reload: 0, confirm: [], apply: 0, register: 0, prompt: 0 };
+  const calls = { reload: 0, confirm: [], apply: 0, register: 0, prompt: 0, update: 0 };
   let allow = true;
   class LocalChannel {
     constructor() {
@@ -17,7 +17,7 @@ function fixture(t, options = {}) {
     ports[0].postMessage({ ok: true, version }); ports[0].close();
   } });
   const active = worker('0.10.0'), next = worker('0.11.0');
-  const registration = { active, waiting: options.waiting ? next : null, installing: null, addEventListener() {}, update: async () => {} };
+  const registration = { active, waiting: options.waiting ? next : null, installing: null, addEventListener() {}, update: async () => { calls.update++; await options.update?.(); } };
   const serviceWorker = { controller: active, addEventListener: (name, fn) => workerEvents.set(name, fn), register: async () => { calls.register++; return options.failFirst && calls.register === 1 ? Promise.reject(new Error('Offline')) : registration; } };
   const values = {
     navigator: { onLine: true, serviceWorker }, isSecureContext: true, MessageChannel: LocalChannel,
@@ -68,4 +68,21 @@ test('install prompt waits for a user action and failed registration can retry',
   f.events.get('beforeinstallprompt')({ preventDefault: () => { prevented = true; }, prompt: async () => { f.calls.prompt++; }, userChoice: Promise.resolve({ outcome: 'accepted' }) });
   assert.equal(prevented, true); assert.equal(f.calls.prompt, 0);
   await f.ui.action('install-open'); assert.equal(f.calls.prompt, 1);
+});
+
+test('an update check keeps its button focusable while ignoring repeated activation', async t => {
+  let finish;
+  const pending = new Promise(resolve => { finish = resolve; });
+  const f = fixture(t, { update: () => pending });
+  await f.ui.init();
+  const check = f.ui.action('install-check');
+  await new Promise(resolve => setImmediate(resolve));
+  const button = f.ui.render().match(/<button[^>]*data-action="install-check"[^>]*>/)[0];
+  assert.match(button, /aria-disabled="true"/); assert.match(button, /aria-busy="true"/);
+  assert.doesNotMatch(button, /\sdisabled(?:\s|>)/);
+  await f.ui.action('install-check');
+  assert.equal(f.calls.update, 1);
+  finish(); await check;
+  assert.match(f.ui.render(), /data-action="install-check" aria-disabled="false" aria-busy="false"/);
+  assert.equal(f.calls.apply, 0); assert.equal(f.calls.reload, 0);
 });

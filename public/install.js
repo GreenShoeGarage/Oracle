@@ -1,10 +1,10 @@
 import { registerOfflineShell } from './offline.js';
 
-export const SHELL_VERSION = '0.10.0';
+export const SHELL_VERSION = '1.0.0';
 
 /** Public install/update controls. They never reload another tab or transmit game actions. */
 export function createInstallUI({ getDirty = () => false, confirmDiscard = () => true, onChange = () => {}, toast = () => {} } = {}) {
-  let registration = null, registering = null, promptEvent = null, helpOpen = false, applying = false, checking = false, applyTimer = null;
+  let registration = null, registering = null, promptEvent = null, helpOpen = false, panelOpen = null, applying = false, checking = false, applyTimer = null;
   let offlineReady = false, availableVersion = null, reloadDeadline = 0, status = '', installed = Boolean(navigator.standalone || window.matchMedia?.('(display-mode: standalone)').matches);
   const supported = () => Boolean(navigator.serviceWorker && typeof isSecureContext !== 'undefined' && isSecureContext);
   const waiting = () => registration?.waiting || null;
@@ -95,7 +95,24 @@ export function createInstallUI({ getDirty = () => false, confirmDiscard = () =>
     return true;
   }
   function render() {
-    return `<details class="display-controls" data-oracle-install ${helpOpen || needsUpdate() ? 'open' : ''}><summary>${needsUpdate() ? 'App update ready' : installed ? 'ORACLE app' : 'Install ORACLE'}</summary><div class="reading-options" aria-label="Install and update ORACLE"><p><strong>ORACLE · LARP Field Kit</strong></p><p class="hint">${offlineReady ? 'Complete public app available offline. Live actions still need a connection; only saved readings, Field desk notes, and explicitly queued information requests are kept.' : 'Open ORACLE while connected to prepare the complete offline app. Only explicitly saved device data is available without a connection.'}</p>${!installed ? `<button type="button" data-action="install-open">${promptEvent ? 'Install ORACLE' : 'How to install'}</button>` : ''}${needsUpdate() ? `<button type="button" class="primary" data-action="install-update" ${applying ? 'disabled' : ''}>${applying ? 'Preparing update…' : 'Apply update and reload this tab'}</button>` : ''}<button type="button" data-action="install-check" ${checking || !supported() ? 'disabled' : ''}>Check for app updates</button>${helpOpen ? '<p class="hint">On Android or desktop, use the browser’s Install app command. On iPhone or iPad, open ORACLE in Safari, use Share, then Add to Home Screen. Browser wording and support may vary.</p><button type="button" class="quiet" data-action="install-close-help">Close install instructions</button>' : '<button type="button" class="quiet" data-action="install-help">Install instructions</button>'}${status ? `<p class="hint" role="status">${escaped(status)}</p>` : ''}</div></details>`;
+    return `<details class="install-controls" data-oracle-install ${(panelOpen ?? (helpOpen || needsUpdate())) ? 'open' : ''}><summary>${needsUpdate() ? 'App update ready' : installed ? 'ORACLE app' : 'Install ORACLE'}</summary><div class="install-options" aria-label="Install and update ORACLE"><p><strong>ORACLE · LARP Field Kit</strong></p><p class="hint">${offlineReady ? 'Complete public app available offline. Live actions still need a connection; only saved readings, Field desk notes, and explicitly queued information requests are kept.' : 'Open ORACLE while connected to prepare the complete offline app. Only explicitly saved device data is available without a connection.'}</p>${!installed ? `<button type="button" data-action="install-open">${promptEvent ? 'Install ORACLE' : 'How to install'}</button>` : ''}${needsUpdate() ? `<button type="button" class="primary" data-action="install-update" aria-disabled="${applying}" aria-busy="${applying}">${applying ? 'Preparing update…' : 'Apply update and reload this tab'}</button>` : ''}<button type="button" data-action="install-check" aria-disabled="${checking}" aria-busy="${checking}" ${!supported() ? 'disabled' : ''}>Check for app updates</button>${helpOpen ? '<p class="hint">On Android or desktop, use the browser’s Install app command. On iPhone or iPad, open ORACLE in Safari, use Share, then Add to Home Screen. Browser wording and support may vary.</p><button type="button" class="quiet" data-action="install-close-help">Close install instructions</button>' : '<button type="button" class="quiet" data-action="install-help">Install instructions</button>'}${status ? `<p class="hint" role="status">${escaped(status)}</p>` : ''}</div></details>`;
+  }
+  function refresh(target) {
+    const previous = target.querySelector('[data-oracle-install]');
+    if (previous) panelOpen = previous.open;
+    const active = target.ownerDocument?.activeElement;
+    const restoreFocus = Boolean(active && target.contains(active));
+    const actionName = restoreFocus ? active.dataset?.action : null;
+    const scrollTop = target.querySelector('.install-options')?.scrollTop || 0;
+    target.innerHTML = render();
+    if (restoreFocus) {
+      // Keep keyboard position when a button's label changes or instructions close.
+      const replacementAction = actionName === 'install-help' && helpOpen ? 'install-close-help' : actionName === 'install-close-help' && !helpOpen ? 'install-help' : actionName;
+      const button = [...target.querySelectorAll('button[data-action]')].find(item => item.dataset.action === replacementAction && !item.disabled);
+      (button || target.querySelector('summary'))?.focus({ preventScroll: true });
+    }
+    const options = target.querySelector('.install-options');
+    if (options) options.scrollTop = scrollTop;
   }
   window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); promptEvent = event; changed(); });
   window.addEventListener('appinstalled', () => { installed = true; promptEvent = null; status = 'ORACLE is installed.'; changed(); });
@@ -106,5 +123,5 @@ export function createInstallUI({ getDirty = () => false, confirmDiscard = () =>
       else { clearTimeout(applyTimer); applying = false; reloadDeadline = 0; status = 'A complete app update is available. Apply it when you are ready; this tab has kept its current version.'; changed(); }
     });
   });
-  return { init, render, action, reset() { clearTimeout(applyTimer); applying = false; reloadDeadline = 0; helpOpen = false; }, get registration() { return registration; } };
+  return { init, render, refresh, action, reset() { clearTimeout(applyTimer); applying = false; reloadDeadline = 0; helpOpen = false; panelOpen = null; }, get registration() { return registration; } };
 }

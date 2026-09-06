@@ -1,6 +1,6 @@
 # ORACLE architecture and data contracts
 
-Application v0.11.0 · Database schema 10 · Briefing-pack format 1 · Adventure format 1
+Application v1.0.0 · Database schema 10 · Briefing-pack format 1 · Adventure format 1
 
 Batch 11 release `6127db477f76f1c3b9f18ea6eb423e029c9dcaf7` is deployed to staging and production. Both exact-commit PostgreSQL CI runs, separate isolated 100-player measurements, the complete remote all-twelve/all-three-theme workflow, and production exact readiness plus 70 public GET checks passed. The existing enabled operator and all data/API compatibility boundaries are preserved. Current evidence and physical-device/backup limits are recorded in [STATUS.md](STATUS.md).
 

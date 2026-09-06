@@ -1,16 +1,18 @@
 # ORACLE
 
-**LARP Field Kit** · v0.11.0 · Green Shoe Garage
+**LARP Field Kit** · v1.0.0 · Green Shoe Garage
 
 ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. Shared screens can present selected briefings, cooperative procedures, and explicitly fictional prop readings.
 
-[Open ORACLE](https://oracle.greenshoegarage.com) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
+[Open ORACLE](https://oracle.greenshoegarage.com) · [Help & guides](https://oracle.greenshoegarage.com/help.html) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 11's usability and pilot-preparation implementation is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com) as v0.11.0, release `6127db477f76f1c3b9f18ea6eb423e029c9dcaf7`. Both exact-commit PostgreSQL CI runs, separate 100-player isolated measurements, Railway staging, the complete all-twelve/all-three-theme remote workflow, and Railway production passed. Production exact readiness plus 70 public GET checks passed without gameplay writes. The existing `mike@greenshoegarage.com` superuser remains enabled with identity/password preserved. Schema 10, pack formats 1, browser archive version 2, and the information-only/account-binding API contract are unchanged. See [docs/STATUS.md](docs/STATUS.md).
+Batch 12's usability and pilot-preparation implementation is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com) as v1.0.0, release `6127db477f76f1c3b9f18ea6eb423e029c9dcaf7`. Both exact-commit PostgreSQL CI runs, separate 100-player isolated measurements, Railway staging, the complete all-twelve/all-three-theme remote workflow, and Railway production passed. Production exact readiness plus 70 public GET checks passed without gameplay writes. The existing `mike@greenshoegarage.com` superuser remains enabled with identity/password preserved. Schema 10, pack formats 1, browser archive version 2, and the information-only/account-binding API contract are unchanged. See [docs/STATUS.md](docs/STATUS.md).
 
 Full local verification before the load-cleanup fix passed 306 tests: 294 passed, zero failures, and 12 deliberate TCP-only skips. Both corrected exact-commit PostgreSQL suites passed 307 tests: 306 passed, zero failures, one PGlite-only skip. Human/device checks remain unrun and require actual participants and devices. [docs/PILOT.md](docs/PILOT.md) provides 58 required observations and a local report validator; automated checks do not satisfy those gates. Scheduled live backups and measured Railway capacity also remain outstanding. Next: record the actual pilot, then complete Batch 12 release handoff.
 
 ## What works in this release
+
+Version 1.0.0 is the production handoff release. See [organizer guide](docs/ORGANIZER_GUIDE.md), [player guide](docs/PLAYER_GUIDE.md), [theme and event packs](docs/THEME_AND_EVENT_PACKS.md), [troubleshooting](docs/TROUBLESHOOTING.md), and [release notes](docs/RELEASE_NOTES.md).
 
 - Clear player and organizer entry paths, a next-step event guide, and explanations of invitation, badge, prop, and exchange codes.
 - Three immediate event actions with specialist tools under collapsed sections; existing instruments and permissions remain available.
@@ -190,7 +192,7 @@ The invitation expires 15 minutes after creation; changes do not extend it. Chan
 
 An exchange can copy at most 2 MB of readings in total. Receiving an already-known original does not duplicate it, including a reading shared back to its original reader. Copies retain the reading as discovered; they do not complete instruments, set flags, or grant skills. Items and resources move only when separately included in the reviewed trade terms. Peer offers show selected names and quantities, never private inventory notes or the player's other balances/items. If an offered item changes, or any final balance, stock, or inventory limit fails, the entire confirmation rolls back and both players must review current terms. Completed receipts remain readable after expiry or a partner's departure while you retain access to the assigned character and event.
 
-Under **Sharing permissions**, organizers choose **Shareable**, **Restricted**, or **Organizer only** per instrument. Existing and newly authored instruments default to Restricted: personal discovery is allowed, exchange is not. New complete starter adventures explicitly make RELIC and DEAD DROP readings shareable. Organizer only prevents new player listings, lookups, discoveries, and overrides; organizer authoring/read-only preview remains available. Earlier authorized journal readings remain readable and cannot be retracted by changing a policy. Disabled or removed instruments cannot provide new exchange material.
+Under **Sharing rules**, organizers choose **Shareable**, **Restricted**, or **Organizer only** per instrument. Existing and newly authored instruments default to Restricted: personal discovery is allowed, exchange is not. New complete starter adventures explicitly make RELIC and DEAD DROP readings shareable. Organizer only prevents new player listings, lookups, discoveries, and overrides; organizer authoring/read-only preview remains available. Earlier authorized journal readings remain readable and cannot be retracted by changing a policy. Disabled or removed instruments cannot provide new exchange material.
 
 ## Trade and record agreements
 
@@ -307,7 +309,7 @@ Provisioning uses protected deployment settings, never an email address embedded
 
 ## Export, reuse, and customize
 
-**Export organizer backup** downloads event setup and all authored material, including private organizer notes. Keep that file private. **Export player material** removes organizer-only entries on the server. A player pack still contains public event details, the theme, and rules definitions; put secrets only in entries marked **Organizer only**.
+**Export organizer briefing pack** downloads event setup and all authored material, including private organizer notes. Keep that file private. **Export player material** removes organizer-only entries on the server. A player pack still contains public event details, the theme, and rules definitions; put secrets only in entries marked **Organizer only**.
 
 From the event list, choose **Import briefing pack**, select the JSON file, inspect its validation preview, and select **Create from pack**. Import always creates a new Draft owned by the importing account. It keeps the pack's theme, rules, and content identifiers but creates a new event identity and fresh owner membership. Existing events remain intact. Memberships, account information, invitation codes, activity history, and live event state are never exported or imported.
 
@@ -334,7 +336,7 @@ Custom themes can be supplied inside a validated event pack. They may contain ap
 | Host SIGIL or collect STATIC using own approved character | Yes | Yes | Yes | Yes |
 | Spend another character's assets through an in-person role | No | No | No | No |
 | Edit event, theme, setup / change lifecycle | Yes | Yes | No | No |
-| Export organizer backup | Yes | Yes | No | No |
+| Export organizer briefing pack | Yes | Yes | No | No |
 | Export player material / view prop material | Yes | Yes | Yes | Yes |
 | Invite players or staff | Yes | Yes | No | No |
 | Invite organizers | Yes | No | No | No |

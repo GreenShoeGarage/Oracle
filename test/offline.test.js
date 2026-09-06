@@ -316,11 +316,11 @@ test("external archive metadata invalidates visible listeners and pending scopes
 
 async function worker({ version = '0.10.0', stores = new Map(), clients = [] } = {}) {
   let source = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
-  source = source.replace("const VERSION = '0.11.0';", `const VERSION = '${version}';`);
+  source = source.replace("const VERSION = '1.0.0';", `const VERSION = '${version}';`);
   const origin = 'https://oracle.example.test', listeners = new Map(), requests = [];
   let network = async request => {
     const path = new URL(request.url).pathname;
-    return new Response(`${version} public ${path}`, { headers: { 'x-oracle-shell-version': version, 'content-type': path === '/' ? 'text/html' : path.endsWith('.css') ? 'text/css' : path.endsWith('.png') ? 'image/png' : path.endsWith('.webmanifest') ? 'application/manifest+json' : path.endsWith('.svg') ? 'image/svg+xml' : 'text/javascript' } });
+    return new Response(`${version} public ${path}`, { headers: { 'x-oracle-shell-version': version, 'content-type': path === '/' || path.endsWith('.html') ? 'text/html' : path.endsWith('.css') ? 'text/css' : path.endsWith('.png') ? 'image/png' : path.endsWith('.webmanifest') ? 'application/manifest+json' : path.endsWith('.svg') ? 'image/svg+xml' : 'text/javascript' } });
   };
   let cacheFailure = false, putFailure = false, claimed = 0, skipped = 0, liveClients = clients;
   const keyOf = key => typeof key === 'string' ? key : key.url;
@@ -365,13 +365,13 @@ test('service worker installs a complete public build without cookies, rejects m
   assert.ok(sw.requests.every(request => request.credentials === 'omit' && request.cache === 'reload' && request.redirect === 'error'));
   assert.equal(stores.get(sw.cacheName).size, sw.assets.length + 1, 'Completeness marker follows every required asset.');
   await sw.run('activate'); assert.equal(stores.has('oracle-static-old'), false); assert.equal(stores.has('unrelated-app'), true); assert.equal(sw.claimed(), 1); assert.equal(sw.skipped(), 0, 'Installation never forces an update.');
-  const mixed = await worker(); mixed.network(async () => new Response('newer source', { headers: { 'content-type': 'text/javascript', 'x-oracle-shell-version': '0.11.0' } }));
+  const mixed = await worker(); mixed.network(async () => new Response('newer source', { headers: { 'content-type': 'text/javascript', 'x-oracle-shell-version': '1.0.0' } }));
   await assert.rejects(mixed.run('install'), /match|mixed|incomplete/); assert.equal(mixed.stores.has(mixed.cacheName), false, 'Failed builds never become a partially usable cache.');
 });
 
 test('active immutable shell ignores newer deployments, 503s, weak networks and API-shaped responses', async () => {
   const sw = await worker(); await sw.run('install'); const initialCount = sw.requests.length;
-  for (const network of [async () => new Response('new', { headers: { 'content-type': 'text/javascript', 'x-oracle-shell-version': '0.11.0' } }), async () => new Response('down', { status: 503 }), async () => { throw new Error('Offline'); }, async () => new Response('PRIVATE_JSON', { headers: { 'content-type': 'application/json' } }), () => new Promise(() => {})]) {
+  for (const network of [async () => new Response('new', { headers: { 'content-type': 'text/javascript', 'x-oracle-shell-version': '1.0.0' } }), async () => new Response('down', { status: 503 }), async () => { throw new Error('Offline'); }, async () => new Response('PRIVATE_JSON', { headers: { 'content-type': 'application/json' } }), () => new Promise(() => {})]) {
     sw.network(network); assert.equal(await (await sw.run('fetch')).text(), '0.10.0 public /app.js');
   }
   assert.equal(sw.requests.length, initialCount, 'Cached build assets never request or overwrite with a newer version.');
@@ -380,20 +380,20 @@ test('active immutable shell ignores newer deployments, 503s, weak networks and 
 test('explicit update preserves old active client builds across worker restarts and blocks unknown legacy tabs', async () => {
   const oldTab = { id: 'old-tab', url: 'https://oracle.example.test/' }, newTab = { id: 'new-tab', url: 'https://oracle.example.test/' }, legacy = { id: 'legacy-tab', url: 'https://oracle.example.test/' };
   const old = await worker({ clients: [oldTab] }); await old.run('install'); assert.equal((await old.message({ type: 'ORACLE_CLIENT_VERSION', version: '0.10.0' }, oldTab)).ok, true);
-  const next = await worker({ version: '0.11.0', stores: old.stores, clients: [oldTab, newTab, legacy] }); await next.run('install');
-  const blocked = await next.message({ type: 'ORACLE_APPLY_UPDATE', clientVersion: '0.11.0' }, newTab); assert.equal(blocked.reason, 'other-tabs'); assert.equal(next.skipped(), 0);
-  next.clients([oldTab, newTab]); assert.equal((await next.message({ type: 'ORACLE_APPLY_UPDATE', clientVersion: '0.11.0' }, newTab)).ok, true); assert.equal(next.skipped(), 1); await next.run('activate');
+  const next = await worker({ version: '1.0.0', stores: old.stores, clients: [oldTab, newTab, legacy] }); await next.run('install');
+  const blocked = await next.message({ type: 'ORACLE_APPLY_UPDATE', clientVersion: '1.0.0' }, newTab); assert.equal(blocked.reason, 'other-tabs'); assert.equal(next.skipped(), 0);
+  next.clients([oldTab, newTab]); assert.equal((await next.message({ type: 'ORACLE_APPLY_UPDATE', clientVersion: '1.0.0' }, newTab)).ok, true); assert.equal(next.skipped(), 1); await next.run('activate');
   assert.equal(await (await next.run('fetch', '/app.js', { clientId: oldTab.id })).text(), '0.10.0 public /app.js');
-  assert.equal(await (await next.run('fetch', '/app.js', { clientId: newTab.id })).text(), '0.11.0 public /app.js');
-  const restarted = await worker({ version: '0.11.0', stores: old.stores, clients: [oldTab, newTab] });
+  assert.equal(await (await next.run('fetch', '/app.js', { clientId: newTab.id })).text(), '1.0.0 public /app.js');
+  const restarted = await worker({ version: '1.0.0', stores: old.stores, clients: [oldTab, newTab] });
   assert.equal(await (await restarted.run('fetch', '/app.js', { clientId: oldTab.id })).text(), '0.10.0 public /app.js');
   await restarted.run('fetch', '/', { navigation: true, clientId: oldTab.id, resultingClientId: 'reloaded-tab' });
-  assert.equal(await (await restarted.run('fetch', '/app.js', { clientId: 'reloaded-tab' })).text(), '0.11.0 public /app.js');
+  assert.equal(await (await restarted.run('fetch', '/app.js', { clientId: 'reloaded-tab' })).text(), '1.0.0 public /app.js');
 });
 
 test('missing storage uses only a matching bounded network asset and never caches failures', async () => {
   const sw = await worker(); sw.storageUnavailable(); assert.equal(await (await sw.run('fetch')).text(), '0.10.0 public /app.js');
-  sw.network(async () => new Response('wrong version', { headers: { 'content-type': 'text/javascript', 'x-oracle-shell-version': '0.11.0' } })); assert.equal((await sw.run('fetch')).status, 503);
+  sw.network(async () => new Response('wrong version', { headers: { 'content-type': 'text/javascript', 'x-oracle-shell-version': '1.0.0' } })); assert.equal((await sw.run('fetch')).status, 503);
   sw.network(() => new Promise(() => {})); assert.equal((await sw.run('fetch')).status, 503); assert.equal(sw.requests.at(-1).signal.aborted, true);
   sw.network(async () => new Response(new ReadableStream({ start() {} }), { headers: { 'content-type': 'text/javascript', 'x-oracle-shell-version': '0.10.0' } })); assert.equal((await sw.run('fetch')).status, 503, 'Body stalls are bounded as well as connection stalls.');
   const full = await worker(); full.quotaFull(); await assert.rejects(full.run('install'), /Quota/); assert.equal(full.stores.has(full.cacheName), false);

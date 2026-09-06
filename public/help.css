@@ -1,0 +1,284 @@
+/* Public, script-free help. Keep every layout rule scoped to this page. */
+.help-page .help-shell {
+  width: min(72rem, 100%);
+  margin-inline: auto;
+  padding: 0 clamp(1rem, 4vw, 3rem);
+}
+.help-page .help-header,
+.help-page .help-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  padding-block: 1.5rem;
+}
+.help-page .help-header {
+  border-bottom: 1px solid var(--muted);
+}
+.help-page .help-subtitle {
+  margin-top: .35rem;
+  color: var(--muted);
+}
+.help-page .help-subtitle span {
+  display: inline-block;
+  margin-left: .6rem;
+  font-family: ui-monospace, monospace;
+  font-size: .875em;
+}
+.help-page .help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: .65rem 1rem;
+  border: 1px solid var(--muted);
+  border-radius: .4rem;
+  color: var(--text);
+  background: var(--panel);
+  font-weight: 650;
+  text-align: center;
+}
+.help-page .help-button:hover,
+.help-page .help-contents a:hover,
+.help-page .help-links a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.help-page #main {
+  padding-block: 2.5rem 1rem;
+  min-width: 0;
+}
+.help-page .help-intro {
+  max-width: 48rem;
+}
+.help-page h1 {
+  margin-block: .6rem 1rem;
+  font-size: clamp(2rem, 4.5vw, 3.3rem);
+  line-height: 1.15;
+}
+.help-page h2 {
+  margin-block: .35rem .85rem;
+  font-size: clamp(1.4rem, 3vw, 1.8rem);
+  line-height: 1.25;
+}
+.help-page p + p {
+  margin-top: .8rem;
+}
+.help-page .help-contents {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .5rem;
+  margin-block: 1.75rem 2.5rem;
+}
+.help-page .help-contents a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: .65rem .85rem;
+  border: 1px solid var(--muted);
+  border-radius: .4rem;
+  background: var(--panel);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.help-page .help-starts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+.help-page .help-card {
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+  border: 1px solid var(--muted);
+  border-radius: .6rem;
+  background: var(--panel);
+  min-width: 0;
+}
+.help-page ol {
+  margin-block: 1rem 1.25rem;
+  padding-left: 1.45rem;
+}
+.help-page li {
+  overflow-wrap: anywhere;
+}
+.help-page ol li + li {
+  margin-top: .9rem;
+}
+.help-page li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+.help-page .help-note {
+  color: var(--muted);
+  border-left: 3px solid var(--accent);
+  padding-left: .85rem;
+  margin-top: 1rem;
+}
+.help-page .help-section {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--muted);
+}
+.help-page section[id] {
+  scroll-margin-top: 1.5rem;
+}
+.help-page .help-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin-top: 1.2rem;
+  font-size: 1rem;
+}
+.help-page .help-table caption {
+  text-align: left;
+  padding-bottom: .6rem;
+  color: var(--muted);
+}
+.help-page .help-table th,
+.help-page .help-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: .85rem .9rem;
+  border: 1px solid var(--muted);
+  overflow-wrap: anywhere;
+}
+.help-page .help-table th {
+  background: var(--panel);
+}
+.help-page .help-table th:first-child {
+  width: 25%;
+}
+.help-page .help-faq {
+  display: grid;
+  gap: .7rem;
+  margin-top: 1.25rem;
+}
+.help-page .help-faq details {
+  padding: .25rem 1rem;
+  border: 1px solid var(--muted);
+  border-radius: .5rem;
+  background: var(--panel);
+}
+.help-page .help-faq summary {
+  min-height: 44px;
+  padding-block: .65rem;
+  overflow-wrap: anywhere;
+}
+.help-page .help-faq details > div {
+  padding-block: .25rem .9rem;
+}
+.help-page .help-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+  padding: 0;
+  margin-block: 1.25rem;
+  list-style: none;
+}
+.help-page .help-links a {
+  display: block;
+  min-height: 44px;
+  height: 100%;
+  padding: .9rem 1rem;
+  border: 1px solid var(--muted);
+  border-radius: .4rem;
+  background: var(--panel);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.help-page .help-links span {
+  display: block;
+  margin-top: .25rem;
+  color: var(--text);
+  font-weight: 400;
+}
+.help-page .help-footer {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--muted);
+  color: var(--muted);
+}
+.help-page .help-footer > a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+@media (max-width: 700px) {
+  .help-page .help-starts,
+  .help-page .help-links {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .help-page .help-contents {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .help-page .help-table th:first-child {
+    width: 31%;
+  }
+  .help-page .help-table th,
+  .help-page .help-table td {
+    padding: .7rem .6rem;
+  }
+}
+@media (max-width: 360px) {
+  .help-page .help-contents {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media print {
+  .help-page {
+    --bg: #fff;
+    --panel: #fff;
+    --text: #000;
+    --muted: #222;
+    --accent: #000;
+    --line: #555;
+    color-scheme: light;
+  }
+  .help-page .help-shell {
+    width: 100%;
+    padding: 0;
+  }
+  .help-page .skip,
+  .help-page .help-contents,
+  .help-page .help-button,
+  .help-page .help-footer > a {
+    display: none;
+  }
+  .help-page .help-starts,
+  .help-page .help-links {
+    display: block;
+  }
+  .help-page .help-card {
+    border: 0;
+    padding: 0;
+    margin-bottom: 1.5rem;
+  }
+  .help-page .help-section {
+    margin-top: 1.5rem;
+  }
+  .help-page .help-links li + li {
+    margin-top: .5rem;
+  }
+  .help-page .help-faq details > div {
+    display: block !important;
+  }
+  .help-page .help-faq details::details-content {
+    content-visibility: visible;
+  }
+  .help-page .help-faq details,
+  .help-page .help-table tr,
+  .help-page .help-links li {
+    break-inside: avoid;
+  }
+  .help-page h2,
+  .help-page .eyebrow,
+  .help-page .help-table caption {
+    break-after: avoid;
+  }
+  .help-page .help-links a::after {
+    display: block;
+    margin-top: .3rem;
+    content: attr(href);
+    font-size: .8rem;
+    font-weight: 400;
+  }
+}

@@ -206,6 +206,19 @@ p {
   border-color: #47543e;
   color: var(--accent);
 }
+.sidebar .nav-link {
+  display: block;
+  padding: .65rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  min-height: 44px;
+  max-width: 100%;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.sidebar .nav-link:hover { border-color: var(--muted); }
 .sidebar-footer {
   margin-top: auto;
   padding-top: 2rem;
@@ -790,7 +803,14 @@ dialog::backdrop {
 }
 .connection-status .actions { flex-wrap: wrap; }
 .connection-status button { color: var(--text); background: var(--panel); border-color: var(--muted); }
-[data-install-controls] { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .6rem; }
+[data-install-controls] { width: 100%; min-width: 0; margin-bottom: .6rem; }
+.install-controls { width: 100%; min-width: 0; font-size: .85rem; }
+.install-controls > summary { padding: .4rem .15rem; overflow-wrap: anywhere; }
+.install-options { display: grid; gap: .8rem; width: 100%; min-width: 0; max-height: 65vh; max-height: 65dvh; overflow: auto; overscroll-behavior: contain; scroll-padding: .8rem; margin-top: .25rem; padding: .8rem; border: 1px solid var(--muted); border-radius: .5rem; background: var(--panel); overflow-wrap: anywhere; }
+.install-options p { margin: 0; }
+.install-options button { width: 100%; min-width: 0; white-space: normal; text-align: left; padding: .6rem; }
+.install-options button[aria-disabled="true"] { cursor: wait; opacity: .6; }
+.install-options :focus-visible { outline-offset: 1px; }
 @media print { .connection-status, [data-install-controls] { display: none !important; } }
 
 .operation-status:not([hidden]) { position: fixed; z-index: 100; top: .75rem; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 2rem); padding: .6rem 1rem; color: var(--text); background: var(--panel); border: 1px solid var(--muted); border-radius: .4rem; box-shadow: 0 2px 12px #0004; pointer-events: none; }

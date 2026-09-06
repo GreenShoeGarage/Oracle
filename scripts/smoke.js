@@ -63,6 +63,8 @@ for (const path of [
   "/field.css",
   "/guide-ui.js",
   "/guide.css",
+  "/help.html",
+  "/help.css",
   "/install.js",
   "/manifest.webmanifest",
   "/icon-192.png",

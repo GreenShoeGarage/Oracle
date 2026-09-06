@@ -1,6 +1,6 @@
 // Public, immutable application builds only. No API response or private game data
 // enters the shell cache. Browser-client/build IDs keep active tabs on one build.
-const VERSION = '0.11.0';
+const VERSION = '1.0.0';
 const CACHE_NAME = `oracle-static-v${VERSION}`;
 const CONTROL_CACHE = 'oracle-shell-control-v1';
 const COMPLETE_PATH = '/__oracle_shell_complete__';
@@ -19,7 +19,7 @@ const STATIC_ASSETS = [
   '/oath-model.js', '/oath-ui.js', '/oath.css', '/sigil-model.js', '/sigil-ui.js', '/sigil.css',
   '/static-model.js', '/static-ui.js', '/static.css', '/stagehand-model.js', '/stagehand-ui.js', '/stagehand-manage.js', '/stagehand.css',
   '/prop-effects.js', '/props.css', '/instrument-code.js',
-  '/guide-ui.js', '/guide.css',
+  '/guide-ui.js', '/guide.css', '/help.html', '/help.css',
   '/field-store.js', '/field-sync.js', '/field-ui.js', '/field.css', '/connection.js',
   '/manifest.webmanifest', '/install.js', '/app-icon.svg', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png',
 ];
@@ -34,7 +34,7 @@ function cacheableRequest(request) {
 function cacheableResponse(response, url, version = VERSION) {
   if (!response || response.status !== 200 || !response.ok || response.redirected || ['opaque', 'opaqueredirect'].includes(response.type)) return false;
   const type = response.headers.get('content-type') || '';
-  const expected = url.pathname === '/' ? /^text\/html\b/i : url.pathname.endsWith('.js') ? /^(?:text|application)\/javascript\b/i : url.pathname.endsWith('.css') ? /^text\/css\b/i : url.pathname.endsWith('.png') ? /^image\/png\b/i : url.pathname.endsWith('.webmanifest') ? /^application\/(?:manifest\+json|json)\b/i : /^image\/svg\+xml\b/i;
+  const expected = url.pathname === '/' || url.pathname.endsWith('.html') ? /^text\/html\b/i : url.pathname.endsWith('.js') ? /^(?:text|application)\/javascript\b/i : url.pathname.endsWith('.css') ? /^text\/css\b/i : url.pathname.endsWith('.png') ? /^image\/png\b/i : url.pathname.endsWith('.webmanifest') ? /^application\/(?:manifest\+json|json)\b/i : /^image\/svg\+xml\b/i;
   if (!expected.test(type) || response.headers.get('x-oracle-shell-version') !== version || /private/i.test(response.headers.get('cache-control') || '') || response.headers.get('vary') === '*') return false;
   if (Number(response.headers.get('content-length') || 0) > MAX_ASSET_BYTES) return false;
   if (!response.url) return true;

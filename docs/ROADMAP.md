@@ -11,7 +11,7 @@ Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event s
 
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
-The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are delivered in v0.9 and field resilience in v0.10; a beta pilot and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–11 implementations are deployed; Batch 11 actual device/human acceptance remains open. Batch 12 remains planned. Automated results cannot close the human field acceptance dependency.
+The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are delivered in v0.9 and field resilience in v0.10; a beta pilot and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–11 implementations are deployed; Batch 11 actual device/human acceptance remains open. Batch 12 v1.0 production handoff is now implemented in the checked working tree; its exact-release CI, staging, rollback rehearsal, and production deployment gates remain to be run. Human/device acceptance remains the separate Batch 11 dependency. Automated results cannot close the human field acceptance dependency.
 
 **Product commitments**
 
@@ -183,6 +183,8 @@ Use 100 simultaneously connected players in one event as a provisional load-test
 Completion gate: No unresolved critical defects in access control, data integrity, or the core player journey. Core journeys work on the tested devices; the measured capacity and any limitations are documented; pilot findings have been resolved or explicitly scheduled.
 
 **Batch 12 — v1.0: Production release and handoff**
+
+Implementation status: Handoff documentation, public Help & guides, install-menu layout correction, live-event reset regression coverage, and a schema-compatible rollback rehearsal are implemented in the working tree. Exact-release CI and deployments are next.
 
 Finalize the organizer quick start, player guide, comprehensive GitHub README, theme/event-pack documentation, migration and backup instructions, troubleshooting, and release notes. Ship the three starter adventures and clean sample-data/reset workflows that cannot accidentally reset a live event.
 

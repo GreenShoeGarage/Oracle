@@ -249,6 +249,8 @@ export function createApp({
           "/field.css": ["field.css", "text/css"],
           "/guide-ui.js": ["guide-ui.js", "text/javascript"],
           "/guide.css": ["guide.css", "text/css"],
+          "/help.html": ["help.html", "text/html"],
+          "/help.css": ["help.css", "text/css"],
           "/install.js": ["install.js", "text/javascript"],
           "/manifest.webmanifest": ["manifest.webmanifest", "application/manifest+json"],
           "/icon-192.png": ["icon-192.png", "image/png"],
