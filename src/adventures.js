@@ -4,6 +4,7 @@ import { characterRecord, characterText, characterInteger, validateCharacterProf
 import { validateSetup } from "../public/kit.js";
 import { ADVENTURE_TEMPLATES, buildAdventureTemplate } from "./adventure-templates.js";
 import { readSharing, sharingPolicyFor, seedSharing, copySharing } from "./sharing.js";
+import { seedStory, copyStory, resetStory, filterStoryJournal } from "./story.js";
 
 const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const code = () => Array.from({ length: 20 }, () => alphabet[randomInt(alphabet.length)]).join("");
@@ -37,7 +38,8 @@ export function createAdventureHandler({ pool, config, helpers }) {
     if (!character) return { ...result, message: "Choose an approved character to explore this adventure. Ask an organizer if you need one assigned." };
     const run = await runFor(db, event.id, character.id);
     const attendance = (await db.query("SELECT a.node_id,count(*)::int AS count,bool_or(a.character_id=$2) AS joined FROM adventure_attendance a JOIN characters c ON c.event_id=a.event_id AND c.id=a.character_id JOIN users u ON u.id=c.user_id WHERE a.event_id=$1 AND c.status='approved' AND NOT u.is_disabled AND (u.is_superuser OR EXISTS(SELECT 1 FROM memberships m WHERE m.event_id=a.event_id AND m.user_id=c.user_id)) GROUP BY a.node_id", [event.id, character.id])).rows;
-    result.journal = (await db.query("SELECT * FROM adventure_journal WHERE event_id=$1 AND character_id=$2 ORDER BY created_at,id", [event.id, character.id])).rows.map(journalProjection);
+    const journalRows = (await db.query("SELECT * FROM adventure_journal WHERE event_id=$1 AND character_id=$2 ORDER BY created_at,id", [event.id, character.id])).rows;
+    result.journal = (await filterStoryJournal(db, event.id, user.id, journalRows)).map(journalProjection);
     if (!preview && character.status !== "approved") return { ...result, message: "This character cannot make new discoveries. Previously saved readings remain in the journal." };
     const sharing = await readSharing(db, event.id);
     result.nodes = record.definition.nodes.filter((node) => event.setup.enabledInstruments.includes(instrumentId(node.type)) && (preview || sharingPolicyFor(sharing, node.id) !== "organizer_only")).map((node) => {
@@ -63,12 +65,15 @@ export function createAdventureHandler({ pool, config, helpers }) {
   }
   const setFlags = (run, flags) => { for (const id of flags) run.flags[id] = true; };
   async function seedCharacters(db, event, profiles, factionRows = []) {
+    const ids = [];
     for (const input of profiles) {
       const profile = validateCharacterProfile(input.profile, event.setup, factionRows);
       const id = randomUUID();
+      ids.push(id);
       await db.query("INSERT INTO characters(id,event_id,user_id,status,profile,badge_code,inventory_initialized) VALUES($1,$2,NULL,'approved',$3,$4,true)", [id, event.id, JSON.stringify(profile), code()]);
       for (const item of profile.startingEquipment) await db.query("INSERT INTO character_inventory(id,event_id,character_id,name,quantity,notes) VALUES($1,$2,$3,$4,$5,$6)", [randomUUID(), event.id, id, item.name, item.quantity, item.notes]);
     }
+    return ids;
   }
   async function guardEventCreation(db, user) {
     if (!(await db.query("SELECT id FROM users WHERE id=$1 AND NOT is_disabled FOR UPDATE", [user.id])).rows[0]) fail(401, "Sign in to continue.");
@@ -112,6 +117,7 @@ export function createAdventureHandler({ pool, config, helpers }) {
         await db.query("INSERT INTO event_adventures(event_id,definition) VALUES($1,$2)", [created.id, JSON.stringify(definition)]);
         await seedSharing(db, created.id, definition);
         await seedCharacters(db, created, pack.characters);
+        await seedStory(db, created, user.id);
         await audit(db, created.id, user.id, "adventure.template_created", { templateId: template[1] });
         return created;
       });
@@ -156,7 +162,7 @@ export function createAdventureHandler({ pool, config, helpers }) {
         if (!record.version) fail(409, "Save an adventure before creating a rehearsal copy.");
         validateAdventure(record.definition, event.setup);
         await guardEventCreation(db, user);
-        const sourceProfiles = (await db.query("SELECT profile FROM characters WHERE event_id=$1 ORDER BY created_at,id LIMIT 101", [event.id])).rows;
+        const sourceProfiles = (await db.query("SELECT id,profile FROM characters WHERE event_id=$1 ORDER BY created_at,id LIMIT 101", [event.id])).rows;
         if (sourceProfiles.length > 100) fail(409, "A rehearsal copy supports at most 100 characters. Create a smaller rehearsal event for this adventure.");
         const copied = await newEvent(db, user, `${event.name.slice(0, 88)} rehearsal`, event.description, event.setup, "rehearsal");
         const definition = structuredClone(record.definition); for (const node of definition.nodes) node.code = code();
@@ -171,7 +177,9 @@ export function createAdventureHandler({ pool, config, helpers }) {
           profile.skills = profile.skills.filter((skill) => copied.setup.rules.expertise.some((rule) => rule.id === skill)); profile.factionId = mapped.get(profile.factionId) || null;
           return { profile };
         });
-        await seedCharacters(db, copied, profiles, newFactions);
+        const characterIds = await seedCharacters(db, copied, profiles, newFactions);
+        const characterMap = new Map(sourceProfiles.map((profile, index) => [profile.id, characterIds[index]]));
+        await copyStory(db, event, copied, { characterMap, factionMap: mapped }, user.id);
         const oldSettings = (await db.query("SELECT * FROM event_character_settings WHERE event_id=$1", [event.id])).rows[0];
         if (oldSettings) await db.query("INSERT INTO event_character_settings(event_id,allow_player_creation,require_approval,max_per_player,public_fields) VALUES($1,$2,$3,$4,$5)", [copied.id, oldSettings.allow_player_creation, oldSettings.require_approval, oldSettings.max_per_player, JSON.stringify(oldSettings.public_fields)]);
         await audit(db, copied.id, user.id, "adventure.rehearsal_created", { sourceEventId: event.id });
@@ -182,6 +190,7 @@ export function createAdventureHandler({ pool, config, helpers }) {
         if (!record.is_rehearsal || event.status !== "rehearsal" || input.confirm !== true) fail(409, "Only a dedicated rehearsal copy in rehearsal mode can be reset with confirmation.");
         // Remove exchange provenance before the readings it references. These
         // tables belong only to this rehearsal; the source event is untouched.
+        await resetStory(db, eventId);
         for (const table of ["exchange_requests", "exchange_contacts", "exchange_receipts", "exchange_copies", "exchange_sessions", "adventure_attendance", "adventure_journal", "adventure_requests", "adventure_runs"]) await db.query(`DELETE FROM ${table} WHERE event_id=$1`, [eventId]);
         record = (await db.query("UPDATE event_adventures SET version=version+1,updated_at=now() WHERE event_id=$1 RETURNING *", [eventId])).rows[0];
         await audit(db, event.id, user.id, "adventure.rehearsal_reset", { version: record.version });

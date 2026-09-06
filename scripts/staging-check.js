@@ -4,6 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { isDeepStrictEqual } from "node:util";
 import { VERSION, SCHEMA_VERSION } from "../src/config.js";
 import { defaultSetup, THEMES } from "../public/kit.js";
+import { defaultStoryDocument } from "../public/story-model.js";
 import { defaultCharacterProfile } from "../public/characters-model.js";
 
 // Account creation and event mutations are confined to this disposable environment.
@@ -432,6 +433,159 @@ if (publicOnly) {
     return completedId;
   }
 
+  async function storyJourney(owner, player, event, assigned) {
+    const base = `/api/events/${event.id}`;
+    const [a, b] = assigned;
+    const play = (p) => request(p.account, `${base}/story/play?characterId=${p.character.id}`);
+    const trace = (p) => request(p.account, `${base}/trace?characterId=${p.character.id}`);
+    const journal = (p) => request(p.account, `${base}/adventure/play?characterId=${p.character.id}`);
+    const manage = () => request(owner, `${base}/story/manage`);
+    const entryAction = async (entry, action, status = 200) => (await request(owner, `${base}/story/entries/${entry.id}/${action}`, { method: "POST", body: { requestId: randomUUID(), version: entry.version }, status })).entry;
+    const createEntry = async (kind, document) => (await request(owner, `${base}/story/entries`, { method: "POST", body: { requestId: randomUUID(), kind, document }, status: 201 })).entry;
+    const updateEntry = async (entry, document) => (await request(owner, `${base}/story/entries/${entry.id}`, { method: "PUT", body: { requestId: randomUUID(), version: entry.version, document } })).entry;
+    const createTrace = async (p, document) => (await request(p.account, `${base}/trace`, { method: "POST", body: { requestId: randomUUID(), characterId: p.character.id, document }, status: 201 })).record;
+    const updateTrace = async (p, record, document) => (await request(p.account, `${base}/trace/${record.id}`, { method: "PUT", body: { requestId: randomUUID(), characterId: p.character.id, version: record.version, document } })).record;
+    const progression = async () => (await request(owner, `${base}/adventure/manage`)).progress.map(({ journalEntries, ...state }) => state);
+    const beforeProgress = await progression();
+    const beforeInventory = await Promise.all(assigned.map((p) => request(p.account, `${base}/characters/${p.character.id}/inventory`)));
+    const hiddenTruth = `Hidden witness truth ${runId}`;
+    const hiddenTopic = `Private alternate topic ${runId}`;
+    const safe = (value) => {
+      const text = JSON.stringify(value);
+      for (const secret of [hiddenTruth, hiddenTopic, owner.email, player.email]) assert.ok(!text.includes(secret), "Player story and investigation projections must omit organizer truths, topics, and account identities.");
+    };
+    await request(player, `${base}/story/manage`, { status: 403 });
+    await request(player, `${base}/story/entries`, { method: "POST", body: { requestId: randomUUID(), kind: "rumor", document: defaultStoryDocument() }, status: 403 });
+    let group = (await request(owner, `${base}/story/groups`, { method: "POST", body: { requestId: randomUUID(), name: "Staging investigation party", characterIds: assigned.map((p) => p.character.id) }, status: 201 })).group;
+    const rumors = [];
+    const rumorReadings = [];
+    for (const [index, p] of assigned.entries()) {
+      const document = { ...defaultStoryDocument(), title: index ? "A witness at the southern gate" : "A witness at the northern gate", body: `Independent witness account ${index + 1} ${runId}`, sourceLabel: "A local witness", topic: hiddenTopic, truth: hiddenTruth, audience: { type: "private", ids: [p.character.id] }, conditions: { completed: ["evidence-core"], flags: [], skills: [], statuses: [] }, shareable: true };
+      let entry = await createEntry("rumor", document);
+      assert.ok(!(await play(p)).rumors.some((r) => r.id === entry.id), "Draft rumors must remain unavailable to players.");
+      entry = await entryAction(entry, "publish");
+      rumors.push(entry);
+    }
+    for (const [index, p] of assigned.entries()) {
+      const initial = await play(p);
+      safe(initial);
+      assert.ok(initial.rumors.some((r) => r.id === rumors[index].id), "Each character must receive their own eligible account after the required discovery.");
+      assert.ok(!JSON.stringify(initial).includes(rumors[1 - index].id), "An alternate private account must not leak its identifier or title.");
+      assert.ok(!JSON.stringify(initial).includes(rumors[index].document.body), "An eligible rumor must withhold its body until explicitly collected.");
+      const body = { requestId: randomUUID(), characterId: p.character.id, entryId: rumors[index].id, publicationVersion: rumors[index].publishedVersion };
+      const result = await request(p.account, `${base}/story/collect`, { method: "POST", body });
+      safe(result);
+      assert.ok(result.reading.text.startsWith("Unverified account") && result.reading.text.endsWith(rumors[index].document.body), "Explicit collection must return the intended witness account with its unverified label.");
+      rumorReadings.push(result.reading);
+      const replay = await request(p.account, `${base}/story/collect`, { method: "POST", body });
+      assert.equal(replay.outcome.replayed, true, "An identical collection retry must be idempotent.");
+      assert.equal((await journal(p)).journal.filter((r) => r.id === result.reading.id).length, 1, "A collection retry must not duplicate a rumor journal entry.");
+      await request(p.account, `${base}/story/collect`, { method: "POST", body: { ...body, requestId: randomUUID(), entryId: rumors[1 - index].id, publicationVersion: rumors[1 - index].publishedVersion }, status: 404 });
+    }
+    pass("WHISPER delivers different eligible accounts, withholds bodies until collection, preserves retries, and hides alternate tellings and organizer truth");
+
+    const privateDoc = { kind: "theory", title: "A private explanation", notes: `Private speculation ${runId}`, audience: { type: "private", ids: [] }, sources: [rumorReadings[0].id], links: [] };
+    const privateA = await createTrace(a, privateDoc);
+    const privateB = await createTrace(b, { ...privateDoc, title: "The other player's private explanation", sources: [rumorReadings[1].id] });
+    assert.ok(!(await trace(a)).records.some((r) => r.id === privateB.id), "An event owner must not bypass another player's private investigation.");
+    await request(owner, `${base}/trace?characterId=${b.character.id}`, { status: 404 });
+    assert.ok(!(await trace(b)).records.some((r) => r.id === privateA.id), "Private theories must remain hidden until intentionally shared.");
+    const sharedDoc = { kind: "evidence", title: "The gate witness connection", notes: "These accounts may describe the same lantern. This is a player observation.", audience: { type: "public", ids: [] }, sources: [rumorReadings[0].id], links: [{ recordId: privateA.id, label: "My private working theory" }] };
+    let shared = await createTrace(a, sharedDoc);
+    let receivedTrace = (await trace(b)).records.find((r) => r.id === shared.id);
+    assert.ok(receivedTrace, "A deliberately public observation must reach other approved characters in this event.");
+    assert.equal(receivedTrace.notes, sharedDoc.notes, "Shared authored notes must retain their exact meaning.");
+    assert.deepEqual(receivedTrace.sources, [], "Sharing a TRACE note must not reveal an undiscovered private citation.");
+    assert.deepEqual(receivedTrace.links, [], "A link to an inaccessible theory must not leak its identifier or title.");
+    safe(receivedTrace);
+    await request(player, `${base}/trace/${shared.id}`, { method: "PUT", body: { requestId: randomUUID(), characterId: b.character.id, version: shared.version, document: sharedDoc }, status: 404 });
+    const pair = async () => {
+      const created = (await request(owner, `${base}/exchanges`, { method: "POST", body: { requestId: randomUUID(), characterId: a.character.id }, status: 201 })).exchange;
+      return (await request(player, `${base}/exchanges/join`, { method: "POST", body: { requestId: randomUUID(), characterId: b.character.id, code: created.code } })).exchange;
+    };
+    const exchangeAction = async (p, exchange, action, extra = {}) => (await request(p.account, `${base}/exchanges/${exchange.id}/${action}`, { method: action === "offer" ? "PUT" : "POST", body: { requestId: randomUUID(), characterId: p.character.id, version: exchange.version, ...extra } })).exchange;
+    let exchange = await pair();
+    exchange = await exchangeAction(a, exchange, "offer", { readingIds: [rumorReadings[0].id] });
+    assert.ok(!JSON.stringify((await request(player, `${base}/exchanges/${exchange.id}?characterId=${b.character.id}`)).exchange).includes(rumorReadings[0].text), "A pending rumor exchange must hide the peer's account body.");
+    await exchangeAction(a, exchange, "confirm");
+    exchange = await exchangeAction(b, exchange, "confirm");
+    assert.equal(exchange.status, "completed", "Both confirmations must complete the selected rumor exchange.");
+    assert.ok(exchange.receipt.received.some((r) => r.text === rumorReadings[0].text), "The intended rumor must appear in the completed receipt.");
+    receivedTrace = (await trace(b)).records.find((r) => r.id === shared.id);
+    assert.ok(receivedTrace.sources.some((s) => s.title === rumorReadings[0].title), "Once the original reading is received through QR exchange, TRACE may expose its citation metadata.");
+    assert.deepEqual(receivedTrace.links, [], "Receiving a source must not grant access to a linked private theory.");
+    const groupDoc = { ...sharedDoc, audience: { type: "group", ids: [group.id] } };
+    shared = await updateTrace(a, shared, groupDoc);
+    assert.ok((await trace(b)).records.some((r) => r.id === shared.id), "An explicit group member must receive the shared record.");
+    group = (await request(owner, `${base}/story/groups/${group.id}`, { method: "PUT", body: { requestId: randomUUID(), version: group.version, name: group.name, characterIds: [a.character.id] } })).group;
+    assert.ok(!(await trace(b)).records.some((r) => r.id === shared.id), "Removing a character from a group must immediately remove current shared investigation access.");
+    shared = await updateTrace(a, shared, { ...sharedDoc, audience: { type: "private", ids: [b.character.id] } });
+    assert.ok((await trace(b)).records.some((r) => r.id === shared.id), "A private record explicitly shared to another character must be visible to that character.");
+    pass("TRACE preserves private theories, intentional audiences, canonical evidence citations, hidden links, and immediate group revocation");
+
+    const { faction } = await request(owner, `${base}/factions`, { method: "POST", body: { name: "Staging witness faction", description: "A fictional audience used only for release verification." }, status: 201 });
+    const setFaction = async (id) => {
+      let character = (await request(owner, `${base}/characters/${b.character.id}`)).character;
+      character = (await request(owner, `${base}/characters/${character.id}`, { method: "PATCH", body: { version: character.version, profile: { ...character.profile, factionId: id } } })).character;
+      character = (await request(player, `${base}/characters/${character.id}/submit`, { method: "POST", body: { version: character.version } })).character;
+      if (character.status === "pending") character = (await request(owner, `${base}/characters/${character.id}/review`, { method: "POST", body: { version: character.version, decision: "approve", feedback: "Audience verification character revision." } })).character;
+      assert.equal(character.status, "approved", "Faction changes must pass the configured character approval process.");
+      b.character = character;
+    };
+    await setFaction(faction.id);
+    shared = await updateTrace(a, shared, { ...sharedDoc, audience: { type: "faction", ids: [faction.id] } });
+    assert.ok((await trace(b)).records.some((r) => r.id === shared.id), "A current faction member must receive a record shared to that faction.");
+    let factionNews = await createEntry("bulletin", { ...defaultStoryDocument(), title: "Faction witness briefing", body: "Members of the witness faction should assemble at the gate.", audience: { type: "faction", ids: [faction.id] } });
+    factionNews = await entryAction(factionNews, "publish");
+    assert.ok((await play(b)).bulletins.some((r) => r.id === factionNews.id), "A faction publication must reach a current approved faction member.");
+    assert.ok(!(await play(a)).bulletins.some((r) => r.id === factionNews.id), "Player mode must enforce faction audience even for an event owner.");
+    await setFaction(null);
+    assert.ok(!(await trace(b)).records.some((r) => r.id === shared.id), "Leaving a faction must remove current faction investigation access.");
+    assert.ok(!(await play(b)).bulletins.some((r) => r.id === factionNews.id), "Leaving a faction must remove current faction bulletin access.");
+    shared = await updateTrace(a, shared, { ...sharedDoc, audience: { type: "private", ids: [b.character.id] } });
+    pass("Faction publications and investigations follow current approved affiliations without manager bypass in player mode");
+
+    const proposalTitle = "Witnesses propose an evening meeting";
+    const proposalBody = `Player-proposed announcement ${runId}`;
+    const proposal = (await request(player, `${base}/story/proposals`, { method: "POST", body: { requestId: randomUUID(), characterId: b.character.id, title: proposalTitle, body: proposalBody, sourceJournalId: rumorReadings[1].id, audience: { type: "private", ids: [a.character.id] } }, status: 201 })).entry;
+    assert.equal(proposal.status, "submitted", "Player announcements must await publication review.");
+    assert.ok(!(await play(a)).bulletins.some((r) => r.id === proposal.id), "Submitted announcements must not publish themselves.");
+    let bulletin = (await manage()).entries.find((r) => r.id === proposal.id);
+    assert.ok(bulletin, "Organizers must receive submitted announcements for review.");
+    assert.equal(bulletin.document.truth, "", "A player proposal must not infer hidden game truth from its source.");
+    bulletin = await entryAction(bulletin, "publish");
+    let publication = (await play(a)).bulletins.find((r) => r.id === bulletin.id);
+    assert.equal(publication.body, proposalBody, "Review and Publish must expose the selected approved bulletin.");
+    assert.ok(!(await play(b)).bulletins.some((r) => r.id === bulletin.id), "Publication must enforce the selected private audience even for its proposer.");
+    const correctedBody = `Corrected meeting place ${runId}`;
+    bulletin = await updateEntry(bulletin, { ...bulletin.document, body: correctedBody, correctionNote: "The meeting place was corrected after reviewing the two witness accounts." });
+    assert.equal((await play(a)).bulletins.find((r) => r.id === bulletin.id).body, proposalBody, "Saving a correction draft must leave the previous approved publication live.");
+    bulletin = await entryAction(bulletin, "publish");
+    publication = (await play(a)).bulletins.find((r) => r.id === bulletin.id);
+    assert.equal(publication.body, correctedBody, "Publishing a reviewed correction must replace the live bulletin.");
+    assert.ok(publication.correctionNote, "Readers must see why a publication was corrected.");
+    safe(publication);
+    bulletin = await entryAction(bulletin, "withdraw");
+    assert.ok(!(await play(a)).bulletins.some((r) => r.id === bulletin.id), "Withdrawal must hide the current bulletin from its former audience.");
+    let pending = await pair();
+    pending = await exchangeAction(a, pending, "offer", { readingIds: [rumorReadings[0].id] });
+    await exchangeAction(a, pending, "confirm");
+    rumors[0] = await entryAction(rumors[0], "withdraw");
+    pending = (await request(owner, `${base}/exchanges/${pending.id}?characterId=${a.character.id}`)).exchange;
+    assert.equal(pending.own.confirmed, false, "Withdrawing a rumor must clear outstanding exchange confirmation.");
+    assert.equal(pending.partner.confirmed, false, "Withdrawing a rumor must clear both exchange confirmations.");
+    assert.ok(pending.blockedReason, "A withdrawn rumor must block a new exchange transfer.");
+    await exchangeAction(a, pending, "cancel");
+    assert.ok((await journal(a)).journal.some((r) => r.id === rumorReadings[0].id), "Withdrawal must preserve already authorized rumor journal history.");
+    assert.ok((await journal(b)).journal.some((r) => r.type === "shared_reading" && r.text === rumorReadings[0].text), "Withdrawal must preserve a previously completed received reading.");
+    for (const p of assigned) { safe(await play(p)); safe(await trace(p)); safe(await journal(p)); }
+    assert.ok(isDeepStrictEqual(await progression(), beforeProgress), "Rumors, investigations and publications must not grant adventure completion, flags, or attendance.");
+    assert.ok(isDeepStrictEqual(await Promise.all(assigned.map((p) => request(p.account, `${base}/characters/${p.character.id}/inventory`))), beforeInventory), "Story work must not alter either character's inventory.");
+    assert.ok((await manage()).activity.some((r) => r.entryId === bulletin.id), "Publication and correction work must leave organizer activity metadata.");
+    pass("BROADSIDE requires review, preserves live text while corrections are drafted, publishes to the intended audience, withdraws cleanly, and preserves game state");
+    return { rumors, group, sourceTraceId: shared.id, ownerPrivateTraceId: privateA.id };
+  }
+
   async function adventureJourney(owner, player) {
     const catalog = await request(owner, "/api/adventure-templates");
     assert.deepEqual(catalog.templates.map((template) => template.id).sort(), ["cyberpunk", "fantasy", "wasteland"], "All three complete starter adventures must be available.");
@@ -555,6 +709,7 @@ if (publicOnly) {
       await act(firstRequest.account, firstRequest.character, relic, "examine", { examId: exam.id, code: relic.code }, { requestId: firstRequest.requestId, status: 409 });
       event = await patchEvent(owner, event, { status: "live" });
       const completedExchange = theme === "fantasy" ? await exchangeJourney(owner, player, event, assigned, definition, version) : null;
+      const completedStory = theme === "fantasy" ? await storyJourney(owner, player, event, assigned) : null;
       const original = await request(owner, playPath(assigned[0].character));
       const originalInventory = (await request(owner, `/api/events/${event.id}/characters/${assigned[0].character.id}/inventory`)).inventory;
       const { event: rehearsal } = await request(owner, `${base}/rehearsal`, { method: "POST", body: {}, status: 201 });
@@ -572,12 +727,41 @@ if (publicOnly) {
       const { character: rehearsalCharacter } = await request(owner, `/api/events/${rehearsal.id}/characters/${rehearsalCharacters[0].id}/assign`, {
         method: "POST", body: { version: rehearsalCharacters[0].version, userId: owner.id },
       });
+      let rehearsalStory;
+      if (completedStory) {
+        const storyBase = `/api/events/${rehearsal.id}/story`;
+        const copied = await request(owner, `${storyBase}/manage`);
+        assert.ok(copied.entries.every((entry) => !completedStory.rumors.some((original) => original.id === entry.id)), "Rehearsal story entries must receive new identifiers.");
+        const oldCharacterIds = assigned.map((p) => p.character.id);
+        const copiedCharacterIds = rehearsalCharacters.map((c) => c.id);
+        for (const entry of copied.entries) {
+          if (entry.document.audience.type === "private")
+            assert.ok(entry.document.audience.ids.every((id) => copiedCharacterIds.includes(id) && !oldCharacterIds.includes(id)), "Rehearsal private audiences must remap to its own character identities.");
+          if (entry.document.audience.type === "faction")
+            assert.ok(entry.document.audience.ids.every((id) => copied.factions.some((f) => f.id === id)), "Rehearsal faction audiences must remap to copied factions.");
+        }
+        assert.ok(copied.groups.every((group) => group.characterIds.every((id) => copiedCharacterIds.includes(id))), "Rehearsal groups must contain only remapped character identities.");
+        assert.equal((await request(owner, `/api/events/${rehearsal.id}/trace?characterId=${rehearsalCharacter.id}`)).records.length, 0, "Rehearsal copies must not copy private or shared player investigations.");
+        assert.equal((await request(owner, `${storyBase}/play?characterId=${rehearsalCharacter.id}`)).readings.length, 0, "Rehearsal copies must not inherit collected rumor snapshots.");
+        let entry = (await request(owner, `${storyBase}/entries`, { method: "POST", body: { requestId: randomUUID(), kind: "rumor", document: { ...defaultStoryDocument(), title: "Rehearsal gated witness", body: "A collected witness account used only in the disposable rehearsal.", conditions: { completed: [relic.id], flags: [], skills: [], statuses: [] } } }, status: 201 })).entry;
+        entry = (await request(owner, `${storyBase}/entries/${entry.id}/publish`, { method: "POST", body: { requestId: randomUUID(), version: entry.version } })).entry;
+        assert.ok(!(await request(owner, `${storyBase}/play?characterId=${rehearsalCharacter.id}`)).rumors.some((r) => r.id === entry.id), "A published rumor must remain hidden until its discovery condition is met.");
+        rehearsalStory = { entry, groupIds: copied.groups.map((g) => g.id) };
+      }
       const rehearsalRelic = rehearsalManage.definition.nodes.find((node) => node.id === relic.id);
       await request(owner, `${rehearsalBase}/action`, {
         method: "POST", body: { requestId: randomUUID(), version: rehearsalManage.version, characterId: rehearsalCharacter.id, nodeId: rehearsalRelic.id, kind: "examine", examId: exam.id, code: rehearsalRelic.code },
       });
       const rehearsalPlayPath = `${rehearsalBase}/play?characterId=${rehearsalCharacter.id}`;
       assert.ok((await request(owner, rehearsalPlayPath)).journal.length > 0, "The rehearsal reset check must clear actual persisted play.");
+      if (rehearsalStory) {
+        const storyBase = `/api/events/${rehearsal.id}/story`;
+        const available = await request(owner, `${storyBase}/play?characterId=${rehearsalCharacter.id}`);
+        assert.ok(available.rumors.some((r) => r.id === rehearsalStory.entry.id), "An actual prop discovery must unlock its related published rumor.");
+        const { reading } = await request(owner, `${storyBase}/collect`, { method: "POST", body: { requestId: randomUUID(), characterId: rehearsalCharacter.id, entryId: rehearsalStory.entry.id, publicationVersion: rehearsalStory.entry.publishedVersion } });
+        await request(owner, `/api/events/${rehearsal.id}/trace`, { method: "POST", body: { requestId: randomUUID(), characterId: rehearsalCharacter.id, document: { kind: "theory", title: "Rehearsal private theory", notes: "Disposable investigation state to verify a real reset.", audience: { type: "private", ids: [] }, sources: [reading.id], links: [] } }, status: 201 });
+        assert.equal((await request(owner, `/api/events/${rehearsal.id}/trace?characterId=${rehearsalCharacter.id}`)).records.length, 1, "Rehearsal reset must exercise an actually saved investigation record.");
+      }
       let rehearsalExchange;
       if (completedExchange) {
         const exchangeBase = `/api/events/${rehearsal.id}/exchanges`;
@@ -606,11 +790,27 @@ if (publicOnly) {
         assert.equal(afterReset.contacts.length, 0, "Rehearsal reset must remove contacts created during rehearsal.");
         await request(owner, `/api/events/${rehearsal.id}/exchanges/${rehearsalExchange.id}?characterId=${rehearsalCharacter.id}`, { status: 404 });
       }
+      if (rehearsalStory) {
+        const storyBase = `/api/events/${rehearsal.id}/story`;
+        const afterReset = await request(owner, `${storyBase}/play?characterId=${rehearsalCharacter.id}`);
+        assert.equal(afterReset.readings.length, 0, "Rehearsal reset must remove collected rumors and their replay state.");
+        assert.ok(!afterReset.rumors.some((r) => r.id === rehearsalStory.entry.id), "Reset discovery conditions must again hide the gated rumor.");
+        assert.equal((await request(owner, `/api/events/${rehearsal.id}/trace?characterId=${rehearsalCharacter.id}`)).records.length, 0, "Rehearsal reset must remove player investigation state.");
+        const authored = await request(owner, `${storyBase}/manage`);
+        assert.ok(authored.entries.some((r) => r.id === rehearsalStory.entry.id && r.hasPublication), "Reset must retain authored rumor definitions and explicit publications.");
+        assert.deepEqual(authored.groups.map((g) => g.id).sort(), rehearsalStory.groupIds.sort(), "Reset must retain authored audience groups.");
+        assert.ok((await request(owner, `/api/events/${event.id}/trace?characterId=${assigned[0].character.id}`)).records.some((r) => r.id === completedStory.ownerPrivateTraceId), "Reset must preserve the original player's private investigation.");
+        pass("Story rehearsal copies remap audiences, exclude original player work, unlock rumors through real discoveries, and reset only disposable play state");
+      }
       assert.ok(isDeepStrictEqual((await request(owner, playPath(assigned[0].character))).journal, original.journal), "Resetting a rehearsal must preserve the original event's journal.");
       assert.ok(isDeepStrictEqual((await request(owner, `/api/events/${event.id}/characters/${assigned[0].character.id}/inventory`)).inventory, originalInventory), "Resetting a rehearsal must preserve original character inventory.");
       await request(owner, `/api/events/${event.id}/members/${player.id}`, { method: "DELETE" });
       await request(player, playPath(assigned[1].character), { status: 404 });
       await act(player, assigned[1].character, scene, "join", {}, { status: 404 });
+      if (completedStory) {
+        await request(player, `/api/events/${event.id}/story/play?characterId=${assigned[1].character.id}`, { status: 404 });
+        await request(player, `/api/events/${event.id}/trace?characterId=${assigned[1].character.id}`, { status: 404 });
+      }
       if (completedExchange) {
         await request(player, `/api/events/${event.id}/exchanges/${completedExchange}?characterId=${assigned[1].character.id}`, { status: 404 });
         const retained = (await request(owner, `/api/events/${event.id}/exchanges/${completedExchange}?characterId=${assigned[0].character.id}`)).exchange;

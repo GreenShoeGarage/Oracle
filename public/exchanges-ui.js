@@ -3,7 +3,7 @@ import { parseExchangeInput } from './exchange-code.js';
 
 const activeStatuses = new Set(['waiting', 'negotiating', 'unavailable']);
 const statusNames = { waiting: 'Waiting for a player', negotiating: 'Reviewing offers', completed: 'Completed', cancelled: 'Cancelled', rejected: 'Declined', expired: 'Expired', unavailable: 'Unavailable' };
-const typeNames = { relic: 'Relic reading', dead_drop: 'Message', cipherbox: 'Cipher reading', wayfinder: 'Scene reading', shared_reading: 'Shared reading', exchange_receipt: 'Exchange receipt' };
+const typeNames = { whisper: 'Rumor account', relic: 'Relic reading', dead_drop: 'Message', cipherbox: 'Cipher reading', wayfinder: 'Scene reading', shared_reading: 'Shared reading', exchange_receipt: 'Exchange receipt' };
 const sameIds = (a, b) => a.length === b.length && [...a].sort().every((id, index) => id === [...b].sort()[index]);
 
 export function createExchangeUI(ctx) {

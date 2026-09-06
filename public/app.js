@@ -7,6 +7,8 @@ import { createAdventureOrganizer } from "./adventure-organizer.js";
 import * as offline from "./offline.js";
 import { createExchangeUI } from "./exchanges-ui.js";
 import { createSharingUI } from "./sharing-ui.js";
+import { createStoryUI } from "./story-ui.js";
+import { createTraceUI } from "./trace-ui.js";
 const app = document.querySelector("#app");
 const modal = document.querySelector("#modal");
 const modalContent = document.querySelector("#modal-content");
@@ -48,11 +50,15 @@ const adventure = createAdventurePlayer({ state, api, shell, esc, openModal, clo
 const adventureOrganizer = createAdventureOrganizer({ state, api, shell, esc, openModal, closeModal, loadEvent, loadEvents, toast, isManager, err, render, openPlayer: async (options) => { if (adventureOrganizer.confirmDiscard()) await adventure.open(options); } });
 const exchanges = createExchangeUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, offline, openJournal: (characterId) => adventure.open({ characterId }) });
 const sharing = createSharingUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render });
+const story = createStoryUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openJournal: (characterId) => adventure.open({ characterId }), openExchanges: (characterId) => exchanges.open({ characterId }) });
+const trace = createTraceUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openJournal: (characterId) => adventure.open({ characterId }), openExchanges: (characterId) => exchanges.open({ characterId }) });
 function resetPrivateViews() {
   adventure.reset();
   adventureOrganizer.reset();
   exchanges.reset();
   sharing.reset();
+  story.reset();
+  trace.reset();
 }
 function toast(message) {
   const el = document.querySelector("#notice");
@@ -131,12 +137,14 @@ function openModal(heading, content) {
   if (!modal.open) modal.showModal();
 }
 function closeModal(force = false) {
-  if (!force && (!kit.confirmDiscard() || !characters.confirmDiscard() || !adventureOrganizer.confirmDiscard("modal") || !exchanges.confirmDiscard("modal"))) return;
+  if (!force && (!kit.confirmDiscard() || !characters.confirmDiscard() || !adventureOrganizer.confirmDiscard("modal") || !exchanges.confirmDiscard("modal") || !story.confirmDiscard("modal") || !trace.confirmDiscard("modal"))) return;
   adventure.cleanupModal();
   adventureOrganizer.cleanupModal();
   characters.cleanupModal();
   exchanges.cleanupModal();
   sharing.cleanupModal?.();
+  story.cleanupModal?.();
+  trace.cleanupModal?.();
   if (force) kit.resetDraft();
   modal.classList.remove("wide-modal");
   modal.close();
@@ -154,7 +162,7 @@ function setError(form, error) {
 function auth() {
   kit.apply();
   const signup = state.authMode === "register";
-  app.innerHTML = `<div class="auth-wrap"><section class="auth-intro"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><h1>Bring your people<br>into the story.</h1><p>Prepare an event, assemble your crew, and give your next world a place to begin.</p><p class="auth-footer">Green Shoe Garage · v${esc(state.session?.version || "0.5.0")}</p></section><main id="main" class="auth-form"><p class="eyebrow">Your field kit</p><h2>${signup ? "Create your account" : "Welcome back"}</h2><p>${signup ? "One account. A place in every world you join." : "Sign in to open your events."}</p><form id="auth-form">${err}${signup ? '<div><label for="displayName">Display name</label><input id="displayName" name="displayName" minlength="2" maxlength="80" required autocomplete="nickname"><p class="hint">Shown to the people in your events.</p></div>' : ""}<div><label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"></div><div><label for="password">Password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" required autocomplete="${signup ? "new-password" : "current-password"}">${signup ? '<p class="hint">At least 12 characters. A passphrase works well.</p>' : ""}</div>${signup ? '<details><summary>Have an operator setup code?</summary><label for="setupCode">Operator setup code</label><input id="setupCode" name="setupCode" type="password" maxlength="512" autocomplete="off"><p class="hint">Only needed for an account reserved by the project operator.</p></details>' : ""}<button class="primary" type="submit">${signup ? "Create account" : "Sign in"}</button></form>${state.session?.registrationEnabled ? `<button class="switch" data-action="auth-switch">${signup ? "Already have an account? Sign in" : "New to ORACLE? Create an account"}</button>` : ""}<p class="auth-footer">${state.session?.environment === "staging" ? "Staging environment — use test accounts and events." : "Your email is kept private. Events are visible to their members."}</p></main></div>`;
+  app.innerHTML = `<div class="auth-wrap"><section class="auth-intro"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><h1>Bring your people<br>into the story.</h1><p>Prepare an event, assemble your crew, and give your next world a place to begin.</p><p class="auth-footer">Green Shoe Garage · v${esc(state.session?.version || "0.6.0")}</p></section><main id="main" class="auth-form"><p class="eyebrow">Your field kit</p><h2>${signup ? "Create your account" : "Welcome back"}</h2><p>${signup ? "One account. A place in every world you join." : "Sign in to open your events."}</p><form id="auth-form">${err}${signup ? '<div><label for="displayName">Display name</label><input id="displayName" name="displayName" minlength="2" maxlength="80" required autocomplete="nickname"><p class="hint">Shown to the people in your events.</p></div>' : ""}<div><label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"></div><div><label for="password">Password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" required autocomplete="${signup ? "new-password" : "current-password"}">${signup ? '<p class="hint">At least 12 characters. A passphrase works well.</p>' : ""}</div>${signup ? '<details><summary>Have an operator setup code?</summary><label for="setupCode">Operator setup code</label><input id="setupCode" name="setupCode" type="password" maxlength="512" autocomplete="off"><p class="hint">Only needed for an account reserved by the project operator.</p></details>' : ""}<button class="primary" type="submit">${signup ? "Create account" : "Sign in"}</button></form>${state.session?.registrationEnabled ? `<button class="switch" data-action="auth-switch">${signup ? "Already have an account? Sign in" : "New to ORACLE? Create an account"}</button>` : ""}<p class="auth-footer">${state.session?.environment === "staging" ? "Staging environment — use test accounts and events." : "Your email is kept private. Events are visible to their members."}</p></main></div>`;
 }
 function shell(content) {
   app.innerHTML = `${!navigator.onLine ? '<div class="offline-banner">You are offline. Changes need a connection in this release.</div>' : ""}<div class="layout"><aside class="sidebar"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><nav aria-label="Main navigation"><button class="nav-button ${!["account", "admin"].includes(state.view) ? "active" : ""}" data-action="events">${state.session.user.isSuperuser ? "All events" : "My events"}</button><button class="nav-button ${state.view === "account" ? "active" : ""}" data-action="account">Account</button><button class="nav-button" data-action="offline-open">Saved readings</button>${state.session.user.isSuperuser ? `<button class="nav-button ${state.view === "admin" ? "active" : ""}" data-action="admin-open">Administration</button>` : ""}</nav><div class="sidebar-footer"><div><p class="account-name">${esc(state.session.user.displayName)}</p>${state.session.user.isSuperuser ? '<p class="hint">Project superuser</p>' : ""}<p class="version">ORACLE / v${esc(state.session.version)}</p></div><button class="quiet" data-action="logout">Sign out</button></div></aside><main class="workspace" id="main"><div class="topbar"><button class="quiet menu-toggle" data-action="kit-collapse" aria-label="Toggle navigation" aria-expanded="true">☰ Menu</button><span class="eyebrow">Green Shoe Garage / Field instruments</span>${kit.controls()}${state.session.environment !== "production" ? `<span class="environment">${esc(state.session.environment)}</span>` : ""}</div>${content}</main></div>`;
@@ -170,6 +178,8 @@ function render() {
   if (state.view === "adventure-manage" && state.event) return adventureOrganizer.render();
   if (state.view === "exchanges" && state.event) return exchanges.render();
   if (state.view === "sharing" && state.event) return sharing.render();
+  if (state.view === "story" && state.event) return story.render();
+  if (state.view === "trace" && state.event) return trace.render();
   if (state.view === "detail" && state.event) return detail();
   events();
 }
@@ -185,7 +195,7 @@ function detail() {
   if (isManager() && kit.isOrganizerView()) { organizerDetail(); kit.enhanceOrganizer(); }
   else kit.renderPlayer();
   if (document.documentElement.dataset.prop !== "true") {
-    document.querySelector(".workspace .page-head, .workspace .world-header")?.insertAdjacentHTML("afterend", `<section class="panel character-entry"><div class="panel-head"><div><h2>Your field kit</h2><p class="hint">Choose a character, follow discoveries, and find your next scene.</p></div><div class="actions"><button data-action="character-open">Characters</button><button class="primary" data-action="adv-open">Open adventure</button><button data-action="exchange-open">Exchanges</button>${isManager() ? '<button data-action="advedit-open">Prepare adventure</button><button data-action="sharing-open">Sharing rules</button>' : ''}</div></div></section>`);
+    document.querySelector(".workspace .page-head, .workspace .world-header")?.insertAdjacentHTML("afterend", `<section class="panel character-entry"><div class="panel-head"><div><h2>Your field kit</h2><p class="hint">Choose a character, follow discoveries, and find your next scene.</p></div><div class="actions"><button data-action="character-open">Characters</button><button class="primary" data-action="adv-open">Open adventure</button><button data-action="exchange-open">Exchanges</button>${state.event.setup.enabledInstruments.includes("trace") ? '<button data-action="trace-open">TRACE · Investigation</button>' : ""}${state.event.setup.enabledInstruments.some(id => ["whisper", "broadside"].includes(id)) ? '<button data-action="story-open">Rumors & news</button>' : ""}${isManager() || state.event.role === "staff" ? '<button data-action="story-manage">Prepare rumors & news</button>' : ""}${isManager() ? '<button data-action="advedit-open">Prepare adventure</button><button data-action="sharing-open">Sharing rules</button>' : ''}</div></div></section>`);
   }
 }
 function organizerDetail() {
@@ -249,14 +259,18 @@ function confirmModal(heading, message, action, attributes, label) {
 }
 async function action(button) {
   const destination = button.dataset.action;
-  if (["events", "account", "logout", "open-event", "create", "kit-import", "character-open", "adv-open", "advedit-open", "advedit-starter", "offline-open", "admin-open", "exchange-open", "sharing-open"].includes(destination)) {
+  if (["events", "account", "logout", "open-event", "create", "kit-import", "character-open", "adv-open", "advedit-open", "advedit-starter", "offline-open", "admin-open", "exchange-open", "sharing-open", "story-open", "story-manage", "trace-open"].includes(destination)) {
     if (state.view === "adventure" && !adventure.confirmDiscard()) return;
     if (state.view === "adventure-manage" && !adventureOrganizer.confirmDiscard()) return;
     if (state.view === "exchanges" && !exchanges.confirmDiscard()) return;
     if (state.view === "sharing" && !sharing.confirmDiscard()) return;
+    if (state.view === "story" && !story.confirmDiscard()) return;
+    if (state.view === "trace" && !trace.confirmDiscard()) return;
   }
   if (await exchanges.action(button)) return;
   if (await sharing.action(button)) return;
+  if (await story.action(button)) return;
+  if (await trace.action(button)) return;
   if (await adventure.action(button)) return;
   if (await adventureOrganizer.action(button)) return;
   if (await characters.action(button)) return;
@@ -464,6 +478,8 @@ document.addEventListener("submit", async (e) => {
   try {
     if (await exchanges.submit(form)) return;
     if (await sharing.submit(form)) return;
+    if (await story.submit(form)) return;
+    if (await trace.submit(form)) return;
     if (await adventure.submit(form)) return;
     if (await adventureOrganizer.submit(form)) return;
     if (await characters.submit(form)) return;
@@ -541,7 +557,7 @@ document.addEventListener("submit", async (e) => {
 });
 window.addEventListener("hashchange", async () => {
   try {
-    if (["#prop/", "#exchange/", "#badge/"].some((prefix) => location.hash.startsWith(prefix)) && (!kit.confirmDiscard() || !characters.confirmDiscard() || !adventure.confirmDiscard() || !adventureOrganizer.confirmDiscard() || !sharing.confirmDiscard() || !exchanges.confirmDiscard())) {
+    if (["#prop/", "#exchange/", "#badge/"].some((prefix) => location.hash.startsWith(prefix)) && (!kit.confirmDiscard() || !characters.confirmDiscard() || !adventure.confirmDiscard() || !adventureOrganizer.confirmDiscard() || !sharing.confirmDiscard() || !exchanges.confirmDiscard() || !story.confirmDiscard() || !trace.confirmDiscard())) {
       history.replaceState(null, "", `${location.pathname}${location.search}`);
       return;
     }

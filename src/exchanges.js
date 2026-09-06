@@ -2,6 +2,7 @@ import { randomUUID, randomInt, createHash } from "node:crypto";
 import { validateExchangeRequest, EXCHANGE_CODE_ALPHABET } from "../public/exchange-model.js";
 import { defaultCharacterSettings, projectCharacter } from "../public/characters-model.js";
 import { readSharing, sharingPolicyFor } from "./sharing.js";
+import { canShareWhisper, filterStoryJournal } from "./story.js";
 import { limit } from "./security.js";
 
 const pending = (row) => ["waiting", "negotiating"].includes(row.status);
@@ -51,13 +52,15 @@ export function createExchangeHandler({ pool, config, helpers }) {
   }
   async function offerRows(db, event, characterId, ids, context, strict = true) {
     const resolved = [];
+    const characterOwner = characterId ? (await db.query("SELECT user_id FROM characters WHERE event_id=$1 AND id=$2", [event.id, characterId])).rows[0]?.user_id : null;
     for (const id of ids) {
       const row = (await db.query("SELECT j.*,COALESCE(p.origin_journal_id,j.id) AS origin_id FROM adventure_journal j LEFT JOIN exchange_copies p ON p.journal_id=j.id AND p.event_id=j.event_id WHERE j.event_id=$1 AND j.character_id=$2 AND j.id=$3", [event.id, characterId, id])).rows[0];
-      if (!row) { if (strict) fail(404, "An offered reading was not found in this character's journal."); resolved.push({ id, title: "Unavailable reading", type: "unavailable", valid: false }); continue; }
+      if (!row || !(await filterStoryJournal(db, event.id, characterOwner, [row])).length) { if (strict) fail(404, "An offered reading was not found in this character's journal."); resolved.push({ id, title: "Unavailable reading", type: "unavailable", valid: false }); continue; }
       const original = row.origin_id === row.id ? row : (await db.query("SELECT * FROM adventure_journal WHERE event_id=$1 AND id=$2", [event.id, row.origin_id])).rows[0];
       const node = original && context.definition.nodes.find((entry) => entry.id === original.node_id);
-      const policy = sharingPolicyFor(context.sharing, original?.node_id || row.node_id);
-      const valid = !!original && row.type !== "exchange_receipt" && original.type !== "exchange_receipt" && !!enabledNode(event, node) && policy === "shareable";
+      const whisper = original?.type === "whisper";
+      const policy = whisper ? await canShareWhisper(db, event, original.node_id) ? "shareable" : "restricted" : sharingPolicyFor(context.sharing, original?.node_id || row.node_id);
+      const valid = !!original && row.type !== "exchange_receipt" && original.type !== "exchange_receipt" && (whisper || !!enabledNode(event, node)) && policy === "shareable";
       if (!valid && strict) fail(403, "An offered reading is no longer permitted for sharing. Update the offer before confirming.");
       if (valid && (typeof original.title !== "string" || original.title.length > 250 || typeof original.text !== "string" || original.text.length > 12250 || (original.audio !== null && typeof original.audio !== "string"))) fail(409, "An offered reading does not fit the supported journal format.");
       resolved.push({ id: row.id, title: row.title, type: row.type, valid, policy, original, originId: row.origin_id });
@@ -96,8 +99,13 @@ export function createExchangeHandler({ pool, config, helpers }) {
     const result = { event: { id: event.id, name: event.name, status: event.status }, character: own ? brief(own.character) : null, characters, readOnly: !own?.eligible || !playable(event), readings: [], sessions: [], contacts: [] };
     if (!own) return { ...result, message: "Choose an approved character before exchanging introductions or readings." };
     const character = own.character, context = await projectionContext(db, event);
-    const readings = (await db.query("SELECT id,node_id,title,type FROM adventure_journal WHERE event_id=$1 AND character_id=$2 AND type<>'exchange_receipt' ORDER BY created_at DESC,id DESC LIMIT 500", [event.id, character.id])).rows;
-    result.readings = readings.map((entry) => { const node = context.definition.nodes.find((node) => node.id === entry.node_id), policy = sharingPolicyFor(context.sharing, entry.node_id); return { id: entry.id, nodeId: entry.node_id, title: entry.title, type: entry.type, policy, shareable: own.eligible && playable(event) && !!enabledNode(event, node) && policy === "shareable" }; });
+    const readingRows = (await db.query("SELECT id,node_id,title,type FROM adventure_journal WHERE event_id=$1 AND character_id=$2 AND type<>'exchange_receipt' ORDER BY created_at DESC,id DESC LIMIT 500", [event.id, character.id])).rows;
+    const readings = await filterStoryJournal(db, event.id, user.id, readingRows);
+    result.readings = await Promise.all(readings.map(async (entry) => {
+      const node = context.definition.nodes.find((node) => node.id === entry.node_id), whisper = entry.node_id.startsWith("whisper:");
+      const policy = whisper ? await canShareWhisper(db, event, entry.node_id) ? "shareable" : "restricted" : sharingPolicyFor(context.sharing, entry.node_id);
+      return { id: entry.id, nodeId: entry.node_id, title: entry.title, type: entry.type, policy, shareable: own.eligible && playable(event) && (whisper || !!enabledNode(event, node)) && policy === "shareable" };
+    }));
     const rows = (await db.query("SELECT *,clock_timestamp() AS server_time FROM exchange_sessions WHERE event_id=$1 AND ((initiator_user_id=$2 AND initiator_character_id=$3) OR (recipient_user_id=$2 AND recipient_character_id=$3)) ORDER BY updated_at DESC,id DESC LIMIT 50", [event.id, user.id, character.id])).rows;
     // A history refresh projects metadata only. It must not deserialize every
     // completed receipt or historic audio body just to display recent sessions.
@@ -118,7 +126,13 @@ export function createExchangeHandler({ pool, config, helpers }) {
   async function copyReading(db, event, session, senderCharacter, recipientCharacter, entry) {
     const original = entry.original;
     const existing = (await db.query("SELECT j.* FROM adventure_journal j WHERE j.event_id=$1 AND j.character_id=$2 AND (j.id=$3 OR j.id IN(SELECT journal_id FROM exchange_copies WHERE event_id=$1 AND recipient_character_id=$2 AND origin_journal_id=$3)) LIMIT 1", [event.id, recipientCharacter, entry.originId])).rows[0];
-    if (existing) return { id: existing.id, title: existing.title, text: existing.text, audio: existing.audio, type: existing.type, alreadyKnown: true };
+    if (existing) {
+      const recipientUser = session.initiator_character_id === recipientCharacter ? session.initiator_user_id : session.recipient_user_id;
+      const alreadyKnown = (await filterStoryJournal(db, event.id, recipientUser, [existing])).length > 0;
+      // A confirmed receipt grants the new assignee access to an existing
+      // immutable whisper copy without changing its original provenance.
+      return { id: existing.id, title: existing.title, text: existing.text, audio: existing.audio, type: existing.type, alreadyKnown };
+    }
     const id = randomUUID();
     await db.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,audio,type) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'shared_reading')", [id, event.id, recipientCharacter, original.node_id, `exchange-reading:${entry.originId}`, original.title, original.text, original.audio]);
     await db.query("INSERT INTO exchange_copies(event_id,recipient_character_id,origin_journal_id,journal_id,exchange_id,sender_character_id) VALUES($1,$2,$3,$4,$5,$6)", [event.id, recipientCharacter, entry.originId, id, session.id, senderCharacter]);

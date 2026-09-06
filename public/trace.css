@@ -1,0 +1,47 @@
+.trace-workspace { max-width: 100%; }
+.trace-workspace button, .trace-workspace input, .trace-workspace select, .trace-workspace textarea { max-width: 100%; }
+.trace-workspace h2, .trace-workspace h3, .trace-workspace strong, .trace-workspace .hint { overflow-wrap: anywhere; }
+.trace-character-picker { display: flex; align-items: end; flex-wrap: wrap; gap: .8rem; margin: 1.4rem 0; }
+.trace-character-picker label { min-width: 13rem; margin: 0; flex: 1 1 13rem; max-width: 26rem; }
+.trace-notice { padding: 1.1rem; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: var(--radius, .6rem); background: var(--panel); margin: 1rem 0; }
+.trace-notice h2, .trace-notice h3 { font-size: 1.1rem; margin-bottom: .6rem; }
+.trace-feedback { padding: .8rem 0; color: var(--accent); overflow-wrap: anywhere; }
+.trace-layout { display: grid; grid-template-columns: minmax(17rem, .8fr) minmax(0, 1.65fr); align-items: start; gap: 1rem; margin-top: 1rem; }
+.trace-notebook, .trace-detail { min-width: 0; }
+.trace-new-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin: 1rem 0; }
+.trace-new-actions button { padding: .65rem .5rem; }
+.trace-filter-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.trace-filter-pair label { min-width: 0; }
+.trace-result-count { padding: .2rem 0 .7rem; }
+.trace-record-list { display: grid; gap: .6rem; max-height: 65vh; overflow-y: auto; padding: 2px; }
+.trace-record-card { display: grid; text-align: left; gap: .3rem; padding: .9rem; width: 100%; min-width: 0; white-space: normal; }
+.trace-record-card strong { font-size: 1rem; }
+.trace-record-card .hint { font-weight: normal; }
+.trace-record-card.selected { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.trace-record-kind { font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--accent); }
+.trace-empty p + p { margin-top: 1rem; }
+.trace-reading h2 { margin: .5rem 0; }
+.trace-notes { margin: 1.2rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.trace-related { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 1rem; }
+.trace-related > summary { cursor: pointer; font-weight: 600; }
+.trace-related > .hint { margin: .8rem 0; }
+.trace-citations, .trace-connections { list-style: none; padding: 0; margin: .8rem 0; display: grid; gap: .7rem; }
+.trace-citations li, .trace-connections li { display: grid; gap: .3rem; }
+.trace-connections button { text-align: left; justify-self: start; overflow-wrap: anywhere; white-space: normal; }
+.trace-editor fieldset { min-width: 0; border: 0; padding: 0; margin: 1rem 0 0; }
+.trace-editor-heading { display: grid; grid-template-columns: minmax(7rem, .5fr) minmax(0, 1.5fr); gap: .8rem; }
+.trace-editor-heading label { min-width: 0; }
+.trace-editor textarea { min-height: 11rem; resize: vertical; }
+.trace-audience { border: 1px solid var(--line); border-radius: var(--radius, .6rem); padding: 1rem; margin: 1rem 0; }
+.trace-sharing-explanation { margin-top: .8rem; }
+.trace-checklist { display: grid; gap: .5rem; max-height: 20rem; overflow-y: auto; margin: .8rem 0; padding: 2px; }
+.trace-workspace .trace-checkbox { display: flex; align-items: start; gap: .65rem; margin: 0; padding: .65rem; border: 1px solid var(--line); border-radius: .35rem; }
+.trace-workspace .trace-checkbox input[type="checkbox"] { flex: 0 0 auto; width: 1rem; height: 1rem; margin: .15rem 0 0; }
+.trace-checkbox > span { min-width: 0; overflow-wrap: anywhere; }
+.trace-checkbox .hint { display: block; margin-top: .15rem; }
+.trace-link-option { border: 1px solid var(--line); border-radius: .35rem; padding: .6rem; }
+.trace-workspace .trace-link-option .trace-checkbox { border: 0; padding: .1rem 0 .5rem; }
+.trace-link-option > label { margin: 0; }
+.trace-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 850px) { .trace-layout { grid-template-columns: minmax(0, 1fr); } .trace-record-list { max-height: 23rem; } }
+@media (max-width: 480px) { .trace-filter-pair, .trace-editor-heading { grid-template-columns: minmax(0, 1fr); gap: 0; } .trace-character-picker label { min-width: 0; flex-basis: 100%; } .trace-workspace .page-head .actions { width: 100%; } }

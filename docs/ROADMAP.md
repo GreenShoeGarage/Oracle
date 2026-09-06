@@ -2,16 +2,16 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 1.7 · September 6, 2026
+Development roadmap · Planning revision: 1.8 · September 6, 2026
 
-Status: Batch 5 (v0.5.0, schema 6) is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Local verification, real PostgreSQL CI, the complete remote staging workflow, Railway production, and exact-commit public smoke passed. Production startup confirmed the existing operator account remains enabled with identity and password preserved. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 6 is the next development batch; Batches 6–12 remain planned.
+Status: Batch 6 (v0.6.0, schema 7) is implemented and undergoing release verification. Production remains verified Batch 5 at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com) until exact-commit CI/staging and production promotion pass. Local Batch 6 HTTP staging rehearsal passed 252 reads/287 writes; full local verification passed 155 tests with two TCP-only skips, and ten DOM/API checks passed without uncaught errors. Exact remote release gates remain pending. The existing operator account remains enabled on production. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 7 is next in the development sequence; Batches 7–12 remain planned.
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
 
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
-The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–5 are deployed; Batches 6–12 remain planned.
+The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–5 are deployed; Batch 6 is an implemented candidate; Batches 7–12 remain planned.
 
 **Product commitments**
 
@@ -97,6 +97,12 @@ Distinguish copyable information from owned inventory. This batch handles inform
 Completion gate: Two phones can introduce characters and exchange only selected, permitted information. Expired sessions, changed offers, rejected requests, and repeated confirmations behave predictably. A changed offer requires renewed confirmation. A lost connection never displays an unconfirmed exchange as complete.
 
 **Batch 6 — v0.6: Investigation and living story**
+
+Implementation status: The v0.6.0/schema-7 candidate implements TRACE evidence/person/place/theory notebooks, own journal citations, visible-record connections, private defaults, intentional sharing, and archival. WHISPER supports organizer-authored alternate accounts, bounded discovery/skill/flag/status conditions, explicit collection, hidden staff truth, and permitted rumor QR sharing. BROADSIDE supports player proposals, staff drafting/submission, organizer review/publication, posters, correction drafts separate from current live text, correction notes, and withdrawal. Public event, faction, group, and selected-character audiences are enforced from current access; managers cannot bypass another player's private investigation.
+
+Collected rumors and received copies apply account-bound access in the journal, exchange offers, and TRACE citations. A newly assigned player must explicitly recollect an eligible publication or receive a newly confirmed exchange; immutable original captures/provenance remain preserved. Sources and hidden links do not leak through shared notes. Story work does not change inventory or adventure progression. New themed starter stories remain drafts pending review; rehearsal copies remap all audience IDs, exclude player work, and reset their own collections/investigations while retaining authored story/publications/groups. Existing events receive no retroactive story content. Briefing/adventure formats stay 1. Migration 007 adds seven tables plus a receipt lookup index and requires schema-7-compatible roll-forward recovery.
+
+Local HTTP rehearsal passed 252 reads/287 writes through every audience, different private rumors, confirmed QR transfer, private/shared investigations, proposal review, correction/withdrawal, real discovery conditions, and isolated story-aware rehearsal reset, while retaining all three adventure/exchange paths. Migration/foundation checks passed 35 tests with one existing TCP-only skip, and the recovery fixture populated every new table locally. TRACE HTTP passed 11 tests and story HTTP passed 12. Focused story UI passed 14 checks and TRACE UI passed ten; ten full-app DOM/API checks passed with zero uncaught errors. Full local verification passed 157 tests (155 passed, zero failures, two existing TCP-only skips). A final bounded audience-validation alignment then passed all eleven focused TRACE tests. Exact-commit GitHub CI, remote staging, and production promotion remain pending. Seven gameplay instruments are available in this candidate; five remain planned. The existing 1,000-entry offline journal limit remains, with no TRACE or current-news cache. Physical devices, human field testing, and scheduled backups remain outstanding. See [STATUS.md](STATUS.md).
 
 Implement TRACE, WHISPER, and BROADSIDE. TRACE connects evidence, people, places, provenance, private theories, and intentionally shared investigation records. WHISPER supplies organizer-authored rumors, alternate tellings, and leads for players or an in-character broker. BROADSIDE publishes approved bulletins, posters, and event news.
 
@@ -187,4 +193,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next development batch: Batch 6 — investigation and living story. Batch 5 is fully deployed; scheduled database backups remain a separate operational item. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next development batch: Batch 7 — economy, trades, and agreements. Batch 6 is an implemented candidate awaiting release gates; scheduled database backups remain a separate operational item. Public branding uses ORACLE with the subtitle “LARP Field Kit.”

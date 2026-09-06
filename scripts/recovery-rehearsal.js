@@ -8,6 +8,7 @@ import { createPool, migrate, transaction } from "../src/db.js";
 import { digest } from "../src/security.js";
 import { defaultSetup } from "../public/kit.js";
 import { defaultCharacterProfile } from "../public/characters-model.js";
+import { defaultStoryDocument } from "../public/story-model.js";
 import { defaultAdventure, defaultAdventureNode, validateAdventure } from "../public/adventure-model.js";
 const sourceUrl = new URL(process.env.TEST_DATABASE_URL || "");
 const targetUrl = new URL(process.env.RESTORE_DATABASE_URL || "");
@@ -72,9 +73,9 @@ try {
   // fictional record in this already-validated disposable database so the
   // dump/restore gate checks actual character, administrator and adventure data.
   await migrate(source);
-  const fixture = { user: randomUUID(), peer: randomUUID(), event: randomUUID(), faction: randomUUID(), character: randomUUID(), peerCharacter: randomUUID(), item: randomUUID(), originJournal: randomUUID(), sharedJournal: randomUUID(), exchange: randomUUID() };
+  const fixture = { user: randomUUID(), peer: randomUUID(), event: randomUUID(), faction: randomUUID(), character: randomUUID(), peerCharacter: randomUUID(), item: randomUUID(), originJournal: randomUUID(), sharedJournal: randomUUID(), exchange: randomUUID(), group: randomUUID(), rumor: randomUUID(), bulletin: randomUUID(), rumorJournal: randomUUID(), trace: randomUUID() };
   const setup = defaultSetup("fantasy", "council");
-  setup.enabledInstruments = ["briefing", "relic", "wayfinder"];
+  setup.enabledInstruments = ["briefing", "relic", "wayfinder", "trace", "whisper", "broadside"];
   const profile = {
     ...defaultCharacterProfile(setup.rules), name: "Recovery rehearsal character", factionId: fixture.faction,
     privateObjectives: "A fictional secret that must survive database recovery.",
@@ -133,6 +134,20 @@ try {
     const exchangeRequestId = randomUUID();
     const exchangePayloadHash = digest(JSON.stringify({ action: "confirm", targetId: fixture.exchange, input: { requestId: exchangeRequestId, characterId: fixture.peerCharacter, version: 3 } }));
     await client.query("INSERT INTO exchange_requests(event_id,actor_user_id,request_id,payload_hash,exchange_id) VALUES($1,$2,$3,$4,$5)", [fixture.event, fixture.peer, exchangeRequestId, exchangePayloadHash, fixture.exchange]);
+    await client.query("INSERT INTO story_groups(id,event_id,name,character_ids,version) VALUES($1,$2,'Recovery investigation group',$3,2)", [fixture.group, fixture.event, JSON.stringify([fixture.character, fixture.peerCharacter])]);
+    const rumor = { ...defaultStoryDocument(), title: "Recovery witness account", body: "A witness reports the lantern was moved before dusk.", sourceLabel: "The watchkeeper", topic: "Lantern disappearance", truth: "Organizer-only: this witness confused two evenings.", audience: { type: "group", ids: [fixture.group] }, conditions: { completed: [relic.id], flags: ["recovered"], skills: [], statuses: [] }, shareable: true };
+    const publishedAt = new Date().toISOString();
+    const draft = { ...rumor, body: "An unpublished corrected witness account.", correctionNote: "A correction awaiting organizer review." };
+    await client.query("INSERT INTO story_entries(id,event_id,kind,document,status,version,published,published_version,created_by) VALUES($1,$2,'rumor',$3,'submitted',3,$4,2,$5)", [fixture.rumor, fixture.event, JSON.stringify(draft), JSON.stringify({ ...rumor, publishedAt }), fixture.user]);
+    const bulletin = { ...defaultStoryDocument(), title: "Recovery organizer bulletin", body: "The lantern has been found; meet at the original place.", sourceLabel: "Event organizers", audience: { type: "private", ids: [fixture.peerCharacter] }, correctionNote: "Corrected the meeting place after review." };
+    await client.query("INSERT INTO story_entries(id,event_id,kind,document,status,version,published,published_version,created_by) VALUES($1,$2,'bulletin',$3,'published',5,$4,5,$5)", [fixture.bulletin, fixture.event, JSON.stringify(bulletin), JSON.stringify({ ...bulletin, publishedAt }), fixture.user]);
+    await client.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,type) VALUES($1,$2,$3,$4,$5,$6,$7,'whisper')", [fixture.rumorJournal, fixture.event, fixture.character, `whisper:${fixture.rumor}`, `whisper:${fixture.rumor}:2`, rumor.title, rumor.body]);
+    await client.query("INSERT INTO story_readings(id,event_id,entry_id,owner_user_id,character_id,publication_version,journal_id) VALUES($1,$2,$3,$4,$5,2,$6)", [randomUUID(), fixture.event, fixture.rumor, fixture.user, fixture.character, fixture.rumorJournal]);
+    await client.query("INSERT INTO story_requests(event_id,actor_user_id,request_id,payload_hash,target_id,action) VALUES($1,$2,$3,$4,$5,'collect')", [fixture.event, fixture.user, randomUUID(), digest(JSON.stringify({ characterId: fixture.character, entryId: fixture.rumor, publicationVersion: 2 })), fixture.rumor]);
+    await client.query("INSERT INTO story_activity(id,event_id,entry_id,actor_id,action,version) VALUES($1,$2,$3,$4,'published',5)", [randomUUID(), fixture.event, fixture.bulletin, fixture.user]);
+    const trace = { kind: "theory", title: "Recovery private hypothesis", notes: "The reported movement may be an innocent mistake; this is player speculation.", audience: { type: "private", ids: [] }, sources: [fixture.originJournal, fixture.rumorJournal], links: [] };
+    await client.query("INSERT INTO trace_records(id,event_id,owner_user_id,character_id,document,version,archived) VALUES($1,$2,$3,$4,$5,3,false)", [fixture.trace, fixture.event, fixture.user, fixture.character, JSON.stringify(trace)]);
+    await client.query("INSERT INTO trace_requests(event_id,actor_user_id,request_id,payload_hash,record_id) VALUES($1,$2,$3,$4,$5)", [fixture.event, fixture.user, randomUUID(), digest(JSON.stringify(trace)), fixture.trace]);
   });
   await source.query(`CREATE DATABASE "${name}"`);
   const out = await open(backup, "wx", 0o600);
@@ -197,6 +212,13 @@ try {
     ["exchange_copies", "event_id,recipient_character_id,origin_journal_id"],
     ["exchange_receipts", "exchange_id,owner_user_id"],
     ["exchange_contacts", "id"],
+    ["story_groups", "id"],
+    ["story_entries", "id"],
+    ["story_readings", "id"],
+    ["story_requests", "event_id,actor_user_id,request_id"],
+    ["story_activity", "id"],
+    ["trace_records", "id"],
+    ["trace_requests", "event_id,actor_user_id,request_id"],
     ["schema_migrations", "version"],
   ]) {
     const a = (await source.query(`SELECT * FROM ${table} ORDER BY ${order}`))
@@ -235,7 +257,7 @@ try {
   const systemAudit = (await restored.query("INSERT INTO system_audit_entries(actor_id,target_user_id,action) VALUES($1,$1,'recovery.rehearsed') RETURNING id", [fixture.user])).rows[0];
   assert.ok(BigInt(systemAudit.id) > maximumSystemAudit, "Restored system audit identity sequence must advance safely.");
   console.log(
-    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventures, journals, sharing policies, exchange sessions, provenance, bilateral contacts and receipts, replay records, both audit sequences, and migration after restore passed.",
+    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventures, journals, sharing policies, exchange sessions, provenance, bilateral contacts and receipts, story groups and draft/publication separation, hidden truths, collected rumors, activity, private investigations, replay records, both audit sequences, and migration after restore passed.",
   );
 } finally {
   if (restored) await restored.end();

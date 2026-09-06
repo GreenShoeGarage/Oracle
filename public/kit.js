@@ -1,6 +1,7 @@
 // This module contains declarative event data only. Both server and browser use
 // the same validation; themes never supply CSS, markup, scripts, or asset URLs.
 const MAX_BYTES = 200_000;
+const AVAILABLE_INSTRUMENT_IDS = ["briefing", "relic", "dead-drop", "cipherbox", "wayfinder", "trace", "whisper", "broadside"];
 // Reserve room for public event metadata and the versioned export envelope, so
 // every valid saved setup can be exported without dropping authored records.
 const MAX_SETUP_BYTES = 180_000;
@@ -132,7 +133,7 @@ export function validateSetup(value) {
   return size({
     version: version(value.version, "Event setup"), theme: validateTheme(value.theme),
     templateId: id(value.templateId, "Template identifier"),
-    enabledInstruments: list(value.enabledInstruments, 5, "Enabled instruments", (item) => choice(item, ["briefing", "relic", "dead-drop", "cipherbox", "wayfinder"], "Instrument")),
+    enabledInstruments: list(value.enabledInstruments, AVAILABLE_INSTRUMENT_IDS.length, "Enabled instruments", (item) => choice(item, AVAILABLE_INSTRUMENT_IDS, "Instrument")),
     rules: rules(value.rules),
     content: list(value.content, 20, "Briefing content", (item) => {
       record(item, ["id", "title", "body", "visibility", "prop"], "Briefing entry");
@@ -168,7 +169,7 @@ export const INSTRUMENTS = [
     ["wayfinder", "WAYFINDER"], ["trace", "TRACE"], ["whisper", "WHISPER"],
     ["broadside", "BROADSIDE"], ["bazaar", "BAZAAR"], ["oathbook", "OATHBOOK"],
     ["sigil", "SIGIL"], ["static", "STATIC"], ["stagehand", "STAGEHAND"],
-  ].map(([id, name]) => ({ id, name, available: ["relic", "dead-drop", "cipherbox", "wayfinder"].includes(id) })),
+  ].map(([id, name]) => ({ id, name, available: AVAILABLE_INSTRUMENT_IDS.includes(id) })),
 ];
 const emptyRules = () => ({ version: 1, attributes: [], expertise: [], resources: [], outcomes: [] });
 const baseSetup = (themeId, templateId) => ({ version: 1, theme: clone(THEMES.find((theme) => theme.id === themeId)), templateId, enabledInstruments: ["briefing"], rules: emptyRules(), content: [] });

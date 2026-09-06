@@ -1,4 +1,51 @@
-# ORACLE v0.5.0 — Batch 5 release status
+# ORACLE v0.6.0 — Batch 6 candidate status
+
+Recorded September 6, 2026.
+
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Candidate application `0.6.0`; database schema `7`; briefing-pack format `1`; adventure format `1`. Exact release commit and deployment IDs are pending.
+
+Batch 6 is implemented and undergoing release verification. Production remains the verified Batch 5 commit `72cce5d6858c6b59b34b7c8c80bc874bb088e099` at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Candidate CI, remote staging, and production promotion are not yet recorded. The existing reserved operator account remains enabled in the verified production deployment; Batch 6 migration checks preserve its modeled identity, password, and enabled superuser privilege.
+
+## Batch 6 implemented
+
+- TRACE records evidence, people, places, and theories with private defaults, selected journal citations, explicit sharing, visible connections, search/filtering, and archive.
+- WHISPER supplies authored alternate accounts with current audience/condition checks and explicit collection. Hidden staff truth/topic and inaccessible variants stay off player paths; collected rumors remain labeled unverified.
+- BROADSIDE provides player proposals, staff drafts/submission, organizer review/publication, printable posters, correction drafts separate from the live publication, correction notes, and withdrawal.
+- Public event, faction, group, and selected-character audiences follow current approved character access. Managers cannot proxy a player's private investigation. Shared notes omit citations the reader has not independently acquired and links to unavailable records.
+- Existing QR exchanges can transfer shareable rumor snapshots with bilateral confirmation. Publication/shareability/withdrawal changes invalidate outstanding consent; received information never grants game flags, progression, or inventory.
+- WHISPER captures are account-bound. Reassignment hides former-player captures and private work; a new player can explicitly recollect eligible material or acquire it through a new completed exchange. A receipt can grant an existing immutable copy without rewriting its provenance or duplicating it.
+- New starter stories are drafts awaiting review. Rehearsals remap authored character/faction/group audiences, exclude original collections and player investigations, and reset disposable play while preserving authored entries/publications/groups and the source event.
+- Migration 007 adds seven story/TRACE tables and a receipt lookup index. Populated schema-6 exchange/adventure/account records and prior migration files remain intact.
+
+Seven gameplay instruments are available in the candidate; five remain planned. Batch 7 is next. Format-1 briefing packs remain setup/material only and do not export story, investigation, exchange, character, or adventure state.
+
+## Candidate verification
+
+| Check | Recorded result |
+| --- | --- |
+| Legacy/foundation migration suite | 36 tests: 35 passed, zero failures, one existing TCP-only skip; populated schema-6 exchanges and enabled superuser identity/password preserved |
+| Recovery fixture | Every new story/TRACE table populated with valid foreign keys; repeated schema-7 migration passed locally; real dump/restore pending CI |
+| TRACE and story HTTP suites | Eleven TRACE and twelve story tests passed; final TRACE audience-validation alignment passed all eleven focused tests again |
+| Focused story UI checks | Fourteen checks passed, including current-role changes and semantic dirty-state tracking |
+| Focused TRACE UI checks | Ten checks passed, including semantically unchanged JSONB round trips |
+| Local HTTP staging rehearsal | 252 reads/287 writes passed, including every audience and prior three-theme adventure/exchange paths |
+| Full app DOM/API walkthrough | Ten end-to-end checks passed with zero uncaught JavaScript errors using actual modules, HTTP/PGlite, and JSDOM |
+| Full local `npm run verify` | 157 tests: 155 passed, zero failures, two deliberate existing TCP-only skips; syntax/assets passed |
+| Exact-commit main/staging CI | Pending |
+| Real PostgreSQL dump/restore, startup, production image | Pending for Batch 6 |
+| Exact-commit remote staging workflow | Pending |
+| Railway Batch 6 production deployment and public smoke | Pending |
+
+The local staging script exercises differing private rumor accounts; explicit collection/retry; hidden truths; manager exclusion from private theories; canonical citations after confirmed QR sharing; private links; public/private/group/faction audiences; group/faction removal and actual character reapproval; player proposal review; separate draft/live corrections; withdrawal; exchange confirmation invalidation; real discovery-gated collection; and source-preserving rehearsal remapping/reset. The full-app DOM walkthrough also checks persisted notes, selected evidence, safe bulletin poster content, uncertain-response retry, exact UUID reuse, and account/character privacy boundaries. The full suite completed before a final bounded TRACE audience-validation alignment; all eleven focused TRACE tests passed afterward. The exact candidate's full PostgreSQL CI gate remains pending. Local request counts are not remote-deployment claims.
+
+## Current limits and recovery position
+
+- Scheduled production backups remain unconfigured. Railway HOBBY reports `maxBackupsCount: 0`; no external runner is configured. Disposable restore rehearsals and briefing packs do not back up live data.
+- After migration 007, earlier v0.5.0/schema-6 and older binaries are incompatible. Preserve data and use a tested schema-7-compatible roll-forward fix.
+- Offline journal snapshots retain the existing 1,000-entry/3 MB limit and may contain only previously authorized readings/receipts, including WHISPER. TRACE, current news, hidden truth, and pending writes are not cached. Device permissions may be stale while disconnected; known revocation/account change clears the relevant archive.
+- Physical phones/cameras, authenticated real-browser/mobile workflows, real service-worker inspection, load measurements, and a human field pilot remain unverified. HTTP, DOM, and storage automation do not replace those gates.
+
+## Previous verified release — Batch 5
 
 Recorded September 6, 2026.
 
@@ -6,7 +53,7 @@ Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Rel
 
 Batch 5 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Local verification, real PostgreSQL CI, the complete remote staging workflow, Railway production, and exact-commit public smoke passed. Production startup confirms the existing reserved operator account is enabled, with identity and password preserved.
 
-## Batch 5 implemented
+### Batch 5 implemented
 
 - Temporary QR or 12-character code pairing for two distinct players using their own assigned approved characters in Live/Rehearsal events.
 - Selected discovered readings, current public character identity, titles-only partner offers, and independent confirmation by both players. Empty offers create an introduction.
@@ -19,7 +66,7 @@ Batch 5 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegara
 
 No inventory, money, skills, flags, or adventure progression transfers. Briefing-pack format 1 remains setup/material only and excludes sharing policies, exchanges, contacts, receipts, characters, and adventure state. Eight gameplay instruments remain planned; Batch 6 is next.
 
-## Release verification
+### Batch 5 release verification
 
 | Check | Recorded result |
 | --- | --- |
@@ -43,7 +90,7 @@ The full app checks cover temporary QR and explicit joining, no peer reading bod
 
 The 188 reads/237 writes describe the local staging rehearsal only. The remote workflow passed independently on the exact release commit. Physical phones, mobile-camera consent, authenticated real-browser workflows, actual service-worker inspection, load measurement, and a human field pilot remain unverified.
 
-## Deployment record
+### Batch 5 deployment record
 
 | Target | Project ID | Deployment ID | Result |
 | --- | --- | --- | --- |
@@ -54,7 +101,7 @@ Staging and production remain separate Railway projects with separate PostgreSQL
 
 Production logs at 00:46:50 UTC on September 6 confirmed migration 6 and a matching existing operator account. At 00:46:55 UTC startup confirmed v0.5.0 in production and `accountExists: true`, `enabled: true`. Idempotent provisioning preserved the existing UUID/password. The [production smoke job 101402849264](https://github.com/GreenShoeGarage/Oracle/actions/runs/34002163969/job/101402849264) passed readiness and all 31 public checks between 00:47:00 and 00:47:03 UTC. Runtime branches use the same checked release commit; subsequent documentation commits do not change that deployment. No private email, user identifier, setup secret, or password appears in these documents.
 
-## Remaining limits
+### Batch 5 recorded limits
 
 - Scheduled production backups remain unconfigured. Railway HOBBY effective limits report `maxBackupsCount: 0`; no external runner is configured. Disposable CI restore tests and briefing packs do not back up live event data.
 - After schema 6 migration, v0.4.0/schema 5 and earlier binaries are incompatible rollback images. Preserve data and use a tested schema-6-compatible roll-forward fix.

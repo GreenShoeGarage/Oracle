@@ -119,6 +119,31 @@ test("completed exchange journal receipts and received readings persist without 
   assert.ok(!html.includes("SECRET_"));
 });
 
+test("collected WHISPER journal snapshots survive without story truth, targeting, current news or TRACE state", async (t) => {
+  const { offline, factory } = await fixture(t);
+  const input = await reading(offline);
+  const whisperId = "60c13814-f22e-4e63-9422-06f2d8e8d8ab";
+  const title = "W".repeat(120), text = "A collected, unverified telling. ".padEnd(6000, ".");
+  input.journal = [{
+    ...input.journal[0], id: "whisper-journal-1", nodeId: `whisper:${whisperId}`, type: "whisper", title, text,
+    entryKey: `whisper:${whisperId}:7`, truth: "SECRET_ORGANIZER_TRUTH", topic: "SECRET_ALTERNATE_TELLING",
+    conditions: { flags: ["SECRET_TARGET_CONDITION"] }, audience: { type: "private", ids: ["SECRET_AUDIENCE_CHARACTER"] },
+    publication: { correctionNote: "SECRET_UNPUBLISHED_CORRECTION" },
+  }];
+  input.story = { rumors: [{ title: "SECRET_UNCOLLECTED_RUMOR" }], bulletins: [{ body: "SECRET_CURRENT_NEWS" }] };
+  input.trace = { records: [{ notes: "SECRET_PRIVATE_THEORY", sources: ["SECRET_PRIVATE_CITATION"] }] };
+  assert.equal(await offline.cacheJournal(input), true);
+  const persisted = JSON.stringify(await storedRows(factory));
+  for (const secret of ["SECRET_ORGANIZER_TRUTH", "SECRET_ALTERNATE_TELLING", "SECRET_TARGET_CONDITION", "SECRET_AUDIENCE_CHARACTER", "SECRET_UNPUBLISHED_CORRECTION", "SECRET_UNCOLLECTED_RUMOR", "SECRET_CURRENT_NEWS", "SECRET_PRIVATE_THEORY", "SECRET_PRIVATE_CITATION", `whisper:${whisperId}:7`]) assert.ok(!persisted.includes(secret), secret);
+  const archive = await (await importFresh()).loadArchive(), saved = archive.records[0].journal[0];
+  assert.deepEqual(Object.keys(saved).sort(), ["audio", "createdAt", "id", "nodeId", "text", "title", "type"]);
+  assert.equal(saved.type, "whisper");
+  assert.equal(saved.nodeId, `whisper:${whisperId}`);
+  assert.equal(saved.title, title);
+  assert.equal(saved.text, text);
+  assert.ok(offline.renderArchive({ esc, archive }).includes(text));
+});
+
 test("logout and account changes clear previous readings and reject late responses", async (t) => {
   const { offline } = await fixture(t);
   const oldResponse = await reading(offline);
@@ -265,7 +290,7 @@ async function worker() {
 test("actual service worker request allowlist excludes all APIs, mutations, queries and foreign origins", async () => {
   const sw = await worker();
   for (const path of sw.assets) assert.equal(sw.accepts(path), true, path);
-  for (const path of ["/api/session", "/api/auth/logout", "/api/events", "/api/badges/ABCD", "/api/events/id/adventure/play", "/api/events/id/adventure/manage", "/api/events/id/exchanges", "/api/events/id/exchanges/join", "/api/events/id/exchanges/session-id", "/health/ready", "/unknown", "/app.js?token=private", "/?badge=private", "https://evil.test/app.js", "/sw.js"]) {
+  for (const path of ["/api/session", "/api/auth/logout", "/api/events", "/api/badges/ABCD", "/api/events/id/adventure/play", "/api/events/id/adventure/manage", "/api/events/id/exchanges", "/api/events/id/exchanges/join", "/api/events/id/exchanges/session-id", "/api/events/id/story/manage", "/api/events/id/story/play?characterId=private", "/api/events/id/story/collect", "/api/events/id/story/entries/entry-id", "/api/events/id/trace", "/api/events/id/trace?characterId=private", "/api/events/id/trace/record-id", "/health/ready", "/unknown", "/app.js?token=private", "/?badge=private", "https://evil.test/app.js", "/sw.js"]) {
     assert.equal(sw.accepts(path), false, path);
     assert.equal(await sw.run("fetch", path), undefined, "Excluded requests are not intercepted at all.");
   }
