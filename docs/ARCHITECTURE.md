@@ -1,6 +1,6 @@
 # ORACLE architecture and data contracts
 
-Application v0.7.0 candidate · Database schema 8 · Briefing-pack format 1 · Adventure format 1
+Application v0.7.0 · Database schema 8 · Briefing-pack format 1 · Adventure format 1
 
 **Identity and data ownership.** An account belongs to a person. Event membership grants a role within one event. Characters, inventories, and factions carry an event ID and authorize against current membership; future clues and encounters must follow the same contract. Copying content into another event creates new event-owned records. The client never decides ownership or privileges.
 

@@ -1,14 +1,14 @@
 # ORACLE
 
-**LARP Field Kit** · v0.7.0 candidate · Green Shoe Garage
+**LARP Field Kit** · v0.7.0 · Green Shoe Garage
 
 ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. A prop display presents selected briefing material on a shared screen.
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 7 (v0.7.0, database schema 8) is implemented in this candidate. Full local verification passed 183 tests (179 passed, zero failures, four TCP-only skips), and the complete local HTTP staging rehearsal passed. Exact-candidate CI, remote staging, and production promotion remain pending. Current production is the verified Batch 6 v0.6.0/schema 7 release. See [docs/STATUS.md](docs/STATUS.md) for evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
+Batch 7 (v0.7.0, database schema 8) passed full local verification, both PostgreSQL CI runs, Railway staging, and the complete remote workflow. It is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com); Railway production and all 43 exact-commit public checks passed. See [docs/STATUS.md](docs/STATUS.md) for exact-commit evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
 
-## What works in this candidate
+## What works in this release
 
 - BAZAAR fictional whole-unit resource balances, organizer-defined shops, finite stock, versioned purchases, and immutable transaction receipts.
 - Bilateral QR item/resource barter alongside selected readings: revised offers clear both confirmations; all transfers and reading copies commit together, and exact retries produce one transaction.

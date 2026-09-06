@@ -1,10 +1,10 @@
-# ORACLE v0.7.0 — Batch 7 candidate status
+# ORACLE v0.7.0 — Batch 7 release status
 
 Recorded September 6, 2026.
 
-Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Candidate application `0.7.0`; database schema `8`; briefing-pack format `1`; adventure format `1`. The candidate has not yet received a release commit or deployment record.
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Application `0.7.0`; database schema `8`; briefing-pack format `1`; adventure format `1`. Release commit: `a008a659d4f2cc9425a88640bffd5f3df8774d2b`. Railway staging and production and all three CI runs passed on this exact commit.
 
-Batch 7 passed full local verification and its complete local HTTP staging rehearsal. Exact-candidate PostgreSQL CI, remote staging, and production remain pending. Current production remains the verified Batch 6 release, commit `9c14293bd6a13d5d5912070bdacda6b24308df43`, at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Its last verified startup preserved the existing enabled operator's identity/password; Batch 7 will verify that state again after promotion.
+Release commit `a008a659d4f2cc9425a88640bffd5f3df8774d2b` passed both main and staging CI: 183 PostgreSQL tests (182 passed, zero failures, one PGlite-only snapshot skip), all four TCP gates including forced last-stock and same-item contention, actual populated schema-8 dump/restore, startup, and the production Docker image. Railway staging and the complete deployed BAZAAR/QR/OATHBOOK/three-theme adventure/story workflow passed on that same commit. Railway production and all 43 exact-commit public checks passed on that same release, confirming v0.7.0/schema 8 and the existing enabled operator account. Production migration/startup confirmed the matching existing operator account is enabled; idempotent provisioning and migration tests preserve its identity/password.
 
 ## Batch 7 implemented
 
@@ -17,22 +17,38 @@ Batch 7 passed full local verification and its complete local HTTP staging rehea
 
 Nine gameplay instruments are implemented; three remain planned. Batch 8 adds cooperative challenges and immersive props next. Existing briefing/adventure formats stay 1; briefing packs do not export economy, agreement, character, adventure, exchange, or story histories.
 
-## Candidate verification
+## Batch 7 release verification
 
 | Check | Recorded result |
 | --- | --- |
 | Local HTTP staging rehearsal | Passed 305 reads and 342 writes, including all previous event/character/three-theme adventure/exchange/story workflows, new purchases, mixed barter, independent witnessing, settlement, adjudication, linked correction, and actual rehearsal reset |
 | Legacy/foundation migration checks | 37-test set covered by the initial run plus a corrected planned-instrument fixture rerun: 36 passing tests and one existing TCP-only skip; populated schema-7 records and the complete enabled operator row preserved |
-| Recovery fixture | All 13 new tables populated with valid constraints; repeated schema-8 migration passed locally; actual PostgreSQL dump/restore remains a candidate CI gate |
+| Recovery fixture | All 13 new tables populated with valid constraints; repeated schema-8 migration passed locally; actual PostgreSQL dump/restore passed in both candidate CI runs |
 | Root integration checks | 22 passed |
 | Kit/offline checks | 27 passed |
 | Full app DOM/API walkthrough | Eight checks passed with zero uncaught errors, using actual modules/HTTP/PGlite and JSDOM, including lost purchase/trade/settlement responses and reassignment privacy |
 | Focused OATHBOOK UI checks | Ten scenarios passed |
 | New and extended HTTP suites | Economy 7 passed; OATHBOOK 13 passed; exchange 14 passed plus one TCP-only skip; story 13 passed including trade-receipt journal privacy |
 | Full local `npm run verify` | 183 tests: 179 passed, zero failures, four deliberate TCP-only skips; syntax, version, and static assets passed |
-| Exact-candidate PostgreSQL CI, Docker, remote staging, and production | Pending; no Batch 7 deployment success is claimed |
+| [Main CI 34007392337](https://github.com/GreenShoeGarage/Oracle/actions/runs/34007392337) | Passed on the exact release commit; [verification job 101417013274](https://github.com/GreenShoeGarage/Oracle/actions/runs/34007392337/job/101417013274) |
+| [Staging CI 34007392743](https://github.com/GreenShoeGarage/Oracle/actions/runs/34007392743) | Verification and complete remote workflow passed; [verification job 101417014468](https://github.com/GreenShoeGarage/Oracle/actions/runs/34007392743/job/101417014468) |
+| PostgreSQL 18 suite | 183 tests: 182 passed, zero failures, one PGlite-only snapshot skip; all four TCP gates passed, including forced last-stock and same-item trade contention |
+| Recovery/runtime gates | Actual populated-table pg_dump/pg_restore including all 13 new tables, repeated migration, startup, and the production Docker image with secure cookies and graceful stop passed |
+| [Remote staging job 101417119106](https://github.com/GreenShoeGarage/Oracle/actions/runs/34007392743/job/101417119106) | Exact-release readiness, BAZAAR, mixed QR barter, OATHBOOK, actual economy reset, every prior three-theme adventure/exchange/story path, and cleanup passed |
+| [Production CI 34007575785](https://github.com/GreenShoeGarage/Oracle/actions/runs/34007575785) | Passed exact release commit, v0.7.0/schema 8 readiness, and all 43 public GET checks; no production users, events, or mutations created |
 
 The local journey demonstrates corrected shop pricing, finite stock, purchase replay and failed-funds isolation; mixed item/resource barter with revised consent, last-leg rejection without partial writes, and identical retry receipts; revised exact agreement terms, a separate-account witness, participant-only settlement, dispute/adjudication without double payment, and a linked correction. It also populates a rehearsal with actual purchases and an agreement, restores its initial inventory/stock, clears only rehearsal balances/history, and checks the original event remains intact. Local request counts are not remote-deployment claims.
+
+## Batch 7 deployment record
+
+| Target | Project ID | Deployment ID | Result |
+| --- | --- | --- | --- |
+| [Staging](https://oracle-production-488d.up.railway.app) | `4e75d5ec-f8e9-492d-ae75-e0d44428d24a` | `9cce9b03-3d96-4056-acb9-5b6df23948b8` | Exact release v0.7.0/schema 8 succeeded; complete remote workflow passed |
+| [Production](https://oracle.greenshoegarage.com) | `d1989864-9a40-4176-a9d3-203a06c4bd72` | `fc197e70-365f-4545-9b4e-caccbc5419bb` | Exact release v0.7.0/schema 8 succeeded; all 43 public checks passed |
+
+Staging logs confirmed migration 8 at 02:48:08 UTC and v0.7.0 `server_ready` in staging at 02:48:14 UTC on September 6. The remote workflow verified exact-commit readiness at 02:48:56 UTC, passed BAZAAR at 02:50:00, QR barter at 02:50:04, OATHBOOK at 02:50:09, and economy reset at 02:50:18. All three adventure paths and disposable-event/session cleanup completed at 02:50:57 UTC. Staging and production remain separate Railway projects and databases.
+
+Production logs confirmed `migrations_complete: 8` and `superuser_provisioned` with `matched: true` at 02:52:35 UTC on September 6. At 02:52:39 UTC, startup reported v0.7.0 in production and `superuser_status` with `accountExists: true`, `enabled: true`. The [production smoke job 101417500630](https://github.com/GreenShoeGarage/Oracle/actions/runs/34007575785/job/101417500630) verified the exact release commit/version/schema at 02:52:43 UTC and passed all 43 public GET checks from 02:52:43 to 02:52:48 UTC. Production checks created no accounts or event data. Runtime branches retain the checked release commit; subsequent documentation commits do not change the deployed application. No private operator address, account identifier, setup secret, or password appears in these documents.
 
 ## Current limits and recovery position
 
