@@ -2,16 +2,16 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 2.0 · September 6, 2026
+Development roadmap · Planning revision: 2.1 · September 6, 2026
 
-Status: Batch 8 (v0.8.0, schema 9), release commit `ef3d822c0e6a36fd0f1e3081b68f5d750d268106`, passed local verification, both PostgreSQL CI runs, Railway staging, and the complete remote workflow. Railway production and all 52 exact-commit public checks passed; the release is fully deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). The existing operator remains enabled with identity/password preserved. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 9 is next; Batches 9–12 remain planned. See [STATUS.md](STATUS.md).
+Status: Batch 9 (v0.9.0, schema 10) is implemented, including STAGEHAND and a connected local rehearsal of all twelve instruments in all three themes. Exact-candidate GitHub/PostgreSQL and Railway staging/production gates remain pending. Batch 8 remains the last verified live release; its history is retained below. The existing enabled operator and all nine prior migration records pass preservation checks. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 10 follows the Batch 9 release; Batches 10–12 remain planned. See [STATUS.md](STATUS.md).
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
 
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
-The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–8 are deployed; Batches 9–12 remain planned.
+The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are implemented in the v0.9 candidate; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–8 are deployed; Batch 9 is awaiting deployment gates; Batches 10–12 remain planned.
 
 **Product commitments**
 
@@ -140,6 +140,10 @@ Completion gate: A group can run the same underlying challenge as a fantasy ritu
 
 **Batch 9 — v0.9: Live event operations**
 
+Implementation status: Candidate implemented; deployment verification pending. STAGEHAND supplies scoped encounter preparation, performer/prop/staff readiness, accepted whole-party queues and dispatch, current capacity, absolute return deadlines, explicit return/cancel acknowledgment, and scene/event lifecycle controls. Linked WAYFINDER scenes require managed dispatch while preserving older attendance. Waiting parties remain available for explicit redirection after their scene is cancelled; all consent clears on changed terms. Operational BROADSIDE notices require organizer approval and disappear when their encounter revision becomes stale. Player/prop views exclude private operational details; copied rehearsals clear staff/runtime and reset actual operations/news without touching the source.
+
+The complete local connected rehearsal passed 971 reads/1,035 writes, exercising all twelve instruments in Fantasy, Cyberpunk, and Wasteland plus actual copied consent/dispatch/check-in/news/reset and final event closure. Migration/foundation checks passed 39 tests (38 passed, zero failures, one existing TCP-only skip), preserving the full enabled operator, all nine prior migration records, and every populated schema-9 instrument table alongside earlier records. All five schema-10 tables passed populated recovery-fixture constraints and repeated migration locally, including an overdue dispatched party and a separate returned party's replay receipt. Focused HTTP, browser modules, and eight full-app DOM/API checks passed; the latter had zero uncaught errors. Full local verification passed 242 tests (230 passed, zero failures, 12 deliberate TCP-only skips), including ten core and ten party HTTP checks. Real PostgreSQL contention/dump/restore and exact-candidate GitHub/Railway release gates remain pending. See [STATUS.md](STATUS.md). Physical-device/human field testing, load measurements, and scheduled backups remain outstanding.
+
 Implement STAGEHAND with encounter queues, party assignments, return windows, performer and prop readiness, capacity, staff acknowledgments, and scene status. Connect operational readiness to WAYFINDER availability and approved BROADSIDE announcements.
 
 Add event and scene pause controls, queue reassignment, cancellations, and a compact organizer activity view. Staff see the operational information their role needs. Prop tablets and player views respect live, paused, and ended event states.
@@ -205,4 +209,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next development batch: Batch 9 — live event operations and STAGEHAND. Batch 8 is fully deployed; scheduled database backups remain a separate operational item. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next development batch after Batch 9 deployment: Batch 10 — offline behavior and field resilience. STAGEHAND implementation and local connected rehearsal are complete; exact-release deployment gates remain pending; scheduled database backups remain a separate operational item. Public branding uses ORACLE with the subtitle “LARP Field Kit.”

@@ -4,6 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { isDeepStrictEqual } from "node:util";
 import { VERSION, SCHEMA_VERSION } from "../src/config.js";
 import { defaultSetup, THEMES } from "../public/kit.js";
+import { defaultAdventureNode } from "../public/adventure-model.js";
 import { defaultStoryDocument } from "../public/story-model.js";
 import { defaultCharacterProfile } from "../public/characters-model.js";
 
@@ -674,7 +675,7 @@ if (publicOnly) {
     assert.ok(!(await inventory(b)).inventory.some((entry) => entry.notes.includes(`Private inventory marker ${runId}`)), "Receiving an item must not transfer the sender's private notes.");
     pass("QR barter resets consent on revised terms, rejects stale assets without partial writes, transfers both sides atomically, and preserves one receipt on replay");
 
-    const witness = await register("Witness");
+    const witness = await register(`Witness-${event.setup.theme.id}`);
     const { invitation } = await request(owner, `${base}/invites`, { method: "POST", body: { role: "player", maxUses: 1, expiresInHours: 1 }, status: 201 });
     await request(witness, "/api/events/join", { method: "POST", body: { code: invitation.code } });
     let witnessCharacter = (await request(owner, `${base}/characters`, { method: "POST", body: { profile: { ...defaultCharacterProfile(event.setup.rules), name: "Staging independent witness" }, userId: witness.id }, status: 201 })).character;
@@ -891,6 +892,166 @@ if (publicOnly) {
     return { event, challengeId: challenge.id, challengeTitle: challengeDocument.title, challengeCode: challenge.code, signalId: signalEntry.id, signalCode: signalEntry.code, signalTitle: staticDocument.title, runId: completedRun.id, result: completedRun.result, peerRunId: peerRun.id, readingId: collected.reading.id };
   }
 
+  async function stagehandJourney(owner, player, event, assigned, staff, definition, adventureVersion, theme) {
+    const base = `/api/events/${event.id}`, ops = `${base}/stagehand`;
+    const [a, b] = assigned, [staffA, staffB] = staff;
+    const scene = definition.nodes.find((node) => node.id === "community-gathering");
+    const destination = definition.nodes.find((node) => node.id === "staging-dispatch-scene");
+    assert.ok(event.setup.enabledInstruments.includes("stagehand"), "Every starter must enable the operations instrument.");
+    for (const account of staff) {
+      const { invitation } = await request(owner, `${base}/invites`, { method: "POST", body: { role: "staff", maxUses: 1, expiresInHours: 1 }, status: 201 });
+      await request(account, "/api/events/join", { method: "POST", body: { code: invitation.code } });
+    }
+    const manage = (account = owner) => request(account, `${ops}/manage`);
+    const play = (participant) => request(participant.account, `${ops}?characterId=${participant.character.id}`);
+    const encounter = async (id) => (await manage()).encounters.find((row) => row.id === id);
+    const party = async (id) => (await manage()).parties.find((row) => row.id === id);
+    const check = async (account, id, checkId, ready, status = 200) => request(account, `${ops}/encounters/${id}/check`, { method: "POST", body: { requestId: randomUUID(), version: (await encounter(id)).version, checkId, ready, reason: ready ? "Assigned staff verified this preparation in the disposable rehearsal." : "The prop needs preparation before further dispatch." }, status });
+    const state = async (account, id, value, status = 200) => request(account, `${ops}/encounters/${id}/state`, { method: "POST", body: { requestId: randomUUID(), version: (await encounter(id)).version, state: value, reason: `Staff explicitly set the disposable scene to ${value}.` }, status });
+    const createParty = async (account, encounterId, characterIds, name = "Staging whole party") => {
+      const response = await request(account, `${ops}/parties`, { method: "POST", body: { requestId: randomUUID(), encounterId, name, characterIds, returnMinutes: 5 }, status: 201 });
+      return party(response.outcome.targetId);
+    };
+    const respond = async (participant, id, response = "accepted", status = 200) => request(participant.account, `${ops}/parties/${id}/respond`, { method: "POST", body: { requestId: randomUUID(), version: (await party(id)).version, characterId: participant.character.id, response }, status });
+    const partyAction = async (account, id, action, status = 200) => request(account, `${ops}/parties/${id}/${action}`, { method: "POST", body: { requestId: randomUUID(), version: (await party(id)).version, reason: `Staff acknowledged the disposable party ${action}.` }, status });
+    const join = (participant, node, status = 200) => request(participant.account, `${base}/adventure/action`, { method: "POST", body: { requestId: randomUUID(), version: adventureVersion, characterId: participant.character.id, nodeId: node.id, kind: "join" }, status });
+    const original = await manage();
+    assert.equal(original.encounters.length, 1, "Each starter must have one prepared operations configuration.");
+    const initial = original.encounters[0];
+    assert.equal(initial.state, "planning");
+    assert.equal(initial.document.nodeId, null, "A new starter must leave legacy WAYFINDER admission unchanged until explicitly linked.");
+    const privateNotes = `Private performer and prop plan ${runId} ${theme}`;
+    const checklist = [{ id: "performer", label: "Performer briefed", kind: "performer" }, { id: "prop", label: "Prop prepared", kind: "prop" }, { id: "checkin", label: "Check-in staff ready", kind: "staff" }];
+    const document = (node, account, title) => ({ title, nodeId: node.id, publicMessage: "Check your party assignment and wait for staff dispatch.", staffNotes: privateNotes, capacity: 2, staffUserIds: [account.id], checks: checklist, returnMinutes: 5 });
+    await request(owner, `${ops}/encounters/${initial.id}`, { method: "PUT", body: { requestId: randomUUID(), version: initial.version, document: document(scene, staffA, `Staging ${theme} original scene`) } });
+    const sceneA = initial.id;
+    const madeB = await request(owner, `${ops}/encounters`, { method: "POST", body: { requestId: randomUUID(), document: document(destination, staffB, `Staging ${theme} alternate scene`) }, status: 201 });
+    const sceneB = madeB.outcome.targetId;
+    await request(player, `${ops}/manage`, { status: 403 });
+    assert.deepEqual((await manage(staffA)).encounters.map((row) => row.id), [sceneA], "Assigned staff must see only their scene.");
+    assert.deepEqual((await manage(staffB)).encounters.map((row) => row.id), [sceneB]);
+    await check(staffA, sceneB, "performer", true, 403);
+    await request(staffA, `${ops}/encounters/${sceneA}`, { method: "PUT", body: { requestId: randomUUID(), version: (await encounter(sceneA)).version, document: document(scene, staffA, "Unapproved staff configuration") }, status: 403 });
+    await state(staffA, sceneA, "open", 409);
+    await join(a, scene, 409);
+    for (const [id, account] of [[sceneA, staffA], [sceneB, staffB]]) {
+      for (const item of checklist) await check(account, id, item.id, true);
+      await state(account, id, "open");
+    }
+    assert.equal((await encounter(sceneA)).attendanceCount, 2, "Linking operations must preserve and count existing WAYFINDER attendance.");
+    let extraCharacter = (await request(owner, `${base}/characters`, { method: "POST", body: { profile: { ...defaultCharacterProfile(event.setup.rules), name: `Staging ${theme} capacity witness` }, userId: staffA.id }, status: 201 })).character;
+    extraCharacter = (await request(owner, `${base}/characters/${extraCharacter.id}/submit`, { method: "POST", body: { version: extraCharacter.version } })).character;
+    if (extraCharacter.status === "pending") extraCharacter = (await request(owner, `${base}/characters/${extraCharacter.id}/review`, { method: "POST", body: { version: extraCharacter.version, decision: "approve", feedback: "Approved only for the disposable capacity gate." } })).character;
+    await request(owner, `${base}/adventure/override`, { method: "POST", body: { requestId: randomUUID(), version: adventureVersion, characterId: extraCharacter.id, nodeId: "restoration-console", kind: "solve" } });
+    const extra = { account: staffA, character: extraCharacter };
+    const fullParty = await createParty(staffA, sceneA, [extraCharacter.id], "Staging capacity check");
+    await respond(extra, fullParty.id);
+    await partyAction(staffA, fullParty.id, "dispatch", 409);
+    assert.equal((await party(fullParty.id)).status, "waiting", "Insufficient room must not partially dispatch a party.");
+    assert.equal((await encounter(sceneA)).attendanceCount, 2);
+    await partyAction(staffA, fullParty.id, "cancel");
+    const legacyParty = await createParty(staffA, sceneA, assigned.map((entry) => entry.character.id), "Existing attendees");
+    for (const participant of assigned) await respond(participant, legacyParty.id);
+    await partyAction(staffA, legacyParty.id, "dispatch");
+    await join(a, scene);
+    await partyAction(staffA, legacyParty.id, "return");
+    assert.equal((await encounter(sceneA)).attendanceCount, 2, "Acknowledging return must preserve attendance that existed before managed dispatch.");
+
+    let redirected = await createParty(staffA, sceneA, assigned.map((entry) => entry.character.id));
+    for (const participant of assigned) await respond(participant, redirected.id);
+    redirected = await party(redirected.id);
+    const oldTerms = redirected.termsVersion;
+    await state(staffA, sceneA, "cancelled");
+    assert.equal((await party(redirected.id)).status, "waiting", "Cancelling a scene must retain its waiting whole party for an explicit redirect.");
+    await partyAction(staffA, redirected.id, "dispatch", 409);
+    const revised = { requestId: randomUUID(), version: redirected.version, encounterId: sceneB, name: "Redirected whole party", characterIds: assigned.map((entry) => entry.character.id), returnMinutes: 5 };
+    await request(staffA, `${ops}/parties/${redirected.id}`, { method: "PUT", body: revised, status: 403 });
+    await request(owner, `${ops}/parties/${redirected.id}`, { method: "PUT", body: revised });
+    redirected = await party(redirected.id);
+    assert.equal(redirected.encounterId, sceneB);
+    assert.ok(redirected.termsVersion > oldTerms && redirected.acceptedCount === 0 && redirected.members.every((member) => member.response === null), "Redirecting the whole party must clear every prior acceptance.");
+    await partyAction(staffB, redirected.id, "dispatch", 409);
+    for (const participant of assigned) {
+      const projection = await play(participant), serialized = JSON.stringify(projection);
+      for (const secret of [privateNotes, owner.email, player.email, staffA.id, staffB.id, checklist[0].label]) assert.ok(!serialized.includes(secret), "Player operations projection must omit staff plans, identities and readiness details.");
+      assert.ok(!Object.hasOwn(projection, "context") && !Object.hasOwn(projection, "activity"));
+      const ownParty = projection.parties.find((row) => row.id === redirected.id);
+      assert.equal(ownParty.memberCount, 2);
+      assert.ok(!Object.hasOwn(ownParty, "members"), "A player may review their own assent and counts, never another member's identity.");
+    }
+    event = await patchEvent(owner, event, { status: "paused" });
+    await respond(a, redirected.id, "accepted", 409);
+    await partyAction(staffB, redirected.id, "dispatch", 409);
+    event = await patchEvent(owner, event, { status: "live" });
+    for (const participant of assigned) await respond(participant, redirected.id);
+    assert.equal((await party(redirected.id)).acceptedCount, 2, "The second response must preserve the first member's current acceptance.");
+    await state(staffB, sceneB, "paused");
+    await partyAction(staffB, redirected.id, "dispatch", 409);
+    await state(staffB, sceneB, "open");
+    await check(staffB, sceneB, "prop", false);
+    await partyAction(staffB, redirected.id, "dispatch", 409);
+    await check(staffB, sceneB, "prop", true);
+    await state(staffB, sceneB, "open");
+    redirected = await party(redirected.id);
+    const dispatchInput = { requestId: randomUUID(), version: redirected.version, reason: "Assigned staff observed both accepted players depart together." };
+    const dispatched = await request(staffB, `${ops}/parties/${redirected.id}/dispatch`, { method: "POST", body: dispatchInput });
+    const committedParty = dispatched.parties.find((row) => row.id === redirected.id);
+    assert.equal(committedParty.status, "dispatched");
+    assert.equal(Date.parse(committedParty.returnBy) - Date.parse(committedParty.dispatchedAt), 5 * 60000, "Return deadlines must use absolute server dispatch time and the accepted window.");
+    const replay = await request(staffB, `${ops}/parties/${redirected.id}/dispatch`, { method: "POST", body: dispatchInput });
+    assert.equal(replay.outcome.replayed, true);
+    assert.deepEqual(replay.parties.find((row) => row.id === redirected.id), committedParty, "Exact dispatch retries must preserve one reservation and deadline.");
+    assert.deepEqual(replay.activity, dispatched.activity, "Dispatch replay must not create duplicate staff activity.");
+    event = await patchEvent(owner, event, { status: "paused" });
+    assert.equal((await party(redirected.id)).returnBy, committedParty.returnBy, "Event pause must retain the absolute expected-return timestamp.");
+    assert.equal((await encounter(sceneB)).attendanceCount, 2, "Pausing an event must retain dispatched reservations.");
+    await join(a, destination, 409);
+    event = await patchEvent(owner, event, { status: "live" });
+    for (const participant of assigned) await join(participant, destination);
+    assert.equal((await encounter(sceneB)).attendanceCount, 2, "A dispatched character's WAYFINDER check-in must not consume another seat.");
+
+    const announce = async (title) => {
+      const response = await request(staffB, `${ops}/encounters/${sceneB}/announcement`, { method: "POST", body: { requestId: randomUUID(), version: (await encounter(sceneB)).version, title, body: "This prepared operational notice is public only after organizer approval." } });
+      return response.encounters.find((row) => row.id === sceneB).announcement.storyEntryId;
+    };
+    const storyEntry = async (id) => (await request(owner, `${base}/story/manage`)).entries.find((row) => row.id === id);
+    const publish = async (id, account = owner, status = 200) => request(account, `${base}/story/entries/${id}/publish`, { method: "POST", body: { requestId: randomUUID(), version: (await storyEntry(id)).version }, status });
+    const bulletins = async () => (await request(player, `${base}/story/play?characterId=${b.character.id}`)).bulletins;
+    const bulletinId = await announce(`Approved ${theme} operations notice`);
+    assert.ok(!(await bulletins()).some((row) => row.id === bulletinId), "Preparing an operational announcement must not publish it.");
+    await publish(bulletinId, staffB, 403);
+    await publish(bulletinId);
+    assert.ok((await bulletins()).some((row) => row.id === bulletinId), "Explicit organizer approval must publish the current operations notice.");
+    const staleDraftId = await announce(`Pending ${theme} operations notice`);
+    await state(staffB, sceneB, "paused");
+    assert.ok(!(await bulletins()).some((row) => row.id === bulletinId), "A changed scene must suppress its formerly approved stale availability notice.");
+    await publish(staleDraftId, owner, 409);
+    await state(staffB, sceneB, "open");
+    const currentBulletinId = await announce(`Current ${theme} operations notice`);
+    await publish(currentBulletinId);
+    assert.ok((await bulletins()).some((row) => row.id === currentBulletinId));
+    event = await patchEvent(owner, event, { status: "paused" });
+    const returned = await partyAction(staffB, redirected.id, "return");
+    assert.equal(returned.parties.find((row) => row.id === redirected.id).status, "returned", "Staff may acknowledge return while the event is paused.");
+    assert.equal((await encounter(sceneB)).attendanceCount, 0, "Return must release both reservation and newly created WAYFINDER attendance.");
+    assert.equal((await encounter(sceneA)).attendanceCount, 2, "Unrelated legacy attendance must remain untouched.");
+    event = await patchEvent(owner, event, { status: "live" });
+    const queued = await request(player, `${ops}/queue`, { method: "POST", body: { requestId: randomUUID(), encounterId: sceneB, characterId: b.character.id }, status: 201 });
+    const selfPartyId = queued.outcome.targetId;
+    assert.equal(queued.parties.find((row) => row.id === selfPartyId).response, null, "Self-queue must still require explicit acceptance.");
+    await respond(b, selfPartyId, "declined");
+    await partyAction(staffB, selfPartyId, "dispatch", 409);
+    await partyAction(player, selfPartyId, "cancel");
+    const endingDispatch = await createParty(staffB, sceneB, [a.character.id], "Event-end dispatched party");
+    await respond(a, endingDispatch.id);
+    await partyAction(staffB, endingDispatch.id, "dispatch");
+    const endingWait = await createParty(staffB, sceneB, [b.character.id], "Event-end waiting party");
+    const source = await manage();
+    assert.ok(source.activity.some((entry) => entry.action.includes("redirect")), "The organizer must have durable staff activity for the explicit whole-party redirect.");
+    pass(`${theme} STAGEHAND: scoped staff, private preparation, legacy capacity, whole-party assent and redirect after scene cancellation, readiness and pauses, exact dispatch deadline/replay, approved current BROADSIDE, explicit return and self-queue cancellation`);
+    return { event, sceneA, sceneB, nodeId: destination.id, source, currentBulletinId, activePartyIds: [endingDispatch.id, endingWait.id], characterCount: (await request(owner, `${base}/characters`)).characters.length };
+  }
+
   async function adventureJourney(owner, player) {
     const catalog = await request(owner, "/api/adventure-templates");
     assert.deepEqual(catalog.templates.map((template) => template.id).sort(), ["cyberpunk", "fantasy", "wasteland"], "All three complete starter adventures must be available.");
@@ -898,6 +1059,7 @@ if (publicOnly) {
       assert.ok(Object.keys(template).every((key) => ["id", "title", "summary", "durationMinutes", "players"].includes(key)), "Starter catalog must contain metadata only.");
     await request(null, "/api/adventure-templates", { status: 401 });
     const completedSources = [];
+    const operationsStaff = [await register("Stagehand-A"), await register("Stagehand-B")];
     for (const theme of ["fantasy", "cyberpunk", "wasteland"]) {
       let { event } = await request(owner, `/api/adventure-templates/${theme}`, {
         method: "POST", body: { name: `CI ${theme} adventure ${runId}` }, status: 201,
@@ -925,7 +1087,11 @@ if (publicOnly) {
         });
         assigned.push({ account, character });
       }
-      const manage = await request(owner, `${base}/manage`);
+      let manage = await request(owner, `${base}/manage`);
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      const operationsNode = { ...defaultAdventureNode("wayfinder", "staging-dispatch-scene", [...randomBytes(20)].map((byte) => alphabet[byte % alphabet.length]).join("")), title: `Staging ${theme} dispatch scene`, location: "Disposable rehearsal gathering point", maxPlayers: 2 };
+      operationsNode.conditions.flags = ["cooperation-complete"];
+      manage = await request(owner, `${base}/manage`, { method: "PUT", body: { version: manage.version, definition: { ...manage.definition, nodes: [...manage.definition.nodes, operationsNode] } } });
       const { definition, version } = manage;
       const relic = definition.nodes.find((node) => node.id === "evidence-core");
       const message = definition.nodes.find((node) => node.id === "sealed-message");
@@ -1013,11 +1179,13 @@ if (publicOnly) {
       event = await patchEvent(owner, event, { status: "paused" });
       await act(firstRequest.account, firstRequest.character, relic, "examine", { examId: exam.id, code: relic.code }, { requestId: firstRequest.requestId, status: 409 });
       event = await patchEvent(owner, event, { status: "live" });
-      const completedExchange = theme === "fantasy" ? await exchangeJourney(owner, player, event, assigned, definition, version) : null;
-      const completedStory = theme === "fantasy" ? await storyJourney(owner, player, event, assigned) : null;
-      const completedEconomy = theme === "fantasy" ? await economyJourney(owner, player, event, assigned) : null;
+      const completedExchange = await exchangeJourney(owner, player, event, assigned, definition, version);
+      const completedStory = await storyJourney(owner, player, event, assigned);
+      const completedEconomy = await economyJourney(owner, player, event, assigned);
       const completedInstruments = await instrumentJourney(owner, player, event, assigned, theme);
       event = completedInstruments.event;
+      const completedOperations = await stagehandJourney(owner, player, event, assigned, operationsStaff, definition, version, theme);
+      event = completedOperations.event;
       const original = await request(owner, playPath(assigned[0].character));
       const originalInventory = (await request(owner, `/api/events/${event.id}/characters/${assigned[0].character.id}/inventory`)).inventory;
       const originalEconomy = completedEconomy ? await request(owner, `/api/events/${event.id}/bazaar?characterId=${assigned[0].character.id}`) : null;
@@ -1031,10 +1199,13 @@ if (publicOnly) {
       assert.equal(rehearsalManage.sourceEventId, event.id, "A rehearsal must identify its original source event.");
       assert.equal(rehearsalManage.progress.length, 0, "Rehearsal copies must not transfer original progress.");
       const rehearsalCharacters = (await request(owner, `/api/events/${rehearsal.id}/characters`)).characters;
-      assert.equal(rehearsalCharacters.length, completedEconomy?.characterCount || 2, "Rehearsal must copy the authored character identities without their play history.");
+      assert.equal(rehearsalCharacters.length, completedOperations.characterCount, "Rehearsal must copy the authored character identities without their play history.");
       assert.ok(rehearsalCharacters.every((character) => character.userId === null && !assigned.some((entry) => entry.character.id === character.id)), "Rehearsal characters must have new identities and await assignment.");
-      const { character: rehearsalCharacter } = await request(owner, `/api/events/${rehearsal.id}/characters/${rehearsalCharacters[0].id}/assign`, {
-        method: "POST", body: { version: rehearsalCharacters[0].version, userId: owner.id },
+      const rehearsalHostSheet = rehearsalCharacters.find((character) => character.profile.name === assigned[0].character.profile.name);
+      const rehearsalPeerSheet = rehearsalCharacters.find((character) => character.profile.name === assigned[1].character.profile.name);
+      assert.ok(rehearsalHostSheet && rehearsalPeerSheet, "Rehearsal participants must use the copied starter sheets, independent of database row ordering.");
+      const { character: rehearsalCharacter } = await request(owner, `/api/events/${rehearsal.id}/characters/${rehearsalHostSheet.id}/assign`, {
+        method: "POST", body: { version: rehearsalHostSheet.version, userId: owner.id },
       });
       const copiedSigil = await request(owner, `/api/events/${rehearsal.id}/sigil/manage`);
       const copiedStatic = await request(owner, `/api/events/${rehearsal.id}/static/manage`);
@@ -1048,6 +1219,18 @@ if (publicOnly) {
       assert.equal(copiedSigil.runs.length, 0, "A rehearsal must not inherit original role assignments, timers, runs or outcomes.");
       assert.equal(rehearsalSignal.override?.stateId ?? null, null, "A rehearsal must not copy staff's live signal override.");
       assert.equal((await request(owner, `/api/events/${rehearsal.id}/static?characterId=${rehearsalCharacter.id}`)).readings.length, 0, "A rehearsal must not inherit original private signal readings.");
+      const copiedOperations = await request(owner, `/api/events/${rehearsal.id}/stagehand/manage`);
+      assert.equal(copiedOperations.encounters.length, completedOperations.source.encounters.length, "A rehearsal must copy all authored encounters.");
+      assert.equal(copiedOperations.parties.length, 0, "A rehearsal must not inherit waiting or dispatched original parties.");
+      assert.equal(copiedOperations.activity.length, 0, "A rehearsal must not inherit staff acknowledgments or activity.");
+      for (const row of copiedOperations.encounters) {
+        assert.ok(!completedOperations.source.encounters.some((source) => source.id === row.id), "Copied encounters must have fresh identities.");
+        assert.equal(row.state, "planning");
+        assert.deepEqual(row.document.staffUserIds, [], "Original staff assignments must not cross into a copied event.");
+        assert.ok(row.readiness.every((item) => !item.ready), "Copied preparations need new staff acknowledgments.");
+        assert.equal(row.announcement, null, "A copied encounter must not retain original publication approval links.");
+      }
+      let rehearsalOperations;
       let rehearsalInstrumentRun;
       let rehearsalEconomy;
       if (completedEconomy) {
@@ -1093,7 +1276,7 @@ if (publicOnly) {
         const instrumentBase = `/api/events/${rehearsal.id}`;
         const doc = rehearsalChallenge.published || rehearsalChallenge.document;
         const items = (await request(owner, `${instrumentBase}/characters/${rehearsalCharacter.id}/inventory`)).inventory;
-        const input = { requestId: randomUUID(), characterId: rehearsalCharacter.id, entryId: rehearsalChallenge.id, publishedVersion: rehearsalChallenge.publishedVersion, code: rehearsalChallenge.code, roles: doc.roles.map((role, index) => ({ roleId: role.id, performer: `Rehearsal participant ${index + 1}` })), bindings: doc.components.filter((component) => component.kind === "item").map((component) => ({ componentId: component.id, itemId: items.find((item) => item.name === component.itemName).id })) };
+        const input = { requestId: randomUUID(), characterId: rehearsalCharacter.id, entryId: rehearsalChallenge.id, publishedVersion: rehearsalChallenge.publishedVersion, code: rehearsalChallenge.code, roles: doc.roles.map((role, index) => ({ roleId: role.id, performer: `Rehearsal participant ${index + 1}` })), bindings: doc.components.filter((component) => component.kind === "item").map((component) => { const item = items.find((item) => item.name === component.itemName); assert.ok(item, "The copied host's authored inventory must satisfy the copied procedure."); return { componentId: component.id, itemId: item.id }; }) };
         rehearsalInstrumentRun = (await request(owner, `${instrumentBase}/sigil/start`, { method: "POST", body: input, status: 201 })).run;
         while (rehearsalInstrumentRun.currentCheckpoint) {
           const checkpoint = doc.checkpoints.find((entry) => entry.id === rehearsalInstrumentRun.currentCheckpoint.id);
@@ -1107,6 +1290,31 @@ if (publicOnly) {
         const states = (rehearsalSignal.published || rehearsalSignal.document).states;
         await request(owner, `${instrumentBase}/static/entries/${rehearsalSignal.id}/state`, { method: "POST", body: { requestId: randomUUID(), version: rehearsalSignal.override?.version || 0, stateId: states.find((state) => state.id !== current.state.id).id, reason: "Create an actual disposable staff override before resetting rehearsal state." } });
         assert.ok((await request(owner, `${instrumentBase}/static?characterId=${rehearsalCharacter.id}`)).readings.length > 0, "Rehearsal reset must clear an actually collected signal snapshot.");
+      }
+      {
+        const operationsBase = `/api/events/${rehearsal.id}/stagehand`;
+        const current = async () => request(owner, `${operationsBase}/manage`);
+        let copiedEncounter = copiedOperations.encounters.find((row) => row.document.nodeId === completedOperations.nodeId);
+        assert.ok(copiedEncounter, "Rehearsal encounter links must point to the corresponding copied WAYFINDER node.");
+        for (const item of copiedEncounter.document.checks) {
+          await request(owner, `${operationsBase}/encounters/${copiedEncounter.id}/check`, { method: "POST", body: { requestId: randomUUID(), version: copiedEncounter.version, checkId: item.id, ready: true, reason: "Organizer checked the actual disposable copied scene." } });
+          copiedEncounter = (await current()).encounters.find((row) => row.id === copiedEncounter.id);
+        }
+        await request(owner, `${operationsBase}/encounters/${copiedEncounter.id}/state`, { method: "POST", body: { requestId: randomUUID(), version: copiedEncounter.version, state: "open", reason: "Open the prepared copied rehearsal scene." } });
+        const queued = await request(owner, `${operationsBase}/queue`, { method: "POST", body: { requestId: randomUUID(), encounterId: copiedEncounter.id, characterId: rehearsalCharacter.id }, status: 201 });
+        let party = queued.parties.find((row) => row.id === queued.outcome.targetId);
+        const accepted = await request(owner, `${operationsBase}/parties/${party.id}/respond`, { method: "POST", body: { requestId: randomUUID(), version: party.version, characterId: rehearsalCharacter.id, response: "accepted" } });
+        party = accepted.parties.find((row) => row.id === party.id);
+        await request(owner, `${operationsBase}/parties/${party.id}/dispatch`, { method: "POST", body: { requestId: randomUUID(), version: party.version, reason: "Dispatch an actual copied party before resetting it." } });
+        await request(owner, `${rehearsalBase}/action`, { method: "POST", body: { requestId: randomUUID(), version: rehearsalManage.version, characterId: rehearsalCharacter.id, nodeId: completedOperations.nodeId, kind: "join" } });
+        copiedEncounter = (await current()).encounters.find((row) => row.id === copiedEncounter.id);
+        assert.equal(copiedEncounter.attendanceCount, 1, "The reset gate must include an actual managed reservation and WAYFINDER attendance.");
+        const announced = await request(owner, `${operationsBase}/encounters/${copiedEncounter.id}/announcement`, { method: "POST", body: { requestId: randomUUID(), version: copiedEncounter.version, title: "Disposable copied operations notice", body: "An actual approved rehearsal bulletin that reset must remove from live player news." } });
+        const storyId = announced.encounters.find((row) => row.id === copiedEncounter.id).announcement.storyEntryId;
+        const entry = (await request(owner, `/api/events/${rehearsal.id}/story/manage`)).entries.find((row) => row.id === storyId);
+        await request(owner, `/api/events/${rehearsal.id}/story/entries/${storyId}/publish`, { method: "POST", body: { requestId: randomUUID(), version: entry.version } });
+        assert.ok((await request(owner, `/api/events/${rehearsal.id}/story/play?characterId=${rehearsalCharacter.id}`)).bulletins.some((row) => row.id === storyId));
+        rehearsalOperations = { encounterId: copiedEncounter.id, partyId: party.id, storyId };
       }
       if (rehearsalStory) {
         const storyBase = `/api/events/${rehearsal.id}/story`;
@@ -1124,8 +1332,8 @@ if (publicOnly) {
         assert.equal(beforeExchange.contacts.length, 0, "A rehearsal copy must not inherit source contacts.");
         const { invitation } = await request(owner, `/api/events/${rehearsal.id}/invites`, { method: "POST", body: { role: "player", maxUses: 1 }, status: 201 });
         await request(player, "/api/events/join", { method: "POST", body: { code: invitation.code } });
-        const { character: rehearsalPeer } = await request(owner, `/api/events/${rehearsal.id}/characters/${rehearsalCharacters[1].id}/assign`, {
-          method: "POST", body: { version: rehearsalCharacters[1].version, userId: player.id },
+        const { character: rehearsalPeer } = await request(owner, `/api/events/${rehearsal.id}/characters/${rehearsalPeerSheet.id}/assign`, {
+          method: "POST", body: { version: rehearsalPeerSheet.version, userId: player.id },
         });
         rehearsalExchange = (await request(owner, exchangeBase, { method: "POST", body: { requestId: randomUUID(), characterId: rehearsalCharacter.id }, status: 201 })).exchange;
         rehearsalExchange = (await request(player, `${exchangeBase}/join`, { method: "POST", body: { requestId: randomUUID(), characterId: rehearsalPeer.id, code: rehearsalExchange.code } })).exchange;
@@ -1144,9 +1352,10 @@ if (publicOnly) {
         }
       }
       await request(owner, `${base}/reset`, { method: "POST", body: { version, confirm: true }, status: 409 });
-      await request(owner, `${rehearsalBase}/reset`, { method: "POST", body: { version: rehearsalManage.version, confirm: true } });
+      const beforeResetVersion = rehearsalManage.version;
+      await request(owner, `${rehearsalBase}/reset`, { method: "POST", body: { version: beforeResetVersion, confirm: true } });
       rehearsalManage = await request(owner, `${rehearsalBase}/manage`);
-      assert.ok(rehearsalManage.version > version, "A rehearsal reset must advance the adventure version.");
+      assert.equal(rehearsalManage.version, beforeResetVersion + 1, "A rehearsal reset must advance its own adventure version exactly once.");
       assert.equal((await request(owner, rehearsalPlayPath)).journal.length, 0, "A rehearsal reset must remove its journal and play state.");
       {
         const instrumentBase = `/api/events/${rehearsal.id}`;
@@ -1161,6 +1370,17 @@ if (publicOnly) {
         assert.deepEqual((await request(owner, `/api/events/${event.id}/sigil/runs/${completedInstruments.runId}?characterId=${assigned[0].character.id}`)).run.result, completedInstruments.result, "A copied rehearsal reset must preserve the original completed cooperative receipt.");
         assert.ok((await request(owner, `/api/events/${event.id}/static?characterId=${assigned[0].character.id}`)).readings.some((reading) => reading.id === completedInstruments.readingId), "A copied rehearsal reset must preserve the original captured fictional reading.");
         pass(`${theme} instrument rehearsal: fresh authored props, actual cooperative outcome and collected signal, reset runtime and staff override, source receipt unchanged`);
+      }
+      {
+        const cleared = await request(owner, `/api/events/${rehearsal.id}/stagehand/manage`);
+        assert.equal(cleared.parties.length, 0, "Reset must remove actually dispatched copied parties and captured consent.");
+        assert.equal(cleared.activity.length, 0, "Reset must remove copied staff activity and replay state.");
+        assert.ok(cleared.encounters.every((row) => row.state === "planning" && row.readiness.every((item) => !item.ready) && row.announcement === null), "Reset must clear actual readiness and operational approval links while preserving authored encounters.");
+        assert.equal(cleared.encounters.find((row) => row.id === rehearsalOperations.encounterId).attendanceCount, 0);
+        assert.ok(!(await request(owner, `/api/events/${rehearsal.id}/story/play?characterId=${rehearsalCharacter.id}`)).bulletins.some((row) => row.id === rehearsalOperations.storyId), "Reset must remove its previously approved operational notice from player news.");
+        const source = await request(owner, `/api/events/${event.id}/stagehand/manage`);
+        for (const key of ["encounters", "parties", "activity"]) assert.deepEqual(source[key], completedOperations.source[key], "Resetting a copy must preserve source assignments, return windows, staff acknowledgments and publication links.");
+        pass(`${theme} STAGEHAND rehearsal: fresh planning encounters, cleared staff scope, actual consent/dispatch/check-in and approved notice, complete reset, source operations unchanged`);
       }
       if (rehearsalExchange) {
         const afterReset = await request(owner, `/api/events/${rehearsal.id}/exchanges?characterId=${rehearsalCharacter.id}`);
@@ -1197,11 +1417,19 @@ if (publicOnly) {
       }
       assert.ok(isDeepStrictEqual((await request(owner, playPath(assigned[0].character))).journal, original.journal), "Resetting a rehearsal must preserve the original event's journal.");
       assert.ok(isDeepStrictEqual((await request(owner, `/api/events/${event.id}/characters/${assigned[0].character.id}/inventory`)).inventory, originalInventory), "Resetting a rehearsal must preserve original character inventory.");
+      event = await patchEvent(owner, event, { status: "ended" });
+      const endedOperations = await request(owner, `/api/events/${event.id}/stagehand/manage`);
+      assert.ok(completedOperations.activePartyIds.every((id) => endedOperations.parties.find((row) => row.id === id)?.status === "cancelled"), "Whole-event end must atomically cancel both waiting and dispatched parties.");
+      assert.equal(endedOperations.encounters.find((row) => row.id === completedOperations.sceneB).attendanceCount, 0, "Ending the event must release every dispatched reservation.");
+      assert.ok(!(await request(player, `/api/events/${event.id}/story/play?characterId=${assigned[1].character.id}`)).bulletins.some((row) => row.id === completedOperations.currentBulletinId), "Ended events must suppress operational availability notices.");
+      assert.equal((await request(player, `/api/events/${event.id}/stagehand?characterId=${assigned[1].character.id}`)).readOnly, true);
+      pass(`${theme} connected all-twelve journey ends with waiting and dispatched parties cancelled and operational news withdrawn`);
       await request(owner, `/api/events/${event.id}/members/${player.id}`, { method: "DELETE" });
       await request(player, playPath(assigned[1].character), { status: 404 });
       await act(player, assigned[1].character, scene, "join", {}, { status: 404 });
       await request(player, `/api/events/${event.id}/sigil/runs/${completedInstruments.peerRunId}?characterId=${assigned[1].character.id}`, { status: 404 });
       await request(player, `/api/events/${event.id}/static?characterId=${assigned[1].character.id}`, { status: 404 });
+      await request(player, `/api/events/${event.id}/stagehand?characterId=${assigned[1].character.id}`, { status: 404 });
       if (completedStory) {
         await request(player, `/api/events/${event.id}/story/play?characterId=${assigned[1].character.id}`, { status: 404 });
         await request(player, `/api/events/${event.id}/trace?characterId=${assigned[1].character.id}`, { status: 404 });

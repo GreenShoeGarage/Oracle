@@ -58,6 +58,7 @@ try {
     "/", "/app.js", "/builder.js", "/kit.js", "/characters-model.js", "/characters-ui.js", "/admin-ui.js",
     "/adventure-model.js", "/adventure-player.js", "/adventure-organizer.js", "/prop-code.js", "/offline.js", "/sw.js",
     "/exchange-model.js", "/exchanges-ui.js", "/exchange-code.js", "/sharing-ui.js", "/exchanges.css", "/sharing.css",
+    "/stagehand-model.js", "/stagehand-ui.js", "/stagehand-manage.js", "/stagehand.css",
     "/sigil-model.js", "/sigil-ui.js", "/sigil.css", "/static-model.js", "/static-ui.js", "/static.css",
     "/instrument-code.js", "/prop-effects.js", "/props.css",
     "/economy-model.js", "/economy-ui.js", "/economy.css", "/oath-model.js", "/oath-ui.js", "/oath.css",

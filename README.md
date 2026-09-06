@@ -1,14 +1,19 @@
 # ORACLE
 
-**LARP Field Kit** · v0.8.0 · Green Shoe Garage
+**LARP Field Kit** · v0.9.0 · Green Shoe Garage
 
 ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. Shared screens can present selected briefings, cooperative procedures, and explicitly fictional prop readings.
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 8 (v0.8.0, database schema 9), release commit `ef3d822c0e6a36fd0f1e3081b68f5d750d268106`, passed full local verification, both PostgreSQL CI runs, Railway staging, and the complete remote workflow. It is fully deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com); Railway production and all 52 exact-commit public checks passed. See [docs/STATUS.md](docs/STATUS.md) for evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
+Batch 9 (v0.9.0, database schema 10) implements STAGEHAND live event operations, completing all twelve gameplay instruments. The full local staging rehearsal passed 971 reads/1,035 writes across every instrument in all three themes. Exact-candidate GitHub/PostgreSQL and Railway staging/production gates are pending; the last verified live release remains Batch 8. See [docs/STATUS.md](docs/STATUS.md) for evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
 
 ## What works in this release
+
+- STAGEHAND encounter preparation, performer/prop/staff readiness, scoped staff access, party queues, explicit member acceptance, and whole-party dispatch within current capacity.
+- Server return deadlines and overdue indicators, acknowledged returns/cancellations, scene/event pauses, and whole-party redirection that clears prior consent.
+- Managed WAYFINDER admission with existing attendance preserved, and operational BROADSIDE drafts requiring organizer approval with stale notices hidden after scene changes.
+- Themed player/prop and staff views, private operational notes, current staff activity, explicit uncertain-request replay, and actual operations-aware rehearsal copy/reset.
 
 - SIGIL shared-device challenges with in-person role assignments, ordered checkpoints, prepared answers, timers, host inventory/resource requirements, and recorded success/failure outcomes.
 - Explicit pause/resume, connectivity leases, cancellation/retry, and staff interventions with reasons; final outcomes and consumed host components commit once.
@@ -51,7 +56,7 @@ Batch 8 (v0.8.0, database schema 9), release commit `ef3d822c0e6a36fd0f1e3081b68
 - Versioned JSON event packs: private organizer backups and player material with organizer-only content removed.
 - Dark and outdoor reading settings, reduced motion, collapsible navigation, and clear manual-save status.
 
-**Briefing** and eleven gameplay instruments—**RELIC**, **DEAD DROP**, **CIPHERBOX**, **WAYFINDER**, **TRACE**, **WHISPER**, **BROADSIDE**, **BAZAAR**, **OATHBOOK**, **SIGIL**, and **STATIC**—are available optional instruments. **STAGEHAND** remains planned for Batch 9. Character badges identify people; prop labels open event instruments. Temporary exchange QR codes support mutually confirmed introductions, selected reading copies, and atomic item/resource barter. Coordinated multi-device timing and offline action synchronization remain later work. Conditions and outcomes are bounded data; they do not run arbitrary scripts.
+**Briefing** and twelve gameplay instruments—**RELIC**, **DEAD DROP**, **CIPHERBOX**, **WAYFINDER**, **TRACE**, **WHISPER**, **BROADSIDE**, **BAZAAR**, **OATHBOOK**, **SIGIL**, **STATIC**, and **STAGEHAND**—are available optional instruments. Character badges identify people; prop labels open event instruments. Temporary exchange QR codes support mutually confirmed introductions, selected reading copies, and atomic item/resource barter. Coordinated multi-device timing and offline action synchronization remain later work. Conditions and outcomes are bounded data; they do not run arbitrary scripts.
 
 ## Stack and project layout
 
@@ -65,6 +70,8 @@ Node.js 22 (22.9 or newer) or 24, a small native HTTP server, PostgreSQL, and pl
 | `src/admin.js`, `public/admin-ui.js` | Operator provisioning and project administration |
 | `src/adventures.js`, `public/adventure-model.js` | Authoritative gameplay, journal, validation, and player projections |
 | `src/adventure-templates.js` | Server-only full adventures and solutions |
+| `src/stagehand.js`, `src/stagehand-core.js`, `src/stagehand-parties.js` | Scoped operations, readiness, capacity, captured consent, dispatch/return, lifecycle, and publication links |
+| `public/stagehand-model.js`, `public/stagehand-ui.js`, `public/stagehand-manage.js` | Validated operations documents, player/prop views, and manager/staff forms |
 | `src/sigil.js`, `public/sigil-model.js`, `public/sigil-ui.js` | Shared-device procedures, roles, authoritative timers, checkpoints, and outcomes |
 | `src/sigil-components.js` | Atomic requirements and consumption from the current host's inventory/resources |
 | `src/static.js`, `public/static-model.js`, `public/static-ui.js` | Prepared fictional signals, staff overrides, and captured readings |
@@ -216,6 +223,18 @@ Offline mode cannot sign in, check current permissions, unlock a clue, submit an
 
 **Shared prop devices:** Player and prop previews exclude organizer-only entries, but previewing does not lower a signed-in organizer's account permissions. Use a separate player account on an unattended device. Prop display is a reading view, not a locked kiosk or a new authorization role. Fullscreen depends on browser support.
 
+## Run live encounters with STAGEHAND
+
+1. Enable **STAGEHAND** and **WAYFINDER**, then open STAGEHAND's staff workspace. Every new starter has a planning encounter with example performer, prop, and check-in preparation. It begins unlinked, so the original adventure remains playable.
+2. Configure an encounter: choose its WAYFINDER scene, public message, private staff notes, assigned staff, capacity, return window, and checklist. Linking transfers admission to party dispatch. The authored scene's conditions, time window, and maximum still apply. Saving configuration clears readiness and pauses an open encounter.
+3. Assigned staff acknowledge each preparation with a reason, then explicitly open the scene. Managers can operate all encounters; staff see only their assignments. Existing WAYFINDER attendance remains counted. An unready check or pause blocks further dispatch.
+4. Create a waiting party from approved assigned characters, or let a player join the queue for their own character. Every member reviews and accepts their own current assignment, including self-queued players. Queueing does not reserve capacity. Staff dispatch the whole accepted party only when every member is eligible and the group fits. Players may then join the linked WAYFINDER scene without consuming another seat.
+5. Monitor the server's return timestamp. **Overdue** keeps seats reserved until staff acknowledge return or cancellation. Pauses do not extend the absolute window. Cancelling/ending one encounter retains its waiting queue for explicit redirect or cancellation; redirecting moves the whole waiting party and clears all consent. Dispatched parties must return/cancel before reassignment. Ending the whole event cancels all waiting/dispatched assignments.
+6. Prepare an operational announcement with public text, then have an organizer review and publish it through **BROADSIDE**. Staff submission alone never publishes. Any encounter revision hides its older availability notices and prevents stale drafts from being approved; prepare and approve a replacement from the current state.
+7. Make a rehearsal copy to practice. It has fresh planning encounters, no staff assignments or parties, and no inherited approval links. A reset removes actual copied consent, dispatch, readiness, activity, and operational bulletins while preserving authored configuration and source event records.
+
+Players see eligible public scenes and their own response/counts, without staff notes, readiness details, or other members' identities. Shared screens use the same filtered state. Live availability and actions require connectivity; return deadlines are not a local timer or an automatic release. Ordinary return/cancel remains available while an event is paused or an instrument is disabled; archived events are read-only. Staff still make the in-person readiness and return decisions.
+
 ## Create and use characters
 
 1. Join or open an event and select **Characters**. Organizers can expand **Character settings & factions** to enable player creation, require approval, choose 1–10 active characters per player, set public fields, and create event factions. Defaults allow player creation, require approval, and permit one active character per player.
@@ -245,7 +264,7 @@ Provisioning uses protected deployment settings, never an email address embedded
 
 From the event list, choose **Import briefing pack**, select the JSON file, inspect its validation preview, and select **Create from pack**. Import always creates a new Draft owned by the importing account. It keeps the pack's theme, rules, and content identifiers but creates a new event identity and fresh owner membership. Existing events remain intact. Memberships, account information, invitation codes, activity history, and live event state are never exported or imported.
 
-An organizer pack is a reusable content backup, **not a database backup**. Format 1 contains event setup and briefing material; it does not include adventure definitions/solutions, discoveries, reservations, sharing policies, exchanges, contacts, receipts, story entries/publications/groups, rumor collections, investigation records, characters, factions, character settings, inventories, participants, or event history. Use the separate character-copy workflow to reuse a character identity. A player pack can also seed a new event, but cannot recover omitted private material.
+An organizer pack is a reusable content backup, **not a database backup**. Format 1 contains event setup and briefing material; it does not include adventure definitions/solutions, discoveries, reservations, sharing policies, exchanges, contacts, receipts, story entries/publications/groups, rumor collections, investigation records, cooperative/fictional instrument state, operations configurations/parties, characters, factions, character settings, inventories, participants, or event history. Use the separate character-copy workflow to reuse a character identity. A player pack can also seed a new event, but cannot recover omitted private material.
 
 Custom themes can be supplied inside a validated event pack. They may contain approved color, font, texture, icon, terminology, and sound choices; arbitrary CSS, markup, scripts, formulas, and external asset URLs are rejected. There is no custom theme editor in this release. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#event-pack-format) for the exact format and a valid example.
 
@@ -259,6 +278,10 @@ Custom themes can be supplied inside a validated event pack. They may contain ap
 | Publish/withdraw stories or manage audience groups | Yes | Yes | No | No |
 | Use own approved character for rumors, proposals, and TRACE | Yes | Yes | Yes | Yes |
 | Bypass another player's private TRACE records | No | No | No | No |
+| Configure STAGEHAND encounters and staff assignments | Yes | Yes | No | No |
+| Acknowledge readiness, operate parties, prepare operations news | Yes | Yes | Assigned encounters only | No |
+| Accept own party or cancel own sole waiting party | Yes | Yes | Yes | Yes |
+| Publish operational BROADSIDE announcements | Yes | Yes | No | No |
 | Author/publish SIGIL or STATIC definitions | Yes | Yes | No | No |
 | Operate SIGIL or prepared STATIC states with a reason | Yes | Yes | Yes | No |
 | Host SIGIL or collect STATIC using own approved character | Yes | Yes | Yes | Yes |
@@ -325,7 +348,7 @@ For the configured disposable staging environment:
 EXPECTED_COMMIT='<full-40-character-release-commit>' node scripts/staging-check.js
 ```
 
-This script waits for the expected deployment commit, app version, and schema. It then creates disposable staging accounts/events to exercise event isolation, invitation redemption, role restrictions, player/prop secret filtering, all three theme switches, pack round trips, stale saves, fresh-session persistence, and immediate access removal. Batch 3 extends the journey through two approved characters, faction/field settings, badge privacy and rotation, inventory initialization/reapproval, prewritten assignment, malformed-write rejection, and cross-event copies. Batch 4 extends it through all three complete adventures, protected readings, puzzle hints/failure/overrides, request replay, reservations, and rehearsal isolation. Batch 5 adds bilateral introductions, selected reading exchange, both-party consent, changed-policy/offer checks, duplicate prevention, receipt persistence, and rehearsal cleanup. Batch 7 additionally verifies finite shops, explicit resource grants, purchase replay, mixed item/resource barter and rollback, an independent witness, revised agreement signatures, settlement replay, disputes/adjudication, linked corrections, and economy-aware rehearsal reset. Batch 6 adds alternate private rumors, hidden truth checks, confirmed QR rumor transfer, private and intentionally shared TRACE records, every audience type with current group/faction revocation, player proposal review, separate live/correction drafts, withdrawal, discovery-gated rumor collection, and story-aware rehearsal copy/reset. Batch 8 adds the same two-role/three-step cooperation in every theme, frozen pauses and reconnect state, one-time resource/item consumption and final-step rollback, conditional/manual fictional signals, stale collection/replay, staff access, and actual copied instrument play/reset. Cleanup archives test events and logs out test sessions. Mutations are restricted to the allowlisted staging origin. The `staging-smoke` GitHub job runs this after `verify` and uses `GITHUB_SHA` as the required deployed commit. After promotion, `production-smoke` waits for that same commit at the canonical production domain and runs public GET checks without creating users or events.
+This script waits for the expected deployment commit, app version, and schema. It then creates disposable staging accounts/events to exercise event isolation, invitation redemption, role restrictions, player/prop secret filtering, all three theme switches, pack round trips, stale saves, fresh-session persistence, and immediate access removal. Batch 3 extends the journey through two approved characters, faction/field settings, badge privacy and rotation, inventory initialization/reapproval, prewritten assignment, malformed-write rejection, and cross-event copies. Batch 4 extends it through all three complete adventures, protected readings, puzzle hints/failure/overrides, request replay, reservations, and rehearsal isolation. Batch 5 adds bilateral introductions, selected reading exchange, both-party consent, changed-policy/offer checks, duplicate prevention, receipt persistence, and rehearsal cleanup. Batch 7 additionally verifies finite shops, explicit resource grants, purchase replay, mixed item/resource barter and rollback, an independent witness, revised agreement signatures, settlement replay, disputes/adjudication, linked corrections, and economy-aware rehearsal reset. Batch 6 adds alternate private rumors, hidden truth checks, confirmed QR rumor transfer, private and intentionally shared TRACE records, every audience type with current group/faction revocation, player proposal review, separate live/correction drafts, withdrawal, discovery-gated rumor collection, and story-aware rehearsal copy/reset. Batch 8 adds the same two-role/three-step cooperation in every theme, frozen pauses and reconnect state, one-time resource/item consumption and final-step rollback, conditional/manual fictional signals, stale collection/replay, staff access, and actual copied instrument play/reset. Batch 9 runs all twelve instruments in every theme and verifies scoped readiness, exact whole-party assent, capacity/legacy attendance, scene cancellation and redirect, pauses/returns, approved current operational news, actual copied operations reset, and whole-event closure. Cleanup archives test events and logs out test sessions. Mutations are restricted to the allowlisted staging origin. The `staging-smoke` GitHub job runs this after `verify` and uses `GITHUB_SHA` as the required deployed commit. After promotion, `production-smoke` waits for that same commit at the canonical production domain and runs public GET checks without creating users or events.
 
 ## Railway deployment and recovery
 

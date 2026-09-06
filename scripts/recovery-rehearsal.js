@@ -210,8 +210,31 @@ try {
     await client.query("INSERT INTO static_readings(id,event_id,entry_id,owner_user_id,character_id,publication_version,reading_key,state_id,source,journal_id) VALUES($1,$2,$3,$4,$5,3,$6,'restored','conditions',$7)", [randomUUID(), fixture.event, staticId, fixture.user, fixture.character, readingKey, staticJournalId]);
     await client.query("INSERT INTO static_requests(event_id,actor_user_id,request_id,payload_hash,action,target_id) VALUES($1,$2,$3,$4,'collect',$5)", [fixture.event, fixture.user, randomUUID(), digest(JSON.stringify({ entryId: staticId, publicationVersion: 3, readingKey })), staticId]);
     await client.query("INSERT INTO static_history(id,event_id,entry_id,actor_user_id,action,version,reason,details) VALUES($1,$2,$3,$4,'state',2,'Staff prepared a fictional signal change after observing the group.',$5)", [randomUUID(), fixture.event, staticId, fixture.user, JSON.stringify({ stateId: "unsettled", previousStateId: null })]);
+    // Live operations preserve scoped staff, acknowledged checks, captured
+    // whole-party consent, an overdue occupied return window and approved news.
+    const operationsStaff = randomUUID(), encounterId = randomUUID(), partyId = randomUUID(), announcementId = randomUUID();
+    await client.query("INSERT INTO users(id,email,display_name,password_hash) VALUES($1,$2,'Recovery scene operator','not-a-login-credential')", [operationsStaff, `recovery-staff-${operationsStaff}@example.invalid`]);
+    await client.query("INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'staff')", [fixture.event, operationsStaff]);
+    const dispatchedAt = new Date(Date.now() - 20 * 60000).toISOString(), returnBy = new Date(Date.now() - 15 * 60000).toISOString();
+    const encounterDocument = { title: "Recovery staffed scene", nodeId: scene.id, publicMessage: "Check in with the scene operator.", staffNotes: "Private performer setup and prop handling notes.", capacity: 2, staffUserIds: [operationsStaff], checks: [{ id: "performer", label: "Performer briefed", kind: "performer" }, { id: "prop", label: "Lantern prop checked", kind: "prop" }, { id: "check-in", label: "Staff check-in ready", kind: "staff" }], returnMinutes: 5 };
+    const readyChecks = Object.fromEntries(encounterDocument.checks.map(check => [check.id, { ready: true, actorId: operationsStaff, at: dispatchedAt, reason: "Staff acknowledged the prepared scene check." }]));
+    await client.query("INSERT INTO stagehand_encounters(id,event_id,document,state,checks,version,created_by) VALUES($1,$2,$3,'open',$4,7,$5)", [encounterId, fixture.event, JSON.stringify(encounterDocument), JSON.stringify(readyChecks), fixture.user]);
+    await client.query("INSERT INTO adventure_runs(event_id,character_id,progress,flags) VALUES($1,$2,$3,'{\"recovered\":true}')", [fixture.event, fixture.peerCharacter, JSON.stringify(progress)]);
+    await client.query("INSERT INTO adventure_attendance(event_id,node_id,character_id) VALUES($1,$2,$3)", [fixture.event, scene.id, fixture.peerCharacter]);
+    const partyMembers = [[fixture.character, fixture.user, profile.name, true], [fixture.peerCharacter, fixture.peer, "Recovery exchange recipient", false]].map(([characterId, ownerUserId, name, attendedBefore]) => ({ characterId, ownerUserId, name, response: "accepted", responseTermsVersion: 2, respondedAt: dispatchedAt, attendedBefore }));
+    await client.query("INSERT INTO stagehand_parties(id,event_id,encounter_id,name,status,version,terms_version,return_minutes,members,dispatched_at,return_by,dispatched_node_id,created_by) VALUES($1,$2,$3,'Recovery whole party','dispatched',6,2,5,$4,$5,$6,$7,$8)", [partyId, fixture.event, encounterId, JSON.stringify(partyMembers), dispatchedAt, returnBy, scene.id, operationsStaff]);
+    const returnedPartyId = randomUUID(), releaseRequestId = randomUUID();
+    const releaseOutcome = { action: "return", replayed: false, message: "The party returned and its reservation was released.", targetId: returnedPartyId };
+    const releaseReceipt = { actorUserId: operationsStaff, requestId: releaseRequestId, payloadHash: digest(JSON.stringify({ action: "return", target: returnedPartyId, input: { requestId: releaseRequestId, version: 6, reason: "Staff acknowledged the earlier party return." } })), action: "return", characterId: null, manage: true, outcome: releaseOutcome };
+    await client.query("INSERT INTO stagehand_parties(id,event_id,encounter_id,name,status,version,terms_version,return_minutes,members,dispatched_at,return_by,dispatched_node_id,release_receipt,created_by) VALUES($1,$2,$3,'Recovery acknowledged party','returned',7,2,5,$4,$5,$6,$7,$8,$9)", [returnedPartyId, fixture.event, encounterId, JSON.stringify(partyMembers), dispatchedAt, returnBy, scene.id, JSON.stringify(releaseReceipt), operationsStaff]);
+    const operationOutcome = { action: "dispatch", replayed: false, message: "Party dispatched; return acknowledgment remains outstanding.", targetId: partyId };
+    await client.query("INSERT INTO stagehand_requests(event_id,actor_user_id,request_id,payload_hash,action,target_id,character_id,manage,outcome) VALUES($1,$2,$3,$4,'dispatch',$5,NULL,true,$6)", [fixture.event, operationsStaff, randomUUID(), digest(JSON.stringify({ partyId, version: 5, reason: "Staff acknowledged departure of the accepted party." })), partyId, JSON.stringify(operationOutcome)]);
+    await client.query("INSERT INTO stagehand_history(id,event_id,encounter_id,party_id,actor_user_id,action,details) VALUES($1,$2,$3,$4,$5,'dispatch',$6)", [randomUUID(), fixture.event, encounterId, partyId, operationsStaff, JSON.stringify({ reason: "Staff acknowledged departure of the accepted party.", returnBy, memberCount: 2 })]);
+    const announcementDocument = { ...defaultStoryDocument(), title: "Recovery scene availability", body: "The staffed lantern scene is open; accepted parties should check in with the operator.", sourceLabel: "Scene operations" };
+    await client.query("INSERT INTO story_entries(id,event_id,kind,document,status,version,published,published_version,created_by) VALUES($1,$2,'bulletin',$3,'published',2,$4,1,$5)", [announcementId, fixture.event, JSON.stringify(announcementDocument), JSON.stringify({ ...announcementDocument, publishedAt: dispatchedAt }), operationsStaff]);
+    await client.query("INSERT INTO stagehand_announcements(id,event_id,encounter_id,encounter_version,story_entry_id,created_by) VALUES($1,$2,$3,7,$4,$5)", [randomUUID(), fixture.event, encounterId, announcementId, operationsStaff]);
   });
-  for (const table of ["economy_resources", "economy_balances", "economy_shops", "economy_stock", "economy_transactions", "economy_receipts", "economy_requests", "economy_baselines", "exchange_trade_offers", "oath_agreements", "oath_participants", "oath_history", "oath_requests", "sigil_entries", "sigil_runs", "sigil_outcomes", "sigil_requests", "sigil_history", "static_entries", "static_overrides", "static_readings", "static_requests", "static_history"])
+  for (const table of ["economy_resources", "economy_balances", "economy_shops", "economy_stock", "economy_transactions", "economy_receipts", "economy_requests", "economy_baselines", "exchange_trade_offers", "oath_agreements", "oath_participants", "oath_history", "oath_requests", "sigil_entries", "sigil_runs", "sigil_outcomes", "sigil_requests", "sigil_history", "static_entries", "static_overrides", "static_readings", "static_requests", "static_history", "stagehand_encounters", "stagehand_parties", "stagehand_requests", "stagehand_history", "stagehand_announcements"])
     assert.ok((await source.query(`SELECT count(*)::int AS n FROM ${table}`)).rows[0].n > 0, `${table} must contain actual recovery data.`);
   await source.query(`CREATE DATABASE "${name}"`);
   const out = await open(backup, "wx", 0o600);
@@ -306,6 +329,11 @@ try {
     ["static_readings", "id"],
     ["static_requests", "event_id,actor_user_id,request_id"],
     ["static_history", "id"],
+    ["stagehand_encounters", "id"],
+    ["stagehand_parties", "id"],
+    ["stagehand_requests", "event_id,actor_user_id,request_id"],
+    ["stagehand_history", "id"],
+    ["stagehand_announcements", "event_id,story_entry_id"],
     ["schema_migrations", "version"],
   ]) {
     const a = (await source.query(`SELECT * FROM ${table} ORDER BY ${order}`))
@@ -318,7 +346,7 @@ try {
       `${table} restored content`,
     );
   }
-  assert.equal(await migrate(restored), 9, "The recovered database must accept repeat migration at schema 9.");
+  assert.equal(await migrate(restored), 10, "The recovered database must accept repeat migration at schema 10.");
   const event = (
     await restored.query("SELECT id,owner_user_id FROM events LIMIT 1")
   ).rows[0];
@@ -344,7 +372,7 @@ try {
   const systemAudit = (await restored.query("INSERT INTO system_audit_entries(actor_id,target_user_id,action) VALUES($1,$1,'recovery.rehearsed') RETURNING id", [fixture.user])).rows[0];
   assert.ok(BigInt(systemAudit.id) > maximumSystemAudit, "Restored system audit identity sequence must advance safely.");
   console.log(
-    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventures, journals, sharing policies, exchange sessions, provenance, bilateral contacts and receipts, story groups and draft/publication separation, hidden truths, collected rumors, activity, private investigations, fictional balances and finite shops, atomic transaction receipts, inventory baselines, fixed agreement terms and captured signatures, replay records, published cooperative snapshots and private drafts, captured roles and components, completed outcomes and paused timer state, fictional signal rules and staff overrides, account-bound readings, both audit sequences, and migration after restore passed.",
+    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventures, journals, sharing policies, exchange sessions, provenance, bilateral contacts and receipts, story groups and draft/publication separation, hidden truths, collected rumors, activity, private investigations, fictional balances and finite shops, atomic transaction receipts, inventory baselines, fixed agreement terms and captured signatures, replay records, published cooperative snapshots and private drafts, captured roles and components, completed outcomes and paused timer state, fictional signal rules and staff overrides, account-bound readings, scoped scene staff and readiness acknowledgments, captured party consent and overdue occupied return windows, approved scene-linked bulletins, operations history/replays, both audit sequences, and migration after restore passed.",
   );
 } finally {
   if (restored) await restored.end();

@@ -24,7 +24,7 @@ export function createKitUI(ctx) {
     root.dataset.prop = String(state.view === 'detail' && mode === 'prop');
     document.querySelector('meta[name="theme-color"]').content = preferences.display === 'outdoor' ? '#ffffff' : t.background;
   }
-  function apply() { applyTheme(['detail', 'characters', 'adventure', 'adventure-manage', 'exchanges', 'sharing', 'story', 'trace', 'bazaar', 'oaths', 'sigil', 'static'].includes(state.view) ? state.event?.setup?.theme : THEMES[0]); document.querySelector('[data-action="kit-collapse"]')?.setAttribute("aria-expanded", String(preferences.collapsed === "open")); }
+  function apply() { applyTheme(['detail', 'characters', 'adventure', 'adventure-manage', 'exchanges', 'sharing', 'story', 'trace', 'bazaar', 'oaths', 'sigil', 'static', 'stagehand'].includes(state.view) ? state.event?.setup?.theme : THEMES[0]); document.querySelector('[data-action="kit-collapse"]')?.setAttribute("aria-expanded", String(preferences.collapsed === "open")); }
   function controls() {
     return `<details class="display-controls"><summary>Reading settings</summary><div class="reading-options"><label>Display<select data-preference="display"><option value="dark" ${preferences.display === 'dark' ? 'selected' : ''}>Dark</option><option value="outdoor" ${preferences.display === 'outdoor' ? 'selected' : ''}>Outdoor · high contrast</option></select></label><label>Motion<select data-preference="motion"><option value="system" ${preferences.motion === 'system' ? 'selected' : ''}>Follow device</option><option value="reduce" ${preferences.motion === 'reduce' ? 'selected' : ''}>Reduce motion</option></select></label></div></details>`;
   }

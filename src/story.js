@@ -1,3 +1,4 @@
+import { assertStagehandAnnouncementCurrent, filterStagehandBulletins } from './stagehand-core.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { characterRecord, characterText } from '../public/characters-model.js';
 import { defaultAdventure, ADVENTURE_EVENT_STATUSES } from '../public/adventure-model.js';
@@ -105,7 +106,7 @@ export async function copyStory(db, sourceEvent, newEvent, { characterMap, facti
     }
     return result;
   };
-  for (const entry of (await db.query('SELECT * FROM story_entries WHERE event_id=$1 ORDER BY created_at,id', [sourceId])).rows) {
+  for (const entry of (await db.query('SELECT * FROM story_entries e WHERE event_id=$1 AND NOT EXISTS(SELECT 1 FROM stagehand_announcements a WHERE a.event_id=e.event_id AND a.story_entry_id=e.id) ORDER BY created_at,id', [sourceId])).rows) {
     await db.query('INSERT INTO story_entries(id,event_id,kind,document,status,published,published_version,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8)', [randomUUID(), targetId, entry.kind, JSON.stringify(mappedDocument(entry.document)), entry.status, entry.published ? JSON.stringify(mappedDocument(entry.published)) : null, entry.published ? 1 : null, actorId]);
   }
 }
@@ -143,7 +144,7 @@ export function createStoryHandler({ pool, helpers }) {
     const run = await runFor(db, event.id, character.id);
     result.readings = (await filterStoryJournal(db, event.id, user.id, (await db.query("SELECT j.* FROM adventure_journal j WHERE j.event_id=$1 AND j.character_id=$2 AND (j.type='whisper' OR (j.type='shared_reading' AND j.node_id LIKE 'whisper:%')) ORDER BY j.created_at,j.id", [event.id, character.id])).rows)).map(readingProjection);
     const collected = (await db.query('SELECT entry_id,publication_version FROM story_readings WHERE event_id=$1 AND character_id=$2 AND owner_user_id=$3', [event.id, character.id, user.id])).rows;
-    for (const entry of (await db.query("SELECT * FROM story_entries WHERE event_id=$1 AND published IS NOT NULL AND status<>'withdrawn' ORDER BY created_at,id", [event.id])).rows) {
+    for (const entry of await filterStagehandBulletins(db, event, (await db.query("SELECT * FROM story_entries WHERE event_id=$1 AND published IS NOT NULL AND status<>'withdrawn' ORDER BY created_at,id", [event.id])).rows)) {
       if (!eligible(entry, character, event, run, context)) continue;
       if (entry.kind === 'rumor') result.rumors.push({ id: entry.id, title: entry.published.title, sourceLabel: entry.published.sourceLabel, publicationVersion: entry.published_version, collected: collected.some(row => row.entry_id === entry.id && row.publication_version === entry.published_version) });
       else result.bulletins.push(publication(entry));
@@ -252,6 +253,7 @@ export function createStoryHandler({ pool, helpers }) {
       }
       let entry = target || prior ? await entryFor(db, event.id, target || prior.target_id) : null;
       if ((target || prior) && !entry) fail(404, 'Story entry not found.');
+      if (verb === 'publish') await assertStagehandAnnouncementCurrent(db, event, entry.id);
       if (prior) return { entry: managerEntry(entry) };
       if (!target) {
         if (!['rumor', 'bulletin'].includes(input.kind)) fail(400, 'Choose rumor or bulletin.');

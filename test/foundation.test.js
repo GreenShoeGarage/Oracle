@@ -104,8 +104,8 @@ after(async () => {
 });
 
 test("migration is repeatable and preserves existing accounts", async () => {
-  assert.equal(await migrate(pool), 9);
-  assert.equal(await checkSchema(pool), 9);
+  assert.equal(await migrate(pool), 10);
+  assert.equal(await checkSchema(pool), 10);
   assert.equal(
     (await pool.query("SELECT count(*)::int AS n FROM users")).rows[0].n,
     6,
@@ -719,6 +719,11 @@ test("an isolated database snapshot restores records and accepts repeat migratio
       ["static_readings", "id"],
       ["static_requests", "event_id,actor_user_id,request_id"],
       ["static_history", "id"],
+      ["stagehand_encounters", "id"],
+      ["stagehand_parties", "id"],
+      ["stagehand_requests", "event_id,actor_user_id,request_id"],
+      ["stagehand_history", "id"],
+      ["stagehand_announcements", "event_id,story_entry_id"],
       ["schema_migrations", "version"],
     ]) {
       const sql = `SELECT * FROM ${table} ORDER BY ${order}`;
@@ -737,7 +742,7 @@ test("an isolated database snapshot restores records and accepts repeat migratio
         release() {},
       }),
     };
-    assert.equal(await migrate(adapter), 9);
+    assert.equal(await migrate(adapter), 10);
   } finally {
     await restored.close();
   }

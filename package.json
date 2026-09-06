@@ -1,8 +1,8 @@
 {
   "name": "oracle-larp-field-kit",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
-  "description": "ORACLE — LARP Field Kit. Themed adventures, cooperative challenges, fictional readings, and shared field instruments.",
+  "description": "ORACLE — LARP Field Kit. Themed adventures, cooperative challenges, and live event operations.",
   "type": "module",
   "engines": {
     "node": ">=22.9.0 <25"

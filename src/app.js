@@ -12,6 +12,8 @@ import { createEconomyHandler } from "./economy.js";
 import { createOathHandler } from "./oaths.js";
 import { createSigilHandler, syncSigilEventState } from "./sigil.js";
 import { createStaticHandler } from "./static.js";
+import { createStagehandHandler } from "./stagehand.js";
+import { syncStagehandEventState } from "./stagehand-core.js";
 import { checkSchema, transaction } from "./db.js";
 import {
   THEMES,
@@ -192,6 +194,7 @@ export function createApp({
   const oathHandler = createOathHandler({ pool, config, helpers });
   const sigilHandler = createSigilHandler({ pool, config, helpers });
   const staticHandler = createStaticHandler({ pool, config, helpers });
+  const stagehandHandler = createStagehandHandler({ pool, helpers });
   return async function handle(req, res) {
     const requestId = randomUUID();
     res.setHeader("X-Request-Id", requestId);
@@ -265,6 +268,10 @@ export function createApp({
           "/static-model.js": ["static-model.js", "text/javascript"],
           "/static-ui.js": ["static-ui.js", "text/javascript"],
           "/static.css": ["static.css", "text/css"],
+          "/stagehand-model.js": ["stagehand-model.js", "text/javascript"],
+          "/stagehand-ui.js": ["stagehand-ui.js", "text/javascript"],
+          "/stagehand-manage.js": ["stagehand-manage.js", "text/javascript"],
+          "/stagehand.css": ["stagehand.css", "text/css"],
           "/prop-effects.js": ["prop-effects.js", "text/javascript"],
           "/props.css": ["props.css", "text/css"],
           "/instrument-code.js": ["instrument-code.js", "text/javascript"],
@@ -383,6 +390,7 @@ export function createApp({
       if (await oathHandler({ req, res, path, url, method, user })) return;
       if (await sigilHandler({ req, res, path, url, method, user })) return;
       if (await staticHandler({ req, res, path, url, method, user })) return;
+      if (await stagehandHandler({ req, res, path, url, method, user })) return;
       if (path === "/api/catalog" && method === "GET")
         return send(res, 200, { themes: THEMES, templates: TEMPLATES, instruments: INSTRUMENTS });
       if (path === "/api/auth/logout" && method === "POST") {
@@ -650,6 +658,7 @@ export function createApp({
               ? validateSetup({ ...event.setup, theme: input.theme })
               : event.setup;
           await syncSigilEventState(db, event, { ...event, status, setup }, user.id);
+          await syncStagehandEventState(db, event, { ...event, status, setup }, user.id);
           const changed = (
             await db.query(
               "UPDATE events SET name=$1,description=$2,location=$3,starts_at=$4,status=$5,setup=$6,version=version+1,updated_at=now() WHERE id=$7 RETURNING *",

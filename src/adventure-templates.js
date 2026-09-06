@@ -168,7 +168,7 @@ export function buildAdventureTemplate(themeID) {
   const world = WORLDS[themeID];
   const setup = defaultSetup(themeID);
   setup.templateId = `adventure-${themeID}`;
-  setup.enabledInstruments = ["briefing", "relic", "dead-drop", "cipherbox", "wayfinder", "trace", "whisper", "broadside", "bazaar", "oathbook", "sigil", "static"];
+  setup.enabledInstruments = ["briefing", "relic", "dead-drop", "cipherbox", "wayfinder", "trace", "whisper", "broadside", "bazaar", "oathbook", "sigil", "static", "stagehand"];
   setup.rules = {
     version: 1,
     attributes: [{ id: "resolve", name: "Resolve", min: 0, max: 5, default: 2 }],

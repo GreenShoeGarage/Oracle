@@ -1,0 +1,68 @@
+.stagehand-workspace { max-width: 1500px; margin: 0 auto; }
+.stagehand-focus-surface { min-width: 0; }
+.stagehand-player-grid { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 1.5fr); gap: 1.2rem; margin-top: 1.2rem; align-items: start; }
+.stagehand-scenes { display: grid; gap: 1rem; margin-top: 1rem; }
+.stagehand-row-head { display: flex; justify-content: space-between; align-items: start; gap: .75rem; flex-wrap: wrap; }
+.stagehand-row-head h3 { margin: .25rem 0 .6rem; }
+.stagehand-scene, .stagehand-party-card, .stagehand-empty { padding: 1.15rem; border: 1px solid var(--line); border-radius: .8rem; overflow-wrap: anywhere; }
+.stagehand-scene.selected { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.stagehand-party-card { background: var(--panel); margin-top: 1rem; }
+.stagehand-party-card > p, .stagehand-scene > p { margin-top: .65rem; }
+.stagehand-party-card .actions { margin-top: .9rem; }
+.stagehand-location { color: var(--accent); font-weight: 600; }
+.stagehand-capacity { padding: .65rem 0; font-variant-numeric: tabular-nums; }
+.stagehand-capacity strong { color: var(--accent); font-size: 1.4rem; }
+.stagehand-copy { white-space: pre-wrap; overflow-wrap: anywhere; }
+.stagehand-character-picker { display: flex; align-items: end; gap: .65rem; margin-top: 1rem; }
+.stagehand-character-picker label { flex: 1; max-width: 440px; }
+.stagehand-freshness { color: var(--muted); font-size: .88rem; min-height: 1.6em; margin: .5rem 0 1rem; }
+.stagehand-notice, .stagehand-feedback, .stagehand-manager-notice { margin: 1rem 0; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: .5rem; padding: .9rem 1rem; overflow-wrap: anywhere; }
+.stagehand-notice p, .stagehand-manager-notice p { margin-top: .4rem; }
+.stagehand-return-window { border-left: 3px solid var(--accent); padding: .7rem 1rem; background: var(--raised); margin: 1rem 0; }
+.stagehand-return-window p { margin-top: .5rem; }
+.stagehand-overdue { color: var(--accent); font-weight: 700; }
+.stagehand-history { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .5rem; }
+.stagehand-party-history { font-size: .92rem; }
+.stagehand-consent { border: 1px solid var(--accent); border-radius: .6rem; padding: 1rem; margin-top: 1rem; }
+.stagehand-consent h3 { margin-bottom: .6rem; }
+.stagehand-consent p { margin: .65rem 0; }
+.stagehand-check { display: flex; align-items: start; gap: .6rem; font-weight: 400; margin-top: 1rem; }
+.stagehand-check input[type=checkbox], .stagehand-member-choices input[type=checkbox], .stagehand-checklist input[type=checkbox] { width: 20px; min-width: 20px; min-height: 20px; height: 20px; margin-top: .2rem; accent-color: var(--accent); }
+.stagehand-event-controls { padding: .8rem 1rem; border: 1px solid var(--line); border-radius: .5rem; margin-top: 1.5rem; }
+.stagehand-event-controls .actions { margin-top: .8rem; }
+.stagehand-manager { margin-top: 1rem; min-width: 0; }
+.stagehand-manage-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 1.2rem; align-items: start; }
+.stagehand-manager .panel { padding: 1.1rem; }
+.stagehand-manager .stagehand-scene { margin-top: .85rem; }
+.stagehand-scene-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; padding: .8rem 0; }
+.stagehand-scene-stats strong { color: var(--accent); font-size: 1.25rem; }
+.stagehand-scene-stats .hint, .stagehand-check-row .hint, .stagehand-party-members .hint { display: block; }
+.stagehand-party-members { list-style: none; padding: .3rem 0; display: grid; gap: .6rem; }
+.stagehand-manager-review { margin-top: .7rem; padding: .8rem; border: 1px solid var(--line); border-radius: .4rem; }
+.stagehand-manager-fields { display: grid; gap: .9rem; }
+.stagehand-manager-form { display: grid; gap: .9rem; margin-top: 1rem; min-width: 0; }
+.stagehand-manager-form fieldset { display: grid; gap: .8rem; min-width: 0; }
+.stagehand-manager-form label, .stagehand-check-editor label { min-width: 0; }
+.stagehand-manager-form textarea { min-height: 90px; }
+.stagehand-two-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.stagehand-checklist { display: grid; gap: .65rem; margin: 1rem 0; }
+.stagehand-check-row { display: flex; align-items: start; gap: .65rem; justify-content: space-between; flex-wrap: wrap; padding: .7rem 0; border-bottom: 1px solid var(--line); }
+.stagehand-check-editor { display: grid; gap: .6rem; border: 1px solid var(--line); padding: .8rem; border-radius: .4rem; margin: .7rem 0; }
+.stagehand-member-choices { display: grid; gap: .5rem; max-height: 260px; overflow-y: auto; padding: .4rem; }
+.stagehand-member-choices label { display: flex; align-items: start; gap: .6rem; font-weight: 400; }
+.stagehand-activity { margin-top: 1rem; }
+.stagehand-activity ol, .stagehand-activity ul { padding-left: 1.2rem; display: grid; gap: .75rem; }
+.stagehand-activity .hint { display: block; }
+body.stagehand-focus .sidebar, body.stagehand-focus .topbar, body.stagehand-focus .stagehand-navigation { display: none; }
+body.stagehand-focus .layout { grid-template-columns: 1fr; }
+body.stagehand-focus .workspace { max-width: 1500px; margin: auto; width: 100%; padding: clamp(.8rem, 3vw, 2rem); }
+body.stagehand-focus .stagehand-focus-surface { min-height: calc(100svh - 4rem); }
+body.stagehand-focus .stagehand-focus-surface button { min-height: 48px; }
+body.stagehand-focus .stagehand-focus-surface > .page-head { border-bottom: 2px solid var(--accent); padding-bottom: 1rem; }
+[data-texture="grain"] .stagehand-return-window, [data-texture="grain"] .stagehand-scene { border-radius: 1rem; }
+[data-texture="grid"] .stagehand-scene, [data-texture="grid"] .stagehand-party-card { border-radius: 0; }
+[data-texture="grid"] .stagehand-capacity, [data-texture="grid"] .stagehand-freshness { font-family: ui-monospace, monospace; }
+[data-texture="dust"] .stagehand-return-window { border-left-width: 5px; border-left-style: double; }
+@media (max-width: 1000px) { .stagehand-player-grid, .stagehand-manage-grid { grid-template-columns: 1fr; } .stagehand-scenes { grid-template-columns: repeat(auto-fit, minmax(min(290px, 100%), 1fr)); } }
+@media (max-width: 580px) { .stagehand-two-fields { grid-template-columns: 1fr; } .stagehand-character-picker { flex-direction: column; align-items: stretch; } .stagehand-character-picker label { max-width: none; } .stagehand-party-card, .stagehand-scene, .stagehand-empty { padding: .9rem; } .stagehand-scene .actions button, .stagehand-party-card .actions button { flex: 1 1 140px; } .stagehand-manager-form fieldset { padding: .7rem; } }
+@media (prefers-reduced-motion: reduce) { .stagehand-workspace *, body.stagehand-focus * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }

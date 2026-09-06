@@ -9,6 +9,7 @@ import { seedEconomy, copyEconomy, captureEconomyBaseline, resetEconomy } from "
 import { resetOaths } from "./oaths.js";
 import { seedSigil, copySigil, resetSigil } from "./sigil.js";
 import { seedStatic, copyStatic, resetStatic } from "./static.js";
+import { seedStagehand, copyStagehand, resetStagehand, stagehandWayfinderState } from "./stagehand-core.js";
 
 const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const code = () => Array.from({ length: 20 }, () => alphabet[randomInt(alphabet.length)]).join("");
@@ -56,6 +57,17 @@ export function createAdventureHandler({ pool, config, helpers }) {
       if (node.type === "cipherbox") return { ...common, prompt: node.prompt, attempts: progress.attempts, maxAttempts: node.maxAttempts, retryAfterMs: Math.max(0, 1000 - (Date.now() - Date.parse(progress.lastAttemptAt || "1970-01-01"))), hints: node.hints.map((hint, index) => ({ index, available: progress.attempts >= hint.afterAttempts, requested: progress.hints.includes(index), ...(progress.hints.includes(index) ? { text: hint.text } : {}) })) };
       return { ...common, body: node.body, location: node.location, playStyle: node.playStyle, durationMinutes: node.durationMinutes, minPlayers: node.minPlayers, maxPlayers: node.maxPlayers, availability: node.availability === "closed" || (node.endsAt && Date.parse(node.endsAt) <= Date.now()) ? "closed" : node.startsAt && Date.parse(node.startsAt) > Date.now() ? "scheduled" : "open", startsAt: node.startsAt, endsAt: node.endsAt, attendanceCount: attending?.count || 0 };
     });
+    for (const shown of result.nodes) {
+      if (shown.type !== "wayfinder" || shown.locked) continue;
+      const node = record.definition.nodes.find(row => row.id === shown.id);
+      const operation = await stagehandWayfinderState(db, event, node, character);
+      if (operation) {
+        shown.operations = operation;
+        shown.attendanceCount = operation.attendanceCount;
+        shown.maxPlayers = operation.capacity;
+        if (!operation.canJoin) shown.availability = "closed";
+      }
+    }
     return result;
   }
   async function manageSnapshot(db, event, record) {
@@ -125,6 +137,7 @@ export function createAdventureHandler({ pool, config, helpers }) {
         await seedEconomy(db, created, user.id);
         await seedSigil(db, created, user.id);
         await seedStatic(db, created, user.id);
+        await seedStagehand(db, created, user.id);
         await audit(db, created.id, user.id, "adventure.template_created", { templateId: template[1] });
         return created;
       });
@@ -190,6 +203,7 @@ export function createAdventureHandler({ pool, config, helpers }) {
         await copyEconomy(db, event.id, copied.id, user.id);
         await copySigil(db, event.id, copied.id, user.id);
         await copyStatic(db, event.id, copied.id, user.id);
+        await copyStagehand(db, event.id, copied.id, user.id);
         await captureEconomyBaseline(db, copied.id);
         const oldSettings = (await db.query("SELECT * FROM event_character_settings WHERE event_id=$1", [event.id])).rows[0];
         if (oldSettings) await db.query("INSERT INTO event_character_settings(event_id,allow_player_creation,require_approval,max_per_player,public_fields) VALUES($1,$2,$3,$4,$5)", [copied.id, oldSettings.allow_player_creation, oldSettings.require_approval, oldSettings.max_per_player, JSON.stringify(oldSettings.public_fields)]);
@@ -205,6 +219,7 @@ export function createAdventureHandler({ pool, config, helpers }) {
         await resetOaths(db, eventId);
         await resetSigil(db, eventId);
         await resetStatic(db, eventId);
+        await resetStagehand(db, eventId);
         await resetEconomy(db, eventId);
         for (const table of ["exchange_requests", "exchange_contacts", "exchange_receipts", "exchange_copies", "exchange_sessions", "adventure_attendance", "adventure_journal", "adventure_requests", "adventure_runs"]) await db.query(`DELETE FROM ${table} WHERE event_id=$1`, [eventId]);
         record = (await db.query("UPDATE event_adventures SET version=version+1,updated_at=now() WHERE event_id=$1 RETURNING *", [eventId])).rows[0];
@@ -279,6 +294,8 @@ export function createAdventureHandler({ pool, config, helpers }) {
         message = "Hint saved to your journal.";
       } else if (input.kind === "join") {
         if (node.type !== "wayfinder") fail(400, "Join applies only to a scene.");
+        const operation = await stagehandWayfinderState(db, event, node, character, { lock: true });
+        if (operation && !operation.canJoin) fail(409, operation.reason || "Check STAGEHAND for your scene assignment.");
         const existing = (await db.query("SELECT character_id FROM adventure_attendance WHERE event_id=$1 AND node_id=$2 AND character_id=$3", [eventId, node.id, character.id])).rows[0];
         if (!existing) {
           if (node.availability !== "open" || (node.endsAt && Date.parse(node.endsAt) <= Date.now())) fail(409, "This scene is closed.");
@@ -287,7 +304,7 @@ export function createAdventureHandler({ pool, config, helpers }) {
           // later reapproval or rejoin cannot resurrect an old reservation.
           await db.query("DELETE FROM adventure_attendance a WHERE a.event_id=$1 AND NOT EXISTS(SELECT 1 FROM characters c JOIN users u ON u.id=c.user_id WHERE c.event_id=a.event_id AND c.id=a.character_id AND c.status='approved' AND NOT u.is_disabled AND (u.is_superuser OR EXISTS(SELECT 1 FROM memberships m WHERE m.event_id=a.event_id AND m.user_id=c.user_id)))", [eventId]);
           const count = (await db.query("SELECT count(*)::int AS n FROM adventure_attendance WHERE event_id=$1 AND node_id=$2", [eventId, node.id])).rows[0].n;
-          if (count >= node.maxPlayers) fail(409, "This scene is full.");
+          if (!operation && count >= node.maxPlayers) fail(409, "This scene is full.");
           await db.query("INSERT INTO adventure_attendance(event_id,node_id,character_id) VALUES($1,$2,$3)", [eventId, node.id, character.id]);
           changed = true;
         }
