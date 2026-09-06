@@ -733,6 +733,164 @@ if (publicOnly) {
     return { resourceId: resource.id, shopId: shop.id, stockId: stock.id, agreementId: agreement.id, tradeId, characterCount: 3 };
   }
 
+  async function instrumentJourney(owner, player, event, assigned, theme) {
+    const base = `/api/events/${event.id}`, host = assigned[0], peer = assigned[1];
+    const characterId = host.character.id;
+    const own = `characterId=${characterId}`;
+    assert.ok(event.setup.enabledInstruments.includes("sigil") && event.setup.enabledInstruments.includes("static"), "Complete starters must explicitly enable SIGIL and STATIC.");
+    let sigilManage = await request(owner, `${base}/sigil/manage`);
+    let staticManage = await request(owner, `${base}/static/manage`);
+    assert.ok(sigilManage.entries.length && staticManage.entries.length, "Every theme must provide prepared cooperative and fictional-reading definitions.");
+    await request(player, `${base}/sigil/manage`, { status: 403 });
+    await request(player, `${base}/static/manage`, { status: 403 });
+    const publish = async (kind, entry) => entry.publishedVersion ? entry : (await request(owner, `${base}/${kind}/entries/${entry.id}/publish`, { method: "POST", body: { requestId: randomUUID(), version: entry.version } })).entry;
+    const challenge = await publish("sigil", sigilManage.entries[0]);
+    let signalEntry = await publish("static", staticManage.entries[0]);
+    const challengeDocument = challenge.published || challenge.document;
+    assert.equal(challengeDocument.roles.length, 2, "The same starter cooperation must assign two in-person roles in every theme.");
+    assert.equal(challengeDocument.checkpoints.length, 3, "All themes must run the same three-step cooperative procedure.");
+    const inventory = (await request(owner, `${base}/characters/${characterId}/inventory`)).inventory;
+    const startInput = (entry, doc, character, items) => ({ requestId: randomUUID(), characterId: character.id, entryId: entry.id, publishedVersion: entry.publishedVersion, code: entry.code, roles: doc.roles.map((role, index) => ({ roleId: role.id, performer: `In-person participant ${index + 1}` })), bindings: doc.components.filter((component) => component.kind === "item").map((component) => { const item = items.find((row) => row.name === component.itemName && row.quantity >= component.quantity); assert.ok(item, "Prepared challenge inventory requirements must exist on the host character."); return { componentId: component.id, itemId: item.id }; }) });
+    const catalog = await request(owner, `${base}/sigil?${own}`);
+    assert.ok(catalog.challenges.some((entry) => entry.id === challenge.id && entry.available), "Existing discovery progress must unlock the prepared cooperation.");
+    const catalogText = JSON.stringify(catalog);
+    for (const checkpoint of challengeDocument.checkpoints) if (checkpoint.answer) assert.ok(!catalogText.includes(checkpoint.answer), "Challenge listings must not reveal future answers.");
+    const lookup = await request(owner, `${base}/sigil/lookup`, { method: "POST", body: { characterId, code: challenge.code } });
+    assert.equal(lookup.challenge.id, challenge.id, "Printed SIGIL codes must identify the expected procedure.");
+    const readSignal = (account, character, entry = signalEntry) => request(account, `${base}/static/lookup`, { method: "POST", body: { characterId: character.id, code: entry.code } });
+    const beforeSignal = (await readSignal(owner, host.character)).signal;
+    assert.equal(beforeSignal.fictional, true, "STATIC must explicitly identify every reading as fictional.");
+    assert.equal(beforeSignal.label, "Fictional event reading");
+    assert.ok(!Object.hasOwn(beforeSignal, "states") && !Object.hasOwn(beforeSignal, "organizerNotes"), "A current fictional reading must not disclose future states or organizer notes.");
+    const initialInput = startInput(challenge, challengeDocument, host.character, inventory);
+    await request(player, `${base}/sigil/start`, { method: "POST", body: { ...initialInput, requestId: randomUUID() }, status: 404 });
+    let run = (await request(owner, `${base}/sigil/start`, { method: "POST", body: initialInput, status: 201 })).run;
+    const initialReplay = await request(owner, `${base}/sigil/start`, { method: "POST", body: initialInput });
+    assert.equal(initialReplay.run.id, run.id, "Retrying challenge creation must return the same shared-device run.");
+    assert.equal(initialReplay.outcome.replayed, true);
+    const runPath = `${base}/sigil/runs/${run.id}`;
+    const command = async (operation, fields = {}, { account = owner, requestId = randomUUID(), status = 200 } = {}) => {
+      const response = await request(account, `${runPath}/${operation}`, { method: "POST", body: { requestId, characterId, version: run.version, ...fields }, status });
+      if (status === 200) run = response.run;
+      return response;
+    };
+    const heartbeat = await request(owner, `${runPath}/heartbeat`, { method: "POST", body: { characterId, sequence: 1 } });
+    const heartbeatReplay = await request(owner, `${runPath}/heartbeat`, { method: "POST", body: { characterId, sequence: 1 } });
+    assert.equal(heartbeatReplay.run.leaseExpiresAt, heartbeat.run.leaseExpiresAt, "Replaying a heartbeat sequence must not extend its connectivity lease.");
+    run = heartbeatReplay.run;
+    await command("pause");
+    const pausedRemaining = run.remainingMs;
+    run = (await request(owner, `${runPath}?${own}`)).run;
+    assert.equal(run.status, "paused");
+    assert.equal(run.remainingMs, pausedRemaining, "A paused timer must remain frozen across a fresh connection.");
+    await command("resume");
+    event = await patchEvent(owner, event, { status: "paused" });
+    run = (await request(owner, `${runPath}?${own}`)).run;
+    assert.equal(run.status, "paused", "Pausing an event must immediately freeze its running SIGIL procedure.");
+    event = await patchEvent(owner, event, { status: "live" });
+    run = (await request(owner, `${runPath}?${own}`)).run;
+    assert.equal(run.status, "paused", "Reopening an event must require explicit challenge resume.");
+    await command("resume");
+    await request(player, `${runPath}/operate`, { method: "POST", body: { requestId: randomUUID(), version: run.version, operation: "succeed", reason: "This player must not operate staff controls." }, status: 403 });
+    let finalRequest;
+    while (run.currentCheckpoint) {
+      const checkpoint = challengeDocument.checkpoints.find((entry) => entry.id === run.currentCheckpoint.id);
+      assert.ok(checkpoint, "The active step must belong to the immutable published procedure.");
+      if (run.checkpointRemainingMs > 0) await delay(run.checkpointRemainingMs + 100);
+      const requestId = randomUUID(), version = run.version;
+      const fields = { checkpointId: checkpoint.id, roleId: checkpoint.roleId, answer: checkpoint.answer || "" };
+      const response = await command("checkpoint", fields, { requestId });
+      if (response.run.status === "succeeded") finalRequest = { requestId, characterId, version, ...fields };
+    }
+    assert.equal(run.status, "succeeded", "A group must complete the prepared cooperation in every theme.");
+    assert.ok(run.result?.journalId, "A completed challenge must persist its authoritative result receipt.");
+    const completedRun = run;
+    const completionReplay = await request(owner, `${runPath}/checkpoint`, { method: "POST", body: finalRequest });
+    assert.equal(completionReplay.run.result.journalId, run.result.journalId, "Retrying the final checkpoint must preserve one result and journal receipt.");
+    await request(owner, `${base}/sigil/start`, { method: "POST", body: { ...initialInput, requestId: randomUUID() }, status: 409 });
+    const afterSignal = (await readSignal(owner, host.character)).signal;
+    assert.equal(afterSignal.source, "conditions", "A cooperative result must drive its prepared STATIC rule.");
+    assert.notEqual(afterSignal.readingKey, beforeSignal.readingKey, "Success must visibly change the fictional signal state.");
+    const collectInput = { requestId: randomUUID(), characterId, entryId: signalEntry.id, code: signalEntry.code, publicationVersion: afterSignal.publicationVersion, readingKey: afterSignal.readingKey };
+    const collected = await request(owner, `${base}/static/collect`, { method: "POST", body: collectInput });
+    const collectReplay = await request(owner, `${base}/static/collect`, { method: "POST", body: collectInput });
+    assert.equal(collectReplay.reading.id, collected.reading.id, "An uncertain STATIC collection retry must return the original captured reading.");
+    const duplicateCollect = await request(owner, `${base}/static/collect`, { method: "POST", body: { ...collectInput, requestId: randomUUID() } });
+    assert.equal(duplicateCollect.reading.id, collected.reading.id, "A fresh request for the same signal state must not duplicate its journal entry.");
+    staticManage = await request(owner, `${base}/static/manage`);
+    signalEntry = staticManage.entries.find((entry) => entry.id === signalEntry.id);
+    const staticDocument = signalEntry.published || signalEntry.document;
+    const manualState = staticDocument.states.find((state) => state.id !== afterSignal.state.id);
+    assert.ok(manualState, "The starter signal must provide a distinct prepared state for staff operation.");
+    const stateInput = { requestId: randomUUID(), version: signalEntry.override?.version || 0, stateId: manualState.id, reason: "Staff rehearse a prepared fictional prop state after group completion." };
+    await request(player, `${base}/static/entries/${signalEntry.id}/state`, { method: "POST", body: stateInput, status: 403 });
+    await request(owner, `${base}/static/entries/${signalEntry.id}/state`, { method: "POST", body: stateInput });
+    const manual = (await readSignal(owner, host.character)).signal;
+    assert.equal(manual.source, "organizer");
+    assert.equal(manual.state.id, manualState.id);
+    assert.equal(manual.fictional, true);
+    await request(owner, `${base}/static/collect`, { method: "POST", body: { ...collectInput, requestId: randomUUID() }, status: 409 });
+    assert.equal((await request(owner, `${base}/static?${own}`)).readings.filter((entry) => entry.id === collected.reading.id || entry.journalId === collected.reading.id).length, 1, "Changing a live signal must preserve its already collected immutable reading.");
+    if (theme === "fantasy") {
+      const resourceId = "sigil-charges";
+      await request(owner, `${base}/bazaar/resources`, { method: "POST", body: { requestId: randomUUID(), id: resourceId, name: "Fictional SIGIL charges" }, status: 201 });
+      const adjust = async (quantity) => {
+        const current = (await request(owner, `${base}/bazaar?${own}`)).balances.find((row) => row.resourceId === resourceId);
+        return request(owner, `${base}/bazaar/adjust`, { method: "POST", body: { requestId: randomUUID(), characterId, resourceId, quantity, version: current?.version || 0, reason: "Rehearse atomic cooperation component consumption." } });
+      };
+      await adjust(5);
+      let coil = (await request(owner, `${base}/characters/${characterId}/inventory`, { method: "POST", body: { name: "Staging SIGIL coil", quantity: 2, notes: "Private inventory note excluded from shared prop presentation." }, status: 201 })).item;
+      if (!coil) coil = (await request(owner, `${base}/characters/${characterId}/inventory`)).inventory.find((item) => item.name === "Staging SIGIL coil");
+      const paidDocument = {
+        title: "Staging component procedure", summary: "A fictional two-component cooperation.", organizerNotes: "Private component adjudication notes.", durationSeconds: 120,
+        roles: [{ id: "operator", name: "Operator", instructions: "Agree on the physical sequence." }],
+        components: [{ id: "coil", name: "Coil", kind: "item", itemName: coil.name, resourceId: null, quantity: 1, consume: true }, { id: "charge", name: "Charge", kind: "resource", itemName: null, resourceId, quantity: 2, consume: true }],
+        checkpoints: [{ id: "prepare", title: "Prepare", instructions: "Place the coil.", roleId: "operator", minimumSeconds: 0, answer: null }, { id: "activate", title: "Activate", instructions: "Confirm the fictional activation.", roleId: "operator", minimumSeconds: 0, answer: null }],
+        conditions: { completed: [], flags: [], skills: [], statuses: [] },
+        success: { text: "The fictional coil and charges powered the prepared procedure.", flags: [] },
+        failure: { text: "The fictional procedure timed out.", flags: [] },
+      };
+      let paidEntry = (await request(owner, `${base}/sigil/entries`, { method: "POST", body: { requestId: randomUUID(), document: paidDocument }, status: 201 })).entry;
+      paidEntry = await publish("sigil", paidEntry);
+      const input = startInput(paidEntry, paidDocument, host.character, [coil]);
+      let paidRun = (await request(owner, `${base}/sigil/start`, { method: "POST", body: input, status: 201 })).run;
+      const path = `${base}/sigil/runs/${paidRun.id}`;
+      const step = (checkpoint, requestId = randomUUID()) => ({ requestId, characterId, version: paidRun.version, checkpointId: checkpoint.id, roleId: checkpoint.roleId, answer: "" });
+      paidRun = (await request(owner, `${path}/checkpoint`, { method: "POST", body: step(paidDocument.checkpoints[0]) })).run;
+      await adjust(0);
+      const beforeFailure = await request(owner, `${base}/adventure/play?${own}`);
+      await request(owner, `${path}/checkpoint`, { method: "POST", body: step(paidDocument.checkpoints[1]), status: 409 });
+      const stillRunning = (await request(owner, `${path}?${own}`)).run;
+      assert.equal(stillRunning.version, paidRun.version, "An insufficient final component must roll back the checkpoint version.");
+      assert.equal(stillRunning.currentCheckpoint.id, "activate", "Failed consumption must leave the final step uncommitted.");
+      assert.equal((await request(owner, `${base}/characters/${characterId}/inventory`)).inventory.find((item) => item.id === coil.id).quantity, 2, "Failed resource consumption must not partially consume the other inventory component.");
+      assert.deepEqual((await request(owner, `${base}/adventure/play?${own}`)).journal, beforeFailure.journal, "An insufficient final component must create no result or private journal receipt.");
+      await adjust(5);
+      const finalInput = step(paidDocument.checkpoints[1]);
+      paidRun = (await request(owner, `${path}/checkpoint`, { method: "POST", body: finalInput })).run;
+      assert.equal(paidRun.status, "succeeded");
+      const replay = await request(owner, `${path}/checkpoint`, { method: "POST", body: finalInput });
+      assert.equal(replay.run.result.journalId, paidRun.result.journalId);
+      await request(owner, `${base}/sigil/start`, { method: "POST", body: { ...input, requestId: randomUUID() }, status: 409 });
+      const after = await request(owner, `${base}/bazaar?${own}`);
+      assert.equal(after.balances.find((row) => row.resourceId === resourceId).quantity, 3, "Successful completion and all retries must consume exactly two fictional charges.");
+      assert.equal((await request(owner, `${base}/characters/${characterId}/inventory`)).inventory.find((item) => item.id === coil.id).quantity, 1, "Successful completion and all retries must consume exactly one inventory component.");
+      pass("SIGIL final component failure rolls back the checkpoint, inventory, flags and journal; successful retries consume each agreed component exactly once");
+    }
+    // A second host exercises cancellation/retry and the reasoned staff override.
+    const peerInventory = (await request(player, `${base}/characters/${peer.character.id}/inventory`)).inventory;
+    const peerInput = startInput(challenge, challengeDocument, peer.character, peerInventory);
+    let peerRun = (await request(player, `${base}/sigil/start`, { method: "POST", body: peerInput, status: 201 })).run;
+    peerRun = (await request(player, `${base}/sigil/runs/${peerRun.id}/cancel`, { method: "POST", body: { requestId: randomUUID(), characterId: peer.character.id, version: peerRun.version } })).run;
+    assert.equal(peerRun.status, "cancelled");
+    peerRun = (await request(player, `${base}/sigil/start`, { method: "POST", body: { ...peerInput, requestId: randomUUID() }, status: 201 })).run;
+    peerRun = (await request(owner, `${base}/sigil/runs/${peerRun.id}/operate`, { method: "POST", body: { requestId: randomUUID(), version: peerRun.version, operation: "succeed", reason: "Organizer observed the group complete the in-person sequence." } })).run;
+    assert.equal(peerRun.status, "succeeded", "A reasoned staff override must create one normal authoritative outcome.");
+    assert.ok(peerRun.history.some((entry) => JSON.stringify(entry).includes("Organizer observed")), "Staff intervention must retain its explicit reason in run history.");
+    pass(`${theme} SIGIL and STATIC: two roles, three checkpoints, frozen event/host pauses, current reconnect state, one result, conditional fictional readings, immutable collection, and audited staff controls`);
+    return { event, challengeId: challenge.id, challengeTitle: challengeDocument.title, challengeCode: challenge.code, signalId: signalEntry.id, signalCode: signalEntry.code, signalTitle: staticDocument.title, runId: completedRun.id, result: completedRun.result, peerRunId: peerRun.id, readingId: collected.reading.id };
+  }
+
   async function adventureJourney(owner, player) {
     const catalog = await request(owner, "/api/adventure-templates");
     assert.deepEqual(catalog.templates.map((template) => template.id).sort(), ["cyberpunk", "fantasy", "wasteland"], "All three complete starter adventures must be available.");
@@ -858,6 +1016,8 @@ if (publicOnly) {
       const completedExchange = theme === "fantasy" ? await exchangeJourney(owner, player, event, assigned, definition, version) : null;
       const completedStory = theme === "fantasy" ? await storyJourney(owner, player, event, assigned) : null;
       const completedEconomy = theme === "fantasy" ? await economyJourney(owner, player, event, assigned) : null;
+      const completedInstruments = await instrumentJourney(owner, player, event, assigned, theme);
+      event = completedInstruments.event;
       const original = await request(owner, playPath(assigned[0].character));
       const originalInventory = (await request(owner, `/api/events/${event.id}/characters/${assigned[0].character.id}/inventory`)).inventory;
       const originalEconomy = completedEconomy ? await request(owner, `/api/events/${event.id}/bazaar?characterId=${assigned[0].character.id}`) : null;
@@ -876,6 +1036,19 @@ if (publicOnly) {
       const { character: rehearsalCharacter } = await request(owner, `/api/events/${rehearsal.id}/characters/${rehearsalCharacters[0].id}/assign`, {
         method: "POST", body: { version: rehearsalCharacters[0].version, userId: owner.id },
       });
+      const copiedSigil = await request(owner, `/api/events/${rehearsal.id}/sigil/manage`);
+      const copiedStatic = await request(owner, `/api/events/${rehearsal.id}/static/manage`);
+      const rehearsalChallenge = copiedSigil.entries.find((entry) => (entry.document || entry.published).title === completedInstruments.challengeTitle);
+      const rehearsalSignal = copiedStatic.entries.find((entry) => (entry.document || entry.published).title === completedInstruments.signalTitle);
+      assert.ok(rehearsalChallenge && rehearsalSignal, "A rehearsal must copy its authored cooperative and fictional prop definitions.");
+      assert.notEqual(rehearsalChallenge.id, completedInstruments.challengeId);
+      assert.notEqual(rehearsalChallenge.code, completedInstruments.challengeCode, "A copied challenge must receive a fresh printed prop code.");
+      assert.notEqual(rehearsalSignal.id, completedInstruments.signalId);
+      assert.notEqual(rehearsalSignal.code, completedInstruments.signalCode, "A copied signal must receive a fresh zone/prop code.");
+      assert.equal(copiedSigil.runs.length, 0, "A rehearsal must not inherit original role assignments, timers, runs or outcomes.");
+      assert.equal(rehearsalSignal.override?.stateId ?? null, null, "A rehearsal must not copy staff's live signal override.");
+      assert.equal((await request(owner, `/api/events/${rehearsal.id}/static?characterId=${rehearsalCharacter.id}`)).readings.length, 0, "A rehearsal must not inherit original private signal readings.");
+      let rehearsalInstrumentRun;
       let rehearsalEconomy;
       if (completedEconomy) {
         const copied = await request(owner, `/api/events/${rehearsal.id}/bazaar?characterId=${rehearsalCharacter.id}`);
@@ -916,6 +1089,25 @@ if (publicOnly) {
       });
       const rehearsalPlayPath = `${rehearsalBase}/play?characterId=${rehearsalCharacter.id}`;
       assert.ok((await request(owner, rehearsalPlayPath)).journal.length > 0, "The rehearsal reset check must clear actual persisted play.");
+      {
+        const instrumentBase = `/api/events/${rehearsal.id}`;
+        const doc = rehearsalChallenge.published || rehearsalChallenge.document;
+        const items = (await request(owner, `${instrumentBase}/characters/${rehearsalCharacter.id}/inventory`)).inventory;
+        const input = { requestId: randomUUID(), characterId: rehearsalCharacter.id, entryId: rehearsalChallenge.id, publishedVersion: rehearsalChallenge.publishedVersion, code: rehearsalChallenge.code, roles: doc.roles.map((role, index) => ({ roleId: role.id, performer: `Rehearsal participant ${index + 1}` })), bindings: doc.components.filter((component) => component.kind === "item").map((component) => ({ componentId: component.id, itemId: items.find((item) => item.name === component.itemName).id })) };
+        rehearsalInstrumentRun = (await request(owner, `${instrumentBase}/sigil/start`, { method: "POST", body: input, status: 201 })).run;
+        while (rehearsalInstrumentRun.currentCheckpoint) {
+          const checkpoint = doc.checkpoints.find((entry) => entry.id === rehearsalInstrumentRun.currentCheckpoint.id);
+          if (rehearsalInstrumentRun.checkpointRemainingMs > 0) await delay(rehearsalInstrumentRun.checkpointRemainingMs + 100);
+          rehearsalInstrumentRun = (await request(owner, `${instrumentBase}/sigil/runs/${rehearsalInstrumentRun.id}/checkpoint`, { method: "POST", body: { requestId: randomUUID(), characterId: rehearsalCharacter.id, version: rehearsalInstrumentRun.version, checkpointId: checkpoint.id, roleId: checkpoint.roleId, answer: checkpoint.answer || "" } })).run;
+        }
+        assert.equal(rehearsalInstrumentRun.status, "succeeded", "The reset gate must include an actually completed copied challenge.");
+        const current = (await request(owner, `${instrumentBase}/static/lookup`, { method: "POST", body: { characterId: rehearsalCharacter.id, code: rehearsalSignal.code } })).signal;
+        assert.equal(current.source, "conditions", "Copied challenge outcomes must drive their copied fictional signal rules.");
+        await request(owner, `${instrumentBase}/static/collect`, { method: "POST", body: { requestId: randomUUID(), characterId: rehearsalCharacter.id, entryId: rehearsalSignal.id, code: rehearsalSignal.code, publicationVersion: current.publicationVersion, readingKey: current.readingKey } });
+        const states = (rehearsalSignal.published || rehearsalSignal.document).states;
+        await request(owner, `${instrumentBase}/static/entries/${rehearsalSignal.id}/state`, { method: "POST", body: { requestId: randomUUID(), version: rehearsalSignal.override?.version || 0, stateId: states.find((state) => state.id !== current.state.id).id, reason: "Create an actual disposable staff override before resetting rehearsal state." } });
+        assert.ok((await request(owner, `${instrumentBase}/static?characterId=${rehearsalCharacter.id}`)).readings.length > 0, "Rehearsal reset must clear an actually collected signal snapshot.");
+      }
       if (rehearsalStory) {
         const storyBase = `/api/events/${rehearsal.id}/story`;
         const available = await request(owner, `${storyBase}/play?characterId=${rehearsalCharacter.id}`);
@@ -956,6 +1148,20 @@ if (publicOnly) {
       rehearsalManage = await request(owner, `${rehearsalBase}/manage`);
       assert.ok(rehearsalManage.version > version, "A rehearsal reset must advance the adventure version.");
       assert.equal((await request(owner, rehearsalPlayPath)).journal.length, 0, "A rehearsal reset must remove its journal and play state.");
+      {
+        const instrumentBase = `/api/events/${rehearsal.id}`;
+        assert.equal((await request(owner, `${instrumentBase}/sigil?characterId=${rehearsalCharacter.id}`)).runs.length, 0, "Rehearsal reset must clear actual cooperative roles, timers, checkpoints and outcomes.");
+        await request(owner, `${instrumentBase}/sigil/runs/${rehearsalInstrumentRun.id}?characterId=${rehearsalCharacter.id}`, { status: 404 });
+        assert.equal((await request(owner, `${instrumentBase}/static?characterId=${rehearsalCharacter.id}`)).readings.length, 0, "Rehearsal reset must clear collected signal snapshots and replay records.");
+        const signal = (await request(owner, `${instrumentBase}/static/manage`)).entries.find((entry) => entry.id === rehearsalSignal.id);
+        assert.equal(signal.override?.stateId ?? null, null, "Rehearsal reset must clear the actual staff signal override.");
+        assert.equal(signal.code, rehearsalSignal.code, "Reset must preserve authored copied prop identities and codes.");
+        const preserved = (await request(owner, `${instrumentBase}/sigil/manage`)).entries.find((entry) => entry.id === rehearsalChallenge.id);
+        assert.equal(preserved.code, rehearsalChallenge.code, "Reset must preserve the authored copied challenge code.");
+        assert.deepEqual((await request(owner, `/api/events/${event.id}/sigil/runs/${completedInstruments.runId}?characterId=${assigned[0].character.id}`)).run.result, completedInstruments.result, "A copied rehearsal reset must preserve the original completed cooperative receipt.");
+        assert.ok((await request(owner, `/api/events/${event.id}/static?characterId=${assigned[0].character.id}`)).readings.some((reading) => reading.id === completedInstruments.readingId), "A copied rehearsal reset must preserve the original captured fictional reading.");
+        pass(`${theme} instrument rehearsal: fresh authored props, actual cooperative outcome and collected signal, reset runtime and staff override, source receipt unchanged`);
+      }
       if (rehearsalExchange) {
         const afterReset = await request(owner, `/api/events/${rehearsal.id}/exchanges?characterId=${rehearsalCharacter.id}`);
         assert.equal(afterReset.sessions.length, 0, "Rehearsal reset must remove completed exchange sessions and receipts.");
@@ -994,6 +1200,8 @@ if (publicOnly) {
       await request(owner, `/api/events/${event.id}/members/${player.id}`, { method: "DELETE" });
       await request(player, playPath(assigned[1].character), { status: 404 });
       await act(player, assigned[1].character, scene, "join", {}, { status: 404 });
+      await request(player, `/api/events/${event.id}/sigil/runs/${completedInstruments.peerRunId}?characterId=${assigned[1].character.id}`, { status: 404 });
+      await request(player, `/api/events/${event.id}/static?characterId=${assigned[1].character.id}`, { status: 404 });
       if (completedStory) {
         await request(player, `/api/events/${event.id}/story/play?characterId=${assigned[1].character.id}`, { status: 404 });
         await request(player, `/api/events/${event.id}/trace?characterId=${assigned[1].character.id}`, { status: 404 });

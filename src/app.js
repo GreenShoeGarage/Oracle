@@ -10,6 +10,8 @@ import { createStoryHandler } from "./story.js";
 import { createTraceHandler } from "./trace.js";
 import { createEconomyHandler } from "./economy.js";
 import { createOathHandler } from "./oaths.js";
+import { createSigilHandler, syncSigilEventState } from "./sigil.js";
+import { createStaticHandler } from "./static.js";
 import { checkSchema, transaction } from "./db.js";
 import {
   THEMES,
@@ -188,6 +190,8 @@ export function createApp({
   const traceHandler = createTraceHandler({ pool, config, helpers });
   const economyHandler = createEconomyHandler({ pool, config, helpers });
   const oathHandler = createOathHandler({ pool, config, helpers });
+  const sigilHandler = createSigilHandler({ pool, config, helpers });
+  const staticHandler = createStaticHandler({ pool, config, helpers });
   return async function handle(req, res) {
     const requestId = randomUUID();
     res.setHeader("X-Request-Id", requestId);
@@ -255,6 +259,15 @@ export function createApp({
           "/oath-model.js": ["oath-model.js", "text/javascript"],
           "/oath-ui.js": ["oath-ui.js", "text/javascript"],
           "/oath.css": ["oath.css", "text/css"],
+          "/sigil-model.js": ["sigil-model.js", "text/javascript"],
+          "/sigil-ui.js": ["sigil-ui.js", "text/javascript"],
+          "/sigil.css": ["sigil.css", "text/css"],
+          "/static-model.js": ["static-model.js", "text/javascript"],
+          "/static-ui.js": ["static-ui.js", "text/javascript"],
+          "/static.css": ["static.css", "text/css"],
+          "/prop-effects.js": ["prop-effects.js", "text/javascript"],
+          "/props.css": ["props.css", "text/css"],
+          "/instrument-code.js": ["instrument-code.js", "text/javascript"],
           "/characters-ui.js": ["characters-ui.js", "text/javascript"],
           "/characters-model.js": ["characters-model.js", "text/javascript"],
           "/characters.css": ["characters.css", "text/css"],
@@ -368,6 +381,8 @@ export function createApp({
       if (await traceHandler({ req, res, path, url, method, user })) return;
       if (await economyHandler({ req, res, path, url, method, user })) return;
       if (await oathHandler({ req, res, path, url, method, user })) return;
+      if (await sigilHandler({ req, res, path, url, method, user })) return;
+      if (await staticHandler({ req, res, path, url, method, user })) return;
       if (path === "/api/catalog" && method === "GET")
         return send(res, 200, { themes: THEMES, templates: TEMPLATES, instruments: INSTRUMENTS });
       if (path === "/api/auth/logout" && method === "POST") {
@@ -634,6 +649,7 @@ export function createApp({
             : input.theme !== undefined
               ? validateSetup({ ...event.setup, theme: input.theme })
               : event.setup;
+          await syncSigilEventState(db, event, { ...event, status, setup }, user.id);
           const changed = (
             await db.query(
               "UPDATE events SET name=$1,description=$2,location=$3,starts_at=$4,status=$5,setup=$6,version=version+1,updated_at=now() WHERE id=$7 RETURNING *",

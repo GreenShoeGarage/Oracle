@@ -1,0 +1,67 @@
+.sigil-workspace { max-width: 1440px; margin: 0 auto; }
+.sigil-layout { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(0, 1.7fr); gap: 1.2rem; align-items: start; margin-top: 1.2rem; }
+.sigil-detail { min-width: 0; }
+.sigil-list, .sigil-editor, .sigil-run, .sigil-challenge, .sigil-empty { padding: 1.3rem; }
+.sigil-card-list { display: grid; gap: .7rem; margin-top: 1rem; }
+.sigil-card { border: 1px solid var(--line); border-radius: var(--radius, 12px); padding: 1rem; overflow-wrap: anywhere; }
+.sigil-card h3 { font-size: 1rem; }
+.sigil-card .actions { gap: .4rem; margin-top: .7rem; }
+.sigil-session { display: grid; gap: .35rem; text-align: left; width: 100%; overflow-wrap: anywhere; }
+.sigil-session.selected { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.sigil-row-head { display: flex; gap: .7rem; justify-content: space-between; align-items: start; flex-wrap: wrap; }
+.sigil-row-head h3 { margin: 0; }
+.sigil-character-picker { display: flex; align-items: end; gap: .7rem; margin: 1rem 0; }
+.sigil-character-picker label { flex: 1; max-width: 440px; }
+.sigil-notice, .sigil-feedback { margin: 1rem 0; padding: 1rem; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; overflow-wrap: anywhere; }
+.sigil-notice p + p { margin-top: .5rem; }
+.sigil-copy { white-space: pre-wrap; overflow-wrap: anywhere; }
+.sigil-section { border-top: 1px solid var(--line); padding: 1rem 0; margin-top: .9rem; }
+.sigil-section > summary { cursor: pointer; font-weight: 700; margin-bottom: .6rem; }
+.sigil-section h3, .sigil-section h4 { margin: .9rem 0 .5rem; }
+.sigil-editor fieldset, .sigil-challenge fieldset { min-width: 0; display: grid; gap: .8rem; padding: 0; border: 0; }
+.sigil-author-row { display: grid; gap: .65rem; margin: .8rem 0; padding: 1rem; border: 1px solid var(--line); border-radius: 8px; }
+.sigil-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; }
+.sigil-fields [hidden] { display: none; }
+.sigil-check { display: flex; align-items: start; gap: .6rem; font-weight: 400; }
+.sigil-check input[type=checkbox], .sigil-picks input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: .2rem; }
+.sigil-picks { display: grid; gap: .5rem; max-height: 240px; overflow: auto; padding: .2rem; }
+.sigil-picks label { display: flex; align-items: start; gap: .5rem; font-weight: 400; }
+.sigil-draft-comparison { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; padding: .8rem; border: 1px solid var(--line); }
+.sigil-components { padding-left: 1.25rem; display: grid; gap: .7rem; margin: .8rem 0; }
+.sigil-components li span { display: block; color: var(--muted); font-size: .88rem; margin-top: .15rem; }
+.sigil-timer { display: grid; justify-items: center; padding: 1.5rem .6rem; margin: 1rem 0 .6rem; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
+.sigil-clock { font-variant-numeric: tabular-nums; font-size: clamp(3.4rem, 9vw, 6rem); font-weight: 750; line-height: 1.12; letter-spacing: -.035em; color: var(--accent); }
+.sigil-timer > span:last-child { color: var(--muted); font-size: .85rem; margin-top: .4rem; }
+.sigil-connection { font-size: .88rem; color: var(--muted); margin-bottom: 1rem; min-height: 2.5em; }
+.sigil-checkpoint { border-left: 3px solid var(--accent); padding: 1rem 0 1rem 1rem; }
+.sigil-checkpoint h3 { font-size: 1.5rem; margin: .4rem 0; }
+.sigil-role { font-weight: 700; color: var(--accent); margin: .7rem 0; }
+.sigil-role span { font-weight: 400; color: var(--muted); }
+.sigil-instructions { line-height: 1.65; margin-bottom: 1rem; }
+.sigil-run-actions { margin-top: 1rem; }
+.sigil-result { border: 1px solid var(--accent); border-radius: 12px; padding: 1rem; margin-top: 1rem; }
+.sigil-result h3 { margin-bottom: .6rem; }
+.sigil-history { display: grid; gap: .8rem; padding-left: 1.3rem; }
+.sigil-history .hint { display: block; margin-top: .3rem; }
+.sigil-staff { border: 1px solid var(--line); padding: 1rem; margin-top: 1rem; border-radius: 8px; }
+.sigil-prop-toolbar { margin-bottom: .9rem; }
+.sigil-scanner video { width: 100%; max-height: 45vh; border-radius: 10px; object-fit: cover; margin: .8rem 0; }
+.sigil-scanner label { margin-top: 1rem; }
+.sigil-prop-active { max-width: 1040px; margin: 0 auto; width: 100%; }
+.sigil-prop-active .sigil-clock { font-size: clamp(5rem, 15vw, 10rem); }
+.sigil-prop-active .sigil-instructions { font-size: clamp(1.1rem, 2.5vw, 1.8rem); }
+.sigil-prop-active .sigil-checkpoint h3 { font-size: clamp(1.5rem, 4vw, 2.6rem); }
+.sigil-prop-active .sigil-role { font-size: 1.3rem; }
+[data-texture="grain"] .sigil-timer { border-radius: 50% 50% 18px 18px; border-style: double; border-width: 4px; }
+[data-texture="grid"] .sigil-timer { border-radius: 0; box-shadow: inset 0 0 0 5px var(--panel); border-left: 5px solid var(--accent); }
+[data-texture="grid"] .sigil-clock { font-family: ui-monospace, monospace; }
+[data-texture="dust"] .sigil-timer { border-radius: 3px; border: 2px dashed var(--accent); }
+.sigil-poster-view { position: fixed; inset: 0; z-index: 70; background: var(--bg, #fff); color: var(--text, #111); overflow: auto; padding: 1rem; }
+.sigil-print-controls { max-width: 700px; margin: 0 auto 1rem; }
+#sigil-prop-label { max-width: 700px; padding: 2rem; margin: 0 auto; border: 2px solid currentColor; text-align: center; background: #fff; color: #111; }
+#sigil-label-qr { margin: 1.5rem auto; }
+.sigil-printed-code { font-family: ui-monospace, monospace; font-size: clamp(1rem, 3vw, 1.4rem); overflow-wrap: anywhere; }
+@media (max-width: 900px) { .sigil-layout { grid-template-columns: 1fr; } .sigil-list { max-height: none; } .sigil-card-list { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); } }
+@media (max-width: 560px) { .sigil-fields { grid-template-columns: 1fr; } .sigil-character-picker { align-items: stretch; flex-direction: column; } .sigil-list, .sigil-editor, .sigil-run, .sigil-challenge, .sigil-empty { padding: 1rem; } .sigil-author-row { padding: .7rem; } .sigil-run-actions button { flex: 1 1 45%; } }
+@media print { body:has(.sigil-poster-view) * { visibility: hidden; } body:has(.sigil-poster-view) #sigil-prop-label, body:has(.sigil-poster-view) #sigil-prop-label * { visibility: visible; } .sigil-poster-view { position: absolute; inset: 0; padding: 0; overflow: visible; background: #fff; } .sigil-print-controls { display: none; } #sigil-prop-label { max-width: none; break-inside: avoid; } }
+@media (prefers-reduced-motion: reduce) { .sigil-workspace *, .sigil-prop-active * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }

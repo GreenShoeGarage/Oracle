@@ -22,8 +22,8 @@ test("built-in themes, templates and unavailable instruments have coherent data"
   }
   for (const template of TEMPLATES) assert.deepEqual(validateSetup(template.setup), template.setup);
   assert.equal(TEMPLATES.length, 4);
-  assert.equal(INSTRUMENTS.filter((instrument) => !instrument.available).length, 3);
-  assert.deepEqual(INSTRUMENTS.filter((instrument) => instrument.available).map((instrument) => instrument.id), ["briefing", "relic", "dead-drop", "cipherbox", "wayfinder", "trace", "whisper", "broadside", "bazaar", "oathbook"]);
+  assert.equal(INSTRUMENTS.filter((instrument) => !instrument.available).length, 1);
+  assert.deepEqual(INSTRUMENTS.filter((instrument) => instrument.available).map((instrument) => instrument.id), ["briefing", "relic", "dead-drop", "cipherbox", "wayfinder", "trace", "whisper", "broadside", "bazaar", "oathbook", "sigil", "static"]);
   rejects("unknown-theme", defaultSetup);
 });
 
@@ -128,7 +128,7 @@ test("rules are bounded declarative records and cannot smuggle formulas or capab
     (setup) => { setup.rules.outcomes[0].id = "../secret"; },
     (setup) => { setup.rules.outcomes[0].description = "<script>alert(1)</script>"; },
     (setup) => { setup.rules.version = 0; },
-    (setup) => { setup.enabledInstruments = ["sigil"]; },
+    (setup) => { setup.enabledInstruments = ["stagehand"]; },
     (setup) => { setup.enabledInstruments = ["briefing", "briefing"]; },
   ];
   for (const mutate of mutations) {

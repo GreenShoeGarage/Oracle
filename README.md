@@ -1,14 +1,21 @@
 # ORACLE
 
-**LARP Field Kit** · v0.7.0 · Green Shoe Garage
+**LARP Field Kit** · v0.8.0 · Green Shoe Garage
 
-ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. A prop display presents selected briefing material on a shared screen.
+ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. Shared screens can present selected briefings, cooperative procedures, and explicitly fictional prop readings.
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 7 (v0.7.0, database schema 8) passed full local verification, both PostgreSQL CI runs, Railway staging, and the complete remote workflow. It is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com); Railway production and all 43 exact-commit public checks passed. See [docs/STATUS.md](docs/STATUS.md) for exact-commit evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
+Batch 8 (v0.8.0, database schema 9) is the current release candidate: SIGIL cooperative challenges, STATIC fictional readings, and immersive prop presentation are implemented and undergoing verification. Production remains the verified Batch 7 release until the exact candidate passes CI and staging. See [docs/STATUS.md](docs/STATUS.md) for deployment evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
 
 ## What works in this release
+
+- SIGIL shared-device challenges with in-person role assignments, ordered checkpoints, prepared answers, timers, host inventory/resource requirements, and recorded success/failure outcomes.
+- Explicit pause/resume, connectivity leases, cancellation/retry, and staff interventions with reasons; final outcomes and consumed host components commit once.
+- STATIC fictional prop/zone readings selected by prepared rules, character discoveries, cooperative outcomes, or staff selection of a published state.
+- Separate organizer drafts and published definitions, immutable collected readings, and current account/character authorization throughout.
+- Theme-aware immersive prop views, printable codes, camera/photo/manual lookup, optional local sounds, visible equivalents, and clear exit controls.
+- The same three-step, two-role starter cooperation appears as a fantasy ritual, cyberpunk relay procedure, or wasteland pump repair. Rehearsals copy authored definitions with new codes and clear their actual runtime state on reset.
 
 - BAZAAR fictional whole-unit resource balances, organizer-defined shops, finite stock, versioned purchases, and immutable transaction receipts.
 - Bilateral QR item/resource barter alongside selected readings: revised offers clear both confirmations; all transfers and reading copies commit together, and exact retries produce one transaction.
@@ -44,7 +51,7 @@ Batch 7 (v0.7.0, database schema 8) passed full local verification, both Postgre
 - Versioned JSON event packs: private organizer backups and player material with organizer-only content removed.
 - Dark and outdoor reading settings, reduced motion, collapsible navigation, and clear manual-save status.
 
-**Briefing** and nine gameplay instruments—**RELIC**, **DEAD DROP**, **CIPHERBOX**, **WAYFINDER**, **TRACE**, **WHISPER**, **BROADSIDE**, **BAZAAR**, and **OATHBOOK**—are available optional instruments. Three gameplay instruments remain planned. Character badges identify people; prop labels open event instruments. Temporary exchange QR codes support mutually confirmed introductions, selected reading copies, and atomic item/resource barter. Broader cooperative challenges and offline action synchronization remain later batches. Conditions and outcomes are bounded data; they do not run arbitrary scripts.
+**Briefing** and eleven gameplay instruments—**RELIC**, **DEAD DROP**, **CIPHERBOX**, **WAYFINDER**, **TRACE**, **WHISPER**, **BROADSIDE**, **BAZAAR**, **OATHBOOK**, **SIGIL**, and **STATIC**—are available optional instruments. **STAGEHAND** remains planned for Batch 9. Character badges identify people; prop labels open event instruments. Temporary exchange QR codes support mutually confirmed introductions, selected reading copies, and atomic item/resource barter. Coordinated multi-device timing and offline action synchronization remain later work. Conditions and outcomes are bounded data; they do not run arbitrary scripts.
 
 ## Stack and project layout
 
@@ -58,6 +65,10 @@ Node.js 22 (22.9 or newer) or 24, a small native HTTP server, PostgreSQL, and pl
 | `src/admin.js`, `public/admin-ui.js` | Operator provisioning and project administration |
 | `src/adventures.js`, `public/adventure-model.js` | Authoritative gameplay, journal, validation, and player projections |
 | `src/adventure-templates.js` | Server-only full adventures and solutions |
+| `src/sigil.js`, `public/sigil-model.js`, `public/sigil-ui.js` | Shared-device procedures, roles, authoritative timers, checkpoints, and outcomes |
+| `src/sigil-components.js` | Atomic requirements and consumption from the current host's inventory/resources |
+| `src/static.js`, `public/static-model.js`, `public/static-ui.js` | Prepared fictional signals, staff overrides, and captured readings |
+| `public/instrument-code.js`, `public/prop-effects.js`, `public/props.css` | Instrument code parsing and accessible immersive prop presentation |
 | `src/economy.js`, `public/economy-model.js`, `public/economy-ui.js` | Fictional resources, shops, purchases, atomic transfers, corrections, and receipts |
 | `src/oaths.js`, `public/oath-model.js`, `public/oath-ui.js` | Exact agreement terms, signatures, witnesses, settlement, and organizer adjudication |
 | `src/exchanges.js`, `public/exchange-model.js` | Atomic information exchange, provenance, receipts, and request validation |
@@ -168,6 +179,19 @@ Collected WHISPER readings are tied to the collecting account as well as its ass
 
 Rumors and publications remain server-backed. A withdrawal or audience change prevents new access, but cannot retract readings already legitimately collected or exchanged. Publication/shareability changes clear pending exchange confirmations. No story or investigation action changes inventory, story flags, scene attendance, or adventure completion.
 
+## Run a cooperative challenge or fictional prop
+
+1. Start a complete adventure, assign its two prewritten characters, and put the event in rehearsal. New starters include a published SIGIL procedure and STATIC signal; existing events are never silently populated.
+2. In SIGIL preparation, review the roles, ordered steps, time limits, discovery conditions, and result text/flags. Add inventory or whole-unit resource requirements where needed and explicitly mark any component consumed on success. Save a draft, then publish it.
+3. Print the instrument label. The host scans its QR code or enters its short code, reviews the required components, binds the host's matching inventory items, and names the people performing each role.
+4. Gather around the host device and complete the ordered steps. These role names describe people cooperating in person; they do not authorize spending from another player's character. Only the host's reviewed components can be consumed.
+5. Pause before stepping away. Resume explicitly when ready. Event pause freezes active challenges; reopening the event does not resume them automatically. Cancellation consumes nothing and permits a new attempt. A successful character cannot farm the same challenge again.
+6. Read STATIC using its prop/zone code. Every result says **Fictional event reading**. A starter's prepared reading changes after successful cooperation; staff may choose another published state with a recorded reason or restore the prepared rules.
+7. Save a STATIC reading to keep an immutable journal copy. If the signal changes before the server accepts collection, refresh and review the new reading. Retrying an already accepted request preserves the original receipt.
+8. Enter immersive prop mode for the current player procedure or reading. Sound starts silent and requires an explicit user gesture; text and visual state remain available. Fullscreen is optional. Use a player account on unattended hardware because hiding navigation does not remove an organizer account's permissions.
+
+SIGIL timing is server-authoritative. A visible active host renews a 20-second connectivity lease; missed contact pauses at the lease boundary and preserves the remaining active time. If the actual challenge deadline arrives first, it fails and records its outcome on the next authorized server interaction. If access or the configured outcome becomes invalid, staff can see a recorded cancellation instead of a result. The interface freezes controls when connectivity is uncertain; it never declares local success. After reconnecting, review the server's current state and explicitly resume a paused attempt. Coordinated multi-device timing is outside this release.
+
 ## Saved readings and connectivity
 
 A successfully loaded player journal can be saved automatically on this device. **Saved readings** shows only previously revealed text/audio, with its last-check time and read-only status. The service worker caches the public app shell; it never caches API responses. The device must first load ORACLE and the readings while connected, and its browser must support the required storage.
@@ -235,6 +259,10 @@ Custom themes can be supplied inside a validated event pack. They may contain ap
 | Publish/withdraw stories or manage audience groups | Yes | Yes | No | No |
 | Use own approved character for rumors, proposals, and TRACE | Yes | Yes | Yes | Yes |
 | Bypass another player's private TRACE records | No | No | No | No |
+| Author/publish SIGIL or STATIC definitions | Yes | Yes | No | No |
+| Operate SIGIL or prepared STATIC states with a reason | Yes | Yes | Yes | No |
+| Host SIGIL or collect STATIC using own approved character | Yes | Yes | Yes | Yes |
+| Spend another character's assets through an in-person role | No | No | No | No |
 | Edit event, theme, setup / change lifecycle | Yes | Yes | No | No |
 | Export organizer backup | Yes | Yes | No | No |
 | Export player material / view prop material | Yes | Yes | Yes | Yes |
@@ -297,7 +325,7 @@ For the configured disposable staging environment:
 EXPECTED_COMMIT='<full-40-character-release-commit>' node scripts/staging-check.js
 ```
 
-This script waits for the expected deployment commit, app version, and schema. It then creates disposable staging accounts/events to exercise event isolation, invitation redemption, role restrictions, player/prop secret filtering, all three theme switches, pack round trips, stale saves, fresh-session persistence, and immediate access removal. Batch 3 extends the journey through two approved characters, faction/field settings, badge privacy and rotation, inventory initialization/reapproval, prewritten assignment, malformed-write rejection, and cross-event copies. Batch 4 extends it through all three complete adventures, protected readings, puzzle hints/failure/overrides, request replay, reservations, and rehearsal isolation. Batch 5 adds bilateral introductions, selected reading exchange, both-party consent, changed-policy/offer checks, duplicate prevention, receipt persistence, and rehearsal cleanup. Batch 7 additionally verifies finite shops, explicit resource grants, purchase replay, mixed item/resource barter and rollback, an independent witness, revised agreement signatures, settlement replay, disputes/adjudication, linked corrections, and economy-aware rehearsal reset. Batch 6 adds alternate private rumors, hidden truth checks, confirmed QR rumor transfer, private and intentionally shared TRACE records, every audience type with current group/faction revocation, player proposal review, separate live/correction drafts, withdrawal, discovery-gated rumor collection, and story-aware rehearsal copy/reset. Cleanup archives test events and logs out test sessions. Mutations are restricted to the allowlisted staging origin. The `staging-smoke` GitHub job runs this after `verify` and uses `GITHUB_SHA` as the required deployed commit. After promotion, `production-smoke` waits for that same commit at the canonical production domain and runs public GET checks without creating users or events.
+This script waits for the expected deployment commit, app version, and schema. It then creates disposable staging accounts/events to exercise event isolation, invitation redemption, role restrictions, player/prop secret filtering, all three theme switches, pack round trips, stale saves, fresh-session persistence, and immediate access removal. Batch 3 extends the journey through two approved characters, faction/field settings, badge privacy and rotation, inventory initialization/reapproval, prewritten assignment, malformed-write rejection, and cross-event copies. Batch 4 extends it through all three complete adventures, protected readings, puzzle hints/failure/overrides, request replay, reservations, and rehearsal isolation. Batch 5 adds bilateral introductions, selected reading exchange, both-party consent, changed-policy/offer checks, duplicate prevention, receipt persistence, and rehearsal cleanup. Batch 7 additionally verifies finite shops, explicit resource grants, purchase replay, mixed item/resource barter and rollback, an independent witness, revised agreement signatures, settlement replay, disputes/adjudication, linked corrections, and economy-aware rehearsal reset. Batch 6 adds alternate private rumors, hidden truth checks, confirmed QR rumor transfer, private and intentionally shared TRACE records, every audience type with current group/faction revocation, player proposal review, separate live/correction drafts, withdrawal, discovery-gated rumor collection, and story-aware rehearsal copy/reset. Batch 8 adds the same two-role/three-step cooperation in every theme, frozen pauses and reconnect state, one-time resource/item consumption and final-step rollback, conditional/manual fictional signals, stale collection/replay, staff access, and actual copied instrument play/reset. Cleanup archives test events and logs out test sessions. Mutations are restricted to the allowlisted staging origin. The `staging-smoke` GitHub job runs this after `verify` and uses `GITHUB_SHA` as the required deployed commit. After promotion, `production-smoke` waits for that same commit at the canonical production domain and runs public GET checks without creating users or events.
 
 ## Railway deployment and recovery
 

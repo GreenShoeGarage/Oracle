@@ -1,7 +1,7 @@
 // This module contains declarative event data only. Both server and browser use
 // the same validation; themes never supply CSS, markup, scripts, or asset URLs.
 const MAX_BYTES = 200_000;
-const AVAILABLE_INSTRUMENT_IDS = ["briefing", "relic", "dead-drop", "cipherbox", "wayfinder", "trace", "whisper", "broadside", "bazaar", "oathbook"];
+const AVAILABLE_INSTRUMENT_IDS = ["briefing", "relic", "dead-drop", "cipherbox", "wayfinder", "trace", "whisper", "broadside", "bazaar", "oathbook", "sigil", "static"];
 // Reserve room for public event metadata and the versioned export envelope, so
 // every valid saved setup can be exported without dropping authored records.
 const MAX_SETUP_BYTES = 180_000;

@@ -173,8 +173,45 @@ try {
     const baseline = (await client.query("SELECT * FROM character_inventory WHERE event_id=$1 ORDER BY id", [fixture.event])).rows;
     await client.query("INSERT INTO economy_baselines(event_id,inventory) VALUES($1,$2)", [fixture.event, JSON.stringify(baseline)]);
     await client.query("INSERT INTO exchange_trade_offers(event_id,exchange_id,side,snapshot) VALUES($1,$2,'initiator',$3)", [fixture.event, fixture.exchange, JSON.stringify({ items: [], resources: [], valid: true })]);
+    // Populate authored snapshots, completed and paused cooperative timers,
+    // captured results, fictional overrides and private readings before dumping.
+    const sigilId = randomUUID(), pausedEntryId = randomUUID(), sigilRunId = randomUUID(), pausedRunId = randomUUID(), sigilJournalId = randomUUID();
+    const sigilDocument = {
+      title: "Recovery cooperative procedure", summary: "Two people operate one fictional prop.", organizerNotes: "Private staff instructions must survive recovery.", durationSeconds: 120,
+      roles: [{ id: "keeper", name: "Keeper", instructions: "Hold the lantern." }, { id: "reader", name: "Reader", instructions: "Read the markings." }],
+      components: [{ id: "lantern", name: "Lantern", kind: "item", itemName: "Recovery lantern", resourceId: null, quantity: 1, consume: true }],
+      checkpoints: [{ id: "prepare", title: "Prepare", instructions: "Place the lantern on the prop.", roleId: "keeper", minimumSeconds: 0, answer: null }, { id: "align", title: "Align", instructions: "Read the prepared code.", roleId: "reader", minimumSeconds: 1, answer: "LANTERN" }],
+      conditions: { completed: [relic.id], flags: [], skills: [], statuses: [] },
+      success: { text: "The restored fictional signal is stable.", flags: ["recovered"] }, failure: { text: "The prepared sequence timed out.", flags: [] },
+    };
+    const roles = [{ roleId: "keeper", performer: "First in-person participant" }, { roleId: "reader", performer: "Second in-person participant" }];
+    const bindings = [{ componentId: "lantern", itemId: fixture.item }];
+    for (const [entryId, title] of [[sigilId, sigilDocument.title], [pausedEntryId, "Recovery paused procedure"]])
+      await client.query("INSERT INTO sigil_entries(id,event_id,code,document,published,status,version,published_version,created_by) VALUES($1,$2,$3,$4,$5,'published',3,2,$6)", [entryId, fixture.event, propCode(), JSON.stringify({ ...sigilDocument, title, organizerNotes: "A revised private staff draft awaiting the next publication." }), JSON.stringify({ ...sigilDocument, title }), fixture.user]);
+    await client.query("INSERT INTO sigil_runs(id,event_id,entry_id,owner_user_id,character_id,character_name,snapshot,published_version,roles,bindings,status,version,checkpoint_index,remaining_ms,checkpoint_elapsed_ms,heartbeat_sequence) VALUES($1,$2,$3,$4,$5,$6,$7,2,$8,$9,'succeeded',8,2,70000,0,5)", [sigilRunId, fixture.event, sigilId, fixture.user, fixture.character, profile.name, JSON.stringify(sigilDocument), JSON.stringify(roles), JSON.stringify(bindings)]);
+    await client.query("INSERT INTO sigil_runs(id,event_id,entry_id,owner_user_id,character_id,character_name,snapshot,published_version,roles,bindings,status,pause_reason,version,checkpoint_index,remaining_ms,checkpoint_elapsed_ms,heartbeat_sequence) VALUES($1,$2,$3,$4,$5,$6,$7,2,$8,$9,'paused','connection',5,1,45000,1200,4)", [pausedRunId, fixture.event, pausedEntryId, fixture.user, fixture.character, profile.name, JSON.stringify({ ...sigilDocument, title: "Recovery paused procedure" }), JSON.stringify(roles), JSON.stringify(bindings)]);
+    await client.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,type) VALUES($1,$2,$3,$4,$5,$6,$7,'sigil')", [sigilJournalId, fixture.event, fixture.character, `sigil:${sigilId}`, `sigil:${sigilRunId}`, sigilDocument.title, sigilDocument.success.text]);
+    const consumption = { items: [{ itemId: fixture.item, name: "Recovery lantern", required: 1, consumed: 1, before: 2, after: 1 }], resources: [] };
+    await client.query("INSERT INTO sigil_outcomes(id,event_id,run_id,entry_id,owner_user_id,character_id,status,text,flags,consumption,journal_id) VALUES($1,$2,$3,$4,$5,$6,'succeeded',$7,$8,$9,$10)", [randomUUID(), fixture.event, sigilRunId, sigilId, fixture.user, fixture.character, sigilDocument.success.text, JSON.stringify(sigilDocument.success.flags), JSON.stringify(consumption), sigilJournalId]);
+    await client.query("INSERT INTO sigil_requests(event_id,actor_user_id,request_id,payload_hash,action,entry_id,run_id,outcome) VALUES($1,$2,$3,$4,'checkpoint',$5,$6,$7)", [fixture.event, fixture.user, randomUUID(), digest(JSON.stringify({ runId: sigilRunId, checkpointId: "align", roleId: "reader", answer: "LANTERN", version: 7 })), sigilId, sigilRunId, JSON.stringify({ status: "succeeded", journalId: sigilJournalId })]);
+    await client.query("INSERT INTO sigil_history(id,event_id,run_id,actor_user_id,action,details) VALUES($1,$2,$3,$4,'succeeded',$5)", [randomUUID(), fixture.event, sigilRunId, fixture.user, JSON.stringify({ reason: "Staff confirmed the group completed its in-person procedure.", consumption })]);
+    await client.query("INSERT INTO sigil_history(id,event_id,run_id,actor_user_id,action,details) VALUES($1,$2,$3,$4,'paused',$5)", [randomUUID(), fixture.event, pausedRunId, fixture.user, JSON.stringify({ reason: "connection", remainingMs: 45000, checkpointElapsedMs: 1200 })]);
+    const staticId = randomUUID(), staticJournalId = randomUUID();
+    const staticDocument = {
+      title: "Recovery fictional scanner", summary: "A prepared fictional zone reading.", organizerNotes: "Private explanation of the future fictional signal.", zoneLabel: "Lantern chamber",
+      conditions: { completed: [relic.id], flags: [], skills: [], statuses: [] },
+      states: [{ id: "unsettled", label: "Unsettled", text: "A fictional oscillation moves across the chamber.", level: 65, tone: "alert" }, { id: "restored", label: "Restored", text: "The fictional chamber signal is stable.", level: 15, tone: "calm" }],
+      defaultStateId: "unsettled", rules: [{ id: "recovered", conditions: { completed: [], flags: ["recovered"], skills: [], statuses: [] }, stateId: "restored" }],
+    };
+    await client.query("INSERT INTO static_entries(id,event_id,code,document,published,status,version,published_version,created_by) VALUES($1,$2,$3,$4,$5,'published',4,3,$6)", [staticId, fixture.event, propCode(), JSON.stringify({ ...staticDocument, organizerNotes: "Private revised draft after publication." }), JSON.stringify(staticDocument), fixture.user]);
+    await client.query("INSERT INTO static_overrides(event_id,entry_id,version,state_id,reason,actor_user_id) VALUES($1,$2,2,'unsettled','Staff prepared a fictional signal change after observing the group.',$3)", [fixture.event, staticId, fixture.user]);
+    await client.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,type) VALUES($1,$2,$3,$4,$5,$6,$7,'static')", [staticJournalId, fixture.event, fixture.character, `static:${staticId}`, `static:${staticId}:captured`, staticDocument.title, staticDocument.states[1].text]);
+    const readingKey = digest(JSON.stringify({ entryId: staticId, publicationVersion: 3, stateId: "restored", source: "conditions", overrideVersion: 0 }));
+    await client.query("INSERT INTO static_readings(id,event_id,entry_id,owner_user_id,character_id,publication_version,reading_key,state_id,source,journal_id) VALUES($1,$2,$3,$4,$5,3,$6,'restored','conditions',$7)", [randomUUID(), fixture.event, staticId, fixture.user, fixture.character, readingKey, staticJournalId]);
+    await client.query("INSERT INTO static_requests(event_id,actor_user_id,request_id,payload_hash,action,target_id) VALUES($1,$2,$3,$4,'collect',$5)", [fixture.event, fixture.user, randomUUID(), digest(JSON.stringify({ entryId: staticId, publicationVersion: 3, readingKey })), staticId]);
+    await client.query("INSERT INTO static_history(id,event_id,entry_id,actor_user_id,action,version,reason,details) VALUES($1,$2,$3,$4,'state',2,'Staff prepared a fictional signal change after observing the group.',$5)", [randomUUID(), fixture.event, staticId, fixture.user, JSON.stringify({ stateId: "unsettled", previousStateId: null })]);
   });
-  for (const table of ["economy_resources", "economy_balances", "economy_shops", "economy_stock", "economy_transactions", "economy_receipts", "economy_requests", "economy_baselines", "exchange_trade_offers", "oath_agreements", "oath_participants", "oath_history", "oath_requests"])
+  for (const table of ["economy_resources", "economy_balances", "economy_shops", "economy_stock", "economy_transactions", "economy_receipts", "economy_requests", "economy_baselines", "exchange_trade_offers", "oath_agreements", "oath_participants", "oath_history", "oath_requests", "sigil_entries", "sigil_runs", "sigil_outcomes", "sigil_requests", "sigil_history", "static_entries", "static_overrides", "static_readings", "static_requests", "static_history"])
     assert.ok((await source.query(`SELECT count(*)::int AS n FROM ${table}`)).rows[0].n > 0, `${table} must contain actual recovery data.`);
   await source.query(`CREATE DATABASE "${name}"`);
   const out = await open(backup, "wx", 0o600);
@@ -259,6 +296,16 @@ try {
     ["oath_participants", "event_id,agreement_id,character_id"],
     ["oath_history", "id"],
     ["oath_requests", "event_id,actor_user_id,request_id"],
+    ["sigil_entries", "id"],
+    ["sigil_runs", "id"],
+    ["sigil_outcomes", "id"],
+    ["sigil_requests", "event_id,actor_user_id,request_id"],
+    ["sigil_history", "id"],
+    ["static_entries", "id"],
+    ["static_overrides", "event_id,entry_id"],
+    ["static_readings", "id"],
+    ["static_requests", "event_id,actor_user_id,request_id"],
+    ["static_history", "id"],
     ["schema_migrations", "version"],
   ]) {
     const a = (await source.query(`SELECT * FROM ${table} ORDER BY ${order}`))
@@ -271,7 +318,7 @@ try {
       `${table} restored content`,
     );
   }
-  await migrate(restored);
+  assert.equal(await migrate(restored), 9, "The recovered database must accept repeat migration at schema 9.");
   const event = (
     await restored.query("SELECT id,owner_user_id FROM events LIMIT 1")
   ).rows[0];
@@ -297,7 +344,7 @@ try {
   const systemAudit = (await restored.query("INSERT INTO system_audit_entries(actor_id,target_user_id,action) VALUES($1,$1,'recovery.rehearsed') RETURNING id", [fixture.user])).rows[0];
   assert.ok(BigInt(systemAudit.id) > maximumSystemAudit, "Restored system audit identity sequence must advance safely.");
   console.log(
-    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventures, journals, sharing policies, exchange sessions, provenance, bilateral contacts and receipts, story groups and draft/publication separation, hidden truths, collected rumors, activity, private investigations, fictional balances and finite shops, atomic transaction receipts, inventory baselines, fixed agreement terms and captured signatures, replay records, both audit sequences, and migration after restore passed.",
+    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventures, journals, sharing policies, exchange sessions, provenance, bilateral contacts and receipts, story groups and draft/publication separation, hidden truths, collected rumors, activity, private investigations, fictional balances and finite shops, atomic transaction receipts, inventory baselines, fixed agreement terms and captured signatures, replay records, published cooperative snapshots and private drafts, captured roles and components, completed outcomes and paused timer state, fictional signal rules and staff overrides, account-bound readings, both audit sequences, and migration after restore passed.",
   );
 } finally {
   if (restored) await restored.end();

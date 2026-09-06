@@ -56,7 +56,7 @@ export async function canShareWhisper(db, event, nodeId) {
   const row = (await db.query("SELECT published,status FROM story_entries WHERE event_id=$1 AND id=$2 AND kind='rumor'", [event.id, id])).rows[0];
   return Boolean(row?.published && row.status !== 'withdrawn' && row.published.shareable === true);
 }
-// Account-bound WHISPER and exchange-receipt provenance govern the journal, QR offers,
+// Account-bound story, exchange, SIGIL and STATIC provenance govern the journal, QR offers,
 // and TRACE citations. Captured recipient ownership preserves a legitimate copy
 // even when the original reader later leaves; assignment cannot transfer it.
 export async function filterStoryJournal(db, eventId, userId, rows) {
@@ -77,7 +77,9 @@ export async function filterStoryJournal(db, eventId, userId, rows) {
         WHERE receipt.event_id=j.event_id AND receipt.owner_user_id=$2 AND receipt.owner_character_id=j.character_id
         AND session.status='completed' AND j.entry_key='exchange-receipt:' || receipt.exchange_id::text
       )) OR
-      (j.type NOT IN('whisper','exchange_receipt') AND COALESCE(original.type,'')<>'whisper' AND j.node_id NOT LIKE 'whisper:%')
+      (j.type='sigil' AND EXISTS(SELECT 1 FROM sigil_outcomes outcome WHERE outcome.event_id=j.event_id AND outcome.journal_id=j.id AND outcome.owner_user_id=$2 AND outcome.character_id=j.character_id)) OR
+      (j.type='static' AND EXISTS(SELECT 1 FROM static_readings reading WHERE reading.event_id=j.event_id AND reading.journal_id=j.id AND reading.owner_user_id=$2 AND reading.character_id=j.character_id)) OR
+      (j.type NOT IN('whisper','exchange_receipt','sigil','static') AND COALESCE(original.type,'') NOT IN('whisper','sigil','static') AND j.node_id NOT LIKE 'whisper:%')
     )`, [eventId, userId, ids])).rows;
   const visible = new Set(allowed.map(row => row.id));
   return rows.filter(row => visible.has(row.id));

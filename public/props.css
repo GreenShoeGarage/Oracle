@@ -1,0 +1,35 @@
+/* Focus mode changes presentation. Authorization remains on each server route. */
+body.oracle-prop-focus .sidebar, body.oracle-prop-focus .topbar { display: none; }
+body.oracle-prop-focus .layout { grid-template-columns: 1fr; }
+body.oracle-prop-focus .workspace { max-width: 1200px; width: 100%; margin: auto; padding: clamp(.8rem, 3vw, 2rem); }
+body.oracle-prop-focus .static-workspace > :not(:has(.instrument-prop-surface)):not(.instrument-prop-surface),
+body.oracle-prop-focus .sigil-workspace > :not(:has(.instrument-prop-surface)):not(.instrument-prop-surface),
+body.oracle-prop-focus .static-layout > :not(:has(.instrument-prop-surface)):not(.instrument-prop-surface),
+body.oracle-prop-focus .sigil-layout > :not(:has(.instrument-prop-surface)):not(.instrument-prop-surface) { display: none; }
+body.oracle-prop-focus .static-layout, body.oracle-prop-focus .sigil-layout { grid-template-columns: 1fr; }
+.instrument-prop-surface { position: relative; overflow-wrap: anywhere; }
+body.oracle-prop-focus .instrument-prop-surface { min-height: calc(100svh - 4rem); border: 2px solid var(--accent); padding: clamp(1rem, 4vw, 3.5rem); display: flex; flex-direction: column; justify-content: center; gap: 1.1rem; }
+body.oracle-prop-focus .instrument-prop-surface h2 { font-size: clamp(2rem, 6vw, 4.5rem); line-height: 1.15; }
+body.oracle-prop-focus .instrument-prop-surface .instrument-copy { font-size: clamp(1.2rem, 2.4vw, 1.8rem); line-height: 1.65; }
+.instrument-prop-controls { display: flex; gap: .65rem; flex-wrap: wrap; align-items: center; margin: 1rem 0; }
+.instrument-prop-controls button { min-height: 48px; }
+.instrument-prop-status { border-left: 3px solid var(--accent); padding: .7rem 1rem; background: var(--raised); }
+[data-texture="grain"] .instrument-prop-surface { border-radius: 1.4rem; background-image: radial-gradient(ellipse at center, transparent 50%, color-mix(in srgb, var(--accent) 9%, transparent)); }
+[data-texture="grid"] .instrument-prop-surface { border-radius: 0; box-shadow: inset 0 0 0 5px var(--panel), inset 0 0 0 6px var(--accent); }
+[data-texture="grid"] .instrument-prop-surface .eyebrow { font-family: ui-monospace, monospace; letter-spacing: .18em; }
+[data-texture="dust"] .instrument-prop-surface { border-radius: .25rem; border-style: double; border-width: 5px; }
+.instrument-label { text-align: center; padding: 1.5rem; border: 2px solid var(--accent); border-radius: .5rem; overflow-wrap: anywhere; }
+.instrument-label .instrument-qr { width: min(256px, 100%); margin: 1rem auto; background: white; padding: .5rem; }
+.instrument-label svg, .instrument-label canvas { display: block; max-width: 100%; height: auto; }
+.instrument-label-code { font: 700 1.05rem/1.5 ui-monospace, monospace; letter-spacing: .08em; }
+@media (max-width: 600px) { body.oracle-prop-focus .instrument-prop-surface { min-height: calc(100svh - 1.6rem); } .instrument-prop-controls { gap: .4rem; } .instrument-prop-controls button { flex: 1 1 140px; } }
+@media (prefers-reduced-motion: reduce) { .instrument-prop-surface, .instrument-prop-surface * { animation: none !important; transition: none !important; } }
+@media print {
+  body.instrument-printing { background: white !important; }
+  body.instrument-printing > :not(#modal) { display: none !important; }
+  body.instrument-printing #modal { display: block !important; position: static !important; overflow: visible !important; width: 100% !important; max-width: none !important; max-height: none !important; margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; background: white !important; }
+  body.instrument-printing #modal::backdrop, body.instrument-printing #modal-content > :not(.instrument-label) { display: none !important; }
+  body.instrument-printing .instrument-label { width: 95mm; max-width: 100%; margin: 5mm auto; padding: 6mm; break-inside: avoid; background: white !important; color: black !important; border: 1px solid black; }
+  body.instrument-printing .instrument-label * { color: black !important; }
+  body.instrument-printing .instrument-qr { width: 58mm; }
+}

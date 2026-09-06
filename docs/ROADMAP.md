@@ -2,16 +2,16 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 1.9 · September 6, 2026
+Development roadmap · Planning revision: 2.0 · September 6, 2026
 
-Status: Batch 7 (v0.7.0, schema 8), release commit `a008a659d4f2cc9425a88640bffd5f3df8774d2b`, passed local verification, both PostgreSQL CI runs, Railway staging, and the complete remote workflow. Railway production and all 43 exact-commit public checks passed; the release is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). The existing operator remains enabled with identity/password preserved. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 8 is the next development batch; Batches 8–12 remain planned.
+Status: Batch 8 (v0.8.0, schema 9) implements SIGIL cooperative challenges, STATIC fictional readings, and immersive prop presentation and is undergoing verification. The verified Batch 7 release remains deployed until the candidate passes exact-commit CI, staging, and production checks. The existing operator remains enabled; additive migration tests preserve identity/password and all eight earlier migration records. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batches 9–12 remain planned. See [STATUS.md](STATUS.md).
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
 
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
-The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–7 are deployed; Batches 8–12 remain planned.
+The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–7 are deployed; Batch 8 is implemented and undergoing verification; Batches 9–12 remain planned.
 
 **Product commitments**
 
@@ -128,6 +128,8 @@ Completion gate: Concurrent attempts to trade the same item cannot duplicate it 
 
 **Batch 8 — v0.8: Cooperative challenges and immersive props**
 
+Implementation status: Candidate implemented. SIGIL provides two-role shared-device starter procedures in all themes, versioned draft/publication authoring, checkpoints, host inventory/resource requirements, server timers and connectivity leases, pause/resume/cancel/retry, and reasoned staff intervention. STATIC supplies explicitly fictional prepared/conditional/manual prop states and immutable collected readings. Both instruments have themed immersive presentation and isolated copied/rehearsal runtime state. Migration/foundation checks passed 38 tests (37 passed, one existing TCP-only skip); populated schema-8 preservation and all ten schema-9 recovery-fixture constraints passed. The complete local staging rehearsal passed 392 reads/466 writes, retaining prior workflows and verifying all three themed procedures, resource/item rollback and once-only consumption, fictional signal changes, staff controls, and actual copied play/reset. Focused SIGIL 16 and STATIC 11 HTTP tests passed; SIGIL UI passed ten focused checks plus a bounded published/draft authoring check, STATIC UI passed eight, and shared prop/code helpers passed seven. Ten full-app DOM/API checks passed with zero uncaught errors. Full-suite, exact-candidate CI, and deployment gates are still being completed.
+
 Implement SIGIL and STATIC. SIGIL runs cooperative sequences with assigned roles, components, checkpoints, timers, and configured outcomes. STATIC presents fictional readings driven by prop/zone codes, prepared event state, or organizer input.
 
 Expand prop mode with theme-specific presentation, optional sounds, clear visual equivalents, and staff-protected controls. Connect challenges to discoveries, inventory requirements, and event outcomes. Provide pause, resume, cancellation, retry, and organizer override. Start with shared-device cooperative play; coordinated multi-device timing can follow after that workflow is dependable.
@@ -201,4 +203,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next development batch: Batch 8 — cooperative challenges and immersive props. Batch 7 is fully deployed; scheduled database backups remain a separate operational item. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Current delivery: complete Batch 8 verification and deployment. Next planned development batch: Batch 9 — live event operations and STAGEHAND; scheduled database backups remain a separate operational item. Public branding uses ORACLE with the subtitle “LARP Field Kit.”

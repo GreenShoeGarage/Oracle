@@ -14,7 +14,7 @@ for (const dir of ["src", "scripts", "test", "public"]) {
 const pkg = JSON.parse(await readFile("package.json", "utf8"));
 assert.equal(VERSION, pkg.version, "App/package versions must match.");
 const html = await readFile("public/index.html", "utf8");
-for (const asset of ["/style.css", "/themes.css", "/characters.css", "/adventure.css", "/adventure-organizer.css", "/exchanges.css", "/sharing.css", "/story.css", "/trace.css", "/economy.css", "/oath.css", "/app.js", "/favicon.svg"]) {
+for (const asset of ["/style.css", "/themes.css", "/characters.css", "/adventure.css", "/adventure-organizer.css", "/exchanges.css", "/sharing.css", "/story.css", "/trace.css", "/economy.css", "/oath.css", "/sigil.css", "/static.css", "/props.css", "/app.js", "/favicon.svg"]) {
   assert.ok(html.includes(asset));
   await readFile(`public${asset}`);
 }

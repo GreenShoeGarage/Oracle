@@ -7,6 +7,8 @@ import { readSharing, sharingPolicyFor, seedSharing, copySharing } from "./shari
 import { seedStory, copyStory, resetStory, filterStoryJournal } from "./story.js";
 import { seedEconomy, copyEconomy, captureEconomyBaseline, resetEconomy } from "./economy.js";
 import { resetOaths } from "./oaths.js";
+import { seedSigil, copySigil, resetSigil } from "./sigil.js";
+import { seedStatic, copyStatic, resetStatic } from "./static.js";
 
 const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const code = () => Array.from({ length: 20 }, () => alphabet[randomInt(alphabet.length)]).join("");
@@ -121,6 +123,8 @@ export function createAdventureHandler({ pool, config, helpers }) {
         await seedCharacters(db, created, pack.characters);
         await seedStory(db, created, user.id);
         await seedEconomy(db, created, user.id);
+        await seedSigil(db, created, user.id);
+        await seedStatic(db, created, user.id);
         await audit(db, created.id, user.id, "adventure.template_created", { templateId: template[1] });
         return created;
       });
@@ -184,6 +188,8 @@ export function createAdventureHandler({ pool, config, helpers }) {
         const characterMap = new Map(sourceProfiles.map((profile, index) => [profile.id, characterIds[index]]));
         await copyStory(db, event, copied, { characterMap, factionMap: mapped }, user.id);
         await copyEconomy(db, event.id, copied.id, user.id);
+        await copySigil(db, event.id, copied.id, user.id);
+        await copyStatic(db, event.id, copied.id, user.id);
         await captureEconomyBaseline(db, copied.id);
         const oldSettings = (await db.query("SELECT * FROM event_character_settings WHERE event_id=$1", [event.id])).rows[0];
         if (oldSettings) await db.query("INSERT INTO event_character_settings(event_id,allow_player_creation,require_approval,max_per_player,public_fields) VALUES($1,$2,$3,$4,$5)", [copied.id, oldSettings.allow_player_creation, oldSettings.require_approval, oldSettings.max_per_player, JSON.stringify(oldSettings.public_fields)]);
@@ -197,6 +203,8 @@ export function createAdventureHandler({ pool, config, helpers }) {
         // tables belong only to this rehearsal; the source event is untouched.
         await resetStory(db, eventId);
         await resetOaths(db, eventId);
+        await resetSigil(db, eventId);
+        await resetStatic(db, eventId);
         await resetEconomy(db, eventId);
         for (const table of ["exchange_requests", "exchange_contacts", "exchange_receipts", "exchange_copies", "exchange_sessions", "adventure_attendance", "adventure_journal", "adventure_requests", "adventure_runs"]) await db.query(`DELETE FROM ${table} WHERE event_id=$1`, [eventId]);
         record = (await db.query("UPDATE event_adventures SET version=version+1,updated_at=now() WHERE event_id=$1 RETURNING *", [eventId])).rows[0];

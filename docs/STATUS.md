@@ -1,4 +1,46 @@
-# ORACLE v0.7.0 — Batch 7 release status
+# ORACLE v0.8.0 — Batch 8 release status
+
+Recorded September 6, 2026.
+
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Candidate application `0.8.0`; database schema `9`; briefing-pack format `1`; adventure format `1`. Production remains the verified Batch 7 release until this candidate passes its exact-commit CI, staging, and production gates. No Batch 8 deployment is claimed here yet.
+
+## Batch 8 implemented
+
+- SIGIL shared-device cooperation: captured in-person roles, ordered checkpoints and optional answers, active-time requirements, server timers, host item/resource requirements, and explicit outcomes.
+- Atomic final checkpoint/component consumption/flags/journal, once-per-character success, request replay, failed/cancelled retry, and staff operations with reasons.
+- Explicit host/event pauses and resume, a 20-second connectivity lease with monotonic heartbeats, fresh server state after reconnect, and no offline progression.
+- STATIC prepared prop/zone readings, condition-driven state, bounded published staff choices, versioned overrides, and an explicit fictional label in every signal projection.
+- Immutable account-bound collected signals and results, private draft/live publication separation, and current ownership/revocation checks.
+- Theme-aware immersive prop presentation, optional local sound with visual equivalents, code printing, and camera/photo/manual entry.
+- The same two-role/three-checkpoint starter appears as a fantasy ritual, cyberpunk relay procedure, or wasteland repair. Copies receive fresh prop codes and omit runtime/private state; reset clears actual rehearsal play while preserving authored definitions and the source event.
+- Additive migration 009 introduces ten tables while preserving all eight prior migration records, populated schema-8 economy/agreement data, and the existing enabled operator's identity/password.
+
+Eleven gameplay instruments plus Briefing are implemented. STAGEHAND is the next planned instrument in Batch 9. Shared-device roles are in-person performer labels; they do not authorize other characters or imply coordinated multi-device timing. Format-1 briefing/adventure contracts stay unchanged.
+
+## Batch 8 candidate verification
+
+| Check | Recorded result |
+| --- | --- |
+| Legacy/foundation migration suite | 38 tests: 37 passed, zero failures, one existing TCP-only skip; complete operator row, all 13 populated schema-8 economy/agreement tables, and all eight old migration records preserved |
+| Populated recovery fixture | All 13 existing economy/agreement tables and all ten schema-9 tables contain valid constrained data; repeated schema-9 migration passed locally |
+| Local full staging rehearsal | Passed 392 reads / 466 writes, including all previous workflows, every-theme cooperation/fictional signal, final component rollback, one-time deduction, staff controls, actual copied play/reset, source preservation, and cleanup |
+| Focused instrument HTTP suites | SIGIL 16 passed; STATIC 11 passed |
+| Focused browser modules | SIGIL UI 10 passed plus a bounded published/draft authoring check; STATIC UI 8 passed; shared prop/code helpers 7 passed |
+| Root integration and persistence checks | 35 existing integration checks passed; 29 kit/offline/component checks passed |
+| Full application DOM/API walkthrough | Ten checks passed with zero uncaught errors using actual modules, HTTP/PGlite and JSDOM |
+| Contention fixture workflows | Four new functional fixtures passed with PGlite; real PostgreSQL contention remains a CI gate |
+| Full application, PostgreSQL, Docker and release gates | Pending exact candidate verification |
+
+The recovery fixture includes distinct draft/publication snapshots, captured role/component records, completed and paused runs with frozen timer state, immutable result consumption evidence, conditional fictional readings, later staff overrides, and history/replay records. The real PostgreSQL dump/restore gate must compare all these tables before promotion. Local fixtures and HTTP checks are not remote-deployment claims.
+
+## Current limits and recovery position
+
+- Scheduled live backups remain unconfigured: Railway HOBBY reports `maxBackupsCount: 0` and no external runner is configured. Disposable restore rehearsals do not back up live event data.
+- After migration 009, v0.7.0/schema-8 and earlier binaries are incompatible. Preserve upgraded data and use a tested schema-9-compatible roll-forward fix.
+- Current cooperative timers, controls, component availability, fictional signals, shops, exchanges, and agreement state require server confirmation. Permitted completed journal text can enter the existing 1,000-entry/3 MB archive, tied to the captured account and character. There is no offline mutation queue or real-world sensor integration.
+- Coordinated multi-device timing, physical phones/cameras, authenticated real-browser/mobile workflows, real service-worker inspection, load measurements, and a human field pilot remain outstanding. HTTP, DOM, and storage automation do not replace those gates.
+
+## Previous verified release — Batch 7
 
 Recorded September 6, 2026.
 
@@ -6,7 +48,7 @@ Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). App
 
 Release commit `a008a659d4f2cc9425a88640bffd5f3df8774d2b` passed both main and staging CI: 183 PostgreSQL tests (182 passed, zero failures, one PGlite-only snapshot skip), all four TCP gates including forced last-stock and same-item contention, actual populated schema-8 dump/restore, startup, and the production Docker image. Railway staging and the complete deployed BAZAAR/QR/OATHBOOK/three-theme adventure/story workflow passed on that same commit. Railway production and all 43 exact-commit public checks passed on that same release, confirming v0.7.0/schema 8 and the existing enabled operator account. Production migration/startup confirmed the matching existing operator account is enabled; idempotent provisioning and migration tests preserve its identity/password.
 
-## Batch 7 implemented
+### Batch 7 implemented
 
 - BAZAAR fictional whole-unit resource balances, organizer-defined shops, finite stock, versioned purchases, and immutable transaction receipts.
 - Bilateral QR item/resource barter alongside selected readings: revised offers clear both confirmations; all transfers and reading copies commit together, and exact retries produce one transaction.
@@ -17,7 +59,7 @@ Release commit `a008a659d4f2cc9425a88640bffd5f3df8774d2b` passed both main and s
 
 Nine gameplay instruments are implemented; three remain planned. Batch 8 adds cooperative challenges and immersive props next. Existing briefing/adventure formats stay 1; briefing packs do not export economy, agreement, character, adventure, exchange, or story histories.
 
-## Batch 7 release verification
+### Batch 7 release verification
 
 | Check | Recorded result |
 | --- | --- |
@@ -39,7 +81,7 @@ Nine gameplay instruments are implemented; three remain planned. Batch 8 adds co
 
 The local journey demonstrates corrected shop pricing, finite stock, purchase replay and failed-funds isolation; mixed item/resource barter with revised consent, last-leg rejection without partial writes, and identical retry receipts; revised exact agreement terms, a separate-account witness, participant-only settlement, dispute/adjudication without double payment, and a linked correction. It also populates a rehearsal with actual purchases and an agreement, restores its initial inventory/stock, clears only rehearsal balances/history, and checks the original event remains intact. Local request counts are not remote-deployment claims.
 
-## Batch 7 deployment record
+### Batch 7 deployment record
 
 | Target | Project ID | Deployment ID | Result |
 | --- | --- | --- | --- |
@@ -50,7 +92,7 @@ Staging logs confirmed migration 8 at 02:48:08 UTC and v0.7.0 `server_ready` in 
 
 Production logs confirmed `migrations_complete: 8` and `superuser_provisioned` with `matched: true` at 02:52:35 UTC on September 6. At 02:52:39 UTC, startup reported v0.7.0 in production and `superuser_status` with `accountExists: true`, `enabled: true`. The [production smoke job 101417500630](https://github.com/GreenShoeGarage/Oracle/actions/runs/34007575785/job/101417500630) verified the exact release commit/version/schema at 02:52:43 UTC and passed all 43 public GET checks from 02:52:43 to 02:52:48 UTC. Production checks created no accounts or event data. Runtime branches retain the checked release commit; subsequent documentation commits do not change the deployed application. No private operator address, account identifier, setup secret, or password appears in these documents.
 
-## Current limits and recovery position
+### Current limits and recovery position
 
 - Scheduled live backups remain unconfigured: Railway HOBBY reports `maxBackupsCount: 0` and no external runner is configured. Disposable restore rehearsals do not back up live event data.
 - After migration 008, v0.6.0/schema-7 and earlier binaries are incompatible. Preserve the upgraded data and use a tested schema-8-compatible roll-forward fix.
