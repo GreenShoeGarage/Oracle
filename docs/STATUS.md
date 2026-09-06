@@ -1,10 +1,10 @@
-# ORACLE v0.5.0 — Batch 5 candidate status
+# ORACLE v0.5.0 — Batch 5 release status
 
 Recorded September 6, 2026.
 
-Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Candidate application `0.5.0`; database schema `6`; briefing-pack format `1`; adventure format `1`. The candidate commit and deployment evidence will be recorded after the remaining gates pass.
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Release commit: `72cce5d6858c6b59b34b7c8c80bc874bb088e099`. Application `0.5.0`; database schema `6`; briefing-pack format `1`; adventure format `1`.
 
-Batch 5 implementation and local verification are complete; real PostgreSQL CI, remote staging, and production promotion remain pending. [Production](https://oracle.greenshoegarage.com) remains on verified Batch 4 until the candidate passes those gates. The existing reserved operator account was last confirmed enabled during Batch 4, with identity and password preserved.
+Batch 5 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Local verification, real PostgreSQL CI, the complete remote staging workflow, Railway production, and exact-commit public smoke passed. Production startup confirms the existing reserved operator account is enabled, with identity and password preserved.
 
 ## Batch 5 implemented
 
@@ -19,7 +19,7 @@ Batch 5 implementation and local verification are complete; real PostgreSQL CI, 
 
 No inventory, money, skills, flags, or adventure progression transfers. Briefing-pack format 1 remains setup/material only and excludes sharing policies, exchanges, contacts, receipts, characters, and adventure state. Eight gameplay instruments remain planned; Batch 6 is next.
 
-## Candidate verification
+## Release verification
 
 | Check | Recorded result |
 | --- | --- |
@@ -32,26 +32,27 @@ No inventory, money, skills, flags, or adventure progression transfers. Briefing
 | Focused exchange UI checks | Six checks passed |
 | Local HTTP staging rehearsal | All prior three-theme adventure paths plus exchanges and completed-exchange rehearsal reset passed: 188 reads, 237 writes |
 | Sharing source syntax and whitespace | Passed |
-| Main/staging CI and real PostgreSQL recovery/runtime gates | Pending candidate commit and successful jobs |
-| Exact-commit remote staging workflow | Pending |
-| Railway production and public-only smoke | Pending promotion |
+| [Main CI 34002025263](https://github.com/GreenShoeGarage/Oracle/actions/runs/34002025263) | Passed at the exact release commit |
+| [Staging CI 34002025408](https://github.com/GreenShoeGarage/Oracle/actions/runs/34002025408) | Verification and complete deployed workflow passed |
+| PostgreSQL 18 suite | 131 tests: 130 passed, zero failures, one PGlite-only snapshot skip; both TCP race tests passed |
+| Recovery/runtime gates | Real populated-table dump/restore, migration preservation, startup, and running production Docker checks passed |
+| [Remote staging job 101402565229](https://github.com/GreenShoeGarage/Oracle/actions/runs/34002025408/job/101402565229) | New exchanges, all three adventures, completed-exchange rehearsal reset, and disposable-data cleanup passed |
+| [Production CI 34002163969](https://github.com/GreenShoeGarage/Oracle/actions/runs/34002163969) | Exact release commit, v0.5.0/schema 6 readiness, and 31 public GET checks passed; no accounts/events/mutations created |
 
-The full app checks cover temporary QR and explicit joining, no peer reading body before both confirmations, changed-offer resets, unsaved-navigation guards, lost-confirmation retry with the identical request UUID, exactly two receipts/contacts, journal persistence, and character-reassignment cache removal. Sharing controls also passed change/discard-guard/save against the actual API. The two local suite skips require PostgreSQL TCP; their CI results are still pending.
+The full app checks cover temporary QR and explicit joining, no peer reading body before both confirmations, changed-offer resets, unsaved-navigation guards, lost-confirmation retry with the identical request UUID, exactly two receipts/contacts, journal persistence, and character-reassignment cache removal. Sharing controls also passed change/discard-guard/save against the actual API. Both tests skipped locally passed against real PostgreSQL TCP in CI. CI skips only the PGlite-specific snapshot test, replacing it with the real dump/restore gate.
 
-These are candidate-local results, not deployed-release evidence. Physical phones, mobile-camera consent, authenticated real-browser workflows, actual service-worker inspection, load measurement, and a human field pilot remain unverified.
+The 188 reads/237 writes describe the local staging rehearsal only. The remote workflow passed independently on the exact release commit. Physical phones, mobile-camera consent, authenticated real-browser workflows, actual service-worker inspection, load measurement, and a human field pilot remain unverified.
 
-## Most recent verified deployment
+## Deployment record
 
-The Batch 4 runtime commit is `f3d77a5df4c3f130fc5a658c9d2d4e9753b1d7c1` (v0.4.0/schema 5). [Main CI 34000116757](https://github.com/GreenShoeGarage/Oracle/actions/runs/34000116757), [staging CI 34000116740](https://github.com/GreenShoeGarage/Oracle/actions/runs/34000116740), the remote three-theme adventure workflow, and [production CI 34000309961](https://github.com/GreenShoeGarage/Oracle/actions/runs/34000309961) passed on that commit.
-
-| Target | Project ID | Batch 4 deployment ID | Result |
+| Target | Project ID | Deployment ID | Result |
 | --- | --- | --- | --- |
-| [Staging](https://oracle-production-488d.up.railway.app) | `4e75d5ec-f8e9-492d-ae75-e0d44428d24a` | `f364f026-ca07-42b7-a5ad-668164e448ed` | v0.4.0/schema 5; complete adventure workflow passed |
-| [Production](https://oracle.greenshoegarage.com) | `d1989864-9a40-4176-a9d3-203a06c4bd72` | `d785c33e-2dd4-4038-93f1-2e74180034cb` | v0.4.0/schema 5; 25 public GET checks passed |
+| [Staging](https://oracle-production-488d.up.railway.app) | `4e75d5ec-f8e9-492d-ae75-e0d44428d24a` | `82cc4760-efba-490a-a36d-d32e706c4218` | v0.5.0/schema 6 success; complete workflow passed |
+| [Production](https://oracle.greenshoegarage.com) | `d1989864-9a40-4176-a9d3-203a06c4bd72` | `0dcec31f-a368-4fb8-883b-5a4dcb9ad47f` | v0.5.0/schema 6 success; exact-commit production smoke passed |
 
 Staging and production remain separate Railway projects with separate PostgreSQL services, credentials, and volumes. Production uses the canonical custom domain and dedicated `production` branch; exact-commit CI/staging checks must pass before promotion. See [DEPLOYMENT.md](DEPLOYMENT.md).
 
-Batch 4 migration/startup logs confirmed the existing reserved operator account matched and was enabled. Provisioning remains idempotent and preserves that account's UUID/password. No private email, user identifier, setup secret, or password appears in these documents. Batch 5 startup will be checked independently before claiming a new deployment result.
+Production logs at 00:46:50 UTC on September 6 confirmed migration 6 and a matching existing operator account. At 00:46:55 UTC startup confirmed v0.5.0 in production and `accountExists: true`, `enabled: true`. Idempotent provisioning preserved the existing UUID/password. The [production smoke job 101402849264](https://github.com/GreenShoeGarage/Oracle/actions/runs/34002163969/job/101402849264) passed readiness and all 31 public checks between 00:47:00 and 00:47:03 UTC. Runtime branches use the same checked release commit; subsequent documentation commits do not change that deployment. No private email, user identifier, setup secret, or password appears in these documents.
 
 ## Remaining limits
 
