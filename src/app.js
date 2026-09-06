@@ -4,6 +4,8 @@ import { VERSION } from "./config.js";
 import { createAdminHandler, isReservedSuperuserEmail, registerSuperuserAllowed, systemAudit } from "./admin.js";
 import { createCharacterHandler } from "./characters.js";
 import { createAdventureHandler } from "./adventures.js";
+import { createExchangeHandler } from "./exchanges.js";
+import { createSharingHandler } from "./sharing.js";
 import { checkSchema, transaction } from "./db.js";
 import {
   THEMES,
@@ -176,6 +178,8 @@ export function createApp({
   const adminHandler = createAdminHandler({ pool, config, helpers });
   const characterHandler = createCharacterHandler({ pool, config, helpers });
   const adventureHandler = createAdventureHandler({ pool, config, helpers });
+  const exchangeHandler = createExchangeHandler({ pool, config, helpers });
+  const sharingHandler = createSharingHandler({ pool, config, helpers });
   return async function handle(req, res) {
     const requestId = randomUUID();
     res.setHeader("X-Request-Id", requestId);
@@ -225,6 +229,12 @@ export function createApp({
           "/offline.js": ["offline.js", "text/javascript"],
           "/prop-code.js": ["prop-code.js", "text/javascript"],
           "/sw.js": ["sw.js", "text/javascript"],
+          "/exchange-model.js": ["exchange-model.js", "text/javascript"],
+          "/exchange-code.js": ["exchange-code.js", "text/javascript"],
+          "/exchanges-ui.js": ["exchanges-ui.js", "text/javascript"],
+          "/exchanges.css": ["exchanges.css", "text/css"],
+          "/sharing-ui.js": ["sharing-ui.js", "text/javascript"],
+          "/sharing.css": ["sharing.css", "text/css"],
           "/characters-ui.js": ["characters-ui.js", "text/javascript"],
           "/characters-model.js": ["characters-model.js", "text/javascript"],
           "/characters.css": ["characters.css", "text/css"],
@@ -332,6 +342,8 @@ export function createApp({
       if (await adminHandler({ req, res, path, url, method, user })) return;
       if (await characterHandler({ req, res, path, url, method, user })) return;
       if (await adventureHandler({ req, res, path, url, method, user })) return;
+      if (await exchangeHandler({ req, res, path, url, method, user })) return;
+      if (await sharingHandler({ req, res, path, url, method, user })) return;
       if (path === "/api/catalog" && method === "GET")
         return send(res, 200, { themes: THEMES, templates: TEMPLATES, instruments: INSTRUMENTS });
       if (path === "/api/auth/logout" && method === "POST") {

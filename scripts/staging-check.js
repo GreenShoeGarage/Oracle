@@ -275,6 +275,163 @@ if (publicOnly) {
       assert.ok(Object.keys(node).every((key) => ["id", "type", "title", "summary", "locked", "lockReason", "completed", "failed", "joined"].includes(key)), "Locked instruments must expose only their public summary and the player's own attendance state.");
   }
 
+  async function exchangeJourney(owner, player, event, assigned, definition, adventureVersion) {
+    const base = `/api/events/${event.id}`;
+    const participants = assigned.map((entry) => ({ ...entry }));
+    const relic = definition.nodes.find((node) => node.id === "evidence-core");
+    const overview = (participant) => request(participant.account, `${base}/exchanges?characterId=${participant.character.id}`);
+    const detail = (participant, id) => request(participant.account, `${base}/exchanges/${id}?characterId=${participant.character.id}`);
+    const journal = (participant) => request(participant.account, `${base}/adventure/play?characterId=${participant.character.id}`);
+    const mutate = (participant, id, action, version, fields = {}, { requestId = randomUUID(), status = 200 } = {}) => request(participant.account, `${base}/exchanges/${id}/${action}`, {
+      method: action === "offer" ? "PUT" : "POST", body: { requestId, characterId: participant.character.id, version, ...fields }, status,
+    });
+    const create = (participant, requestId = randomUUID(), status = 201) => request(participant.account, `${base}/exchanges`, {
+      method: "POST", body: { requestId, characterId: participant.character.id }, status,
+    });
+    const pair = async () => {
+      const created = await create(participants[0]);
+      assert.equal(created.exchange.status, "waiting", "Showing an exchange code must create a waiting session.");
+      assert.ok(/^[A-HJ-NP-Z2-9]{12}$/.test(created.exchange.code), "Waiting exchange codes must contain twelve unambiguous characters.");
+      const joined = await request(player, `${base}/exchanges/join`, {
+        method: "POST", body: { requestId: randomUUID(), characterId: participants[1].character.id, code: created.exchange.code },
+      });
+      assert.equal(joined.exchange.status, "negotiating", "Scanning a code must pair the players without completing an exchange.");
+      assert.equal(joined.exchange.code, null, "The single-recipient code must disappear after pairing.");
+      assert.equal(joined.exchange.own.confirmed, false, "Joining must never imply the recipient's confirmation.");
+      assert.equal(joined.exchange.partner.confirmed, false, "Joining must never imply the initiator's confirmation.");
+      return joined.exchange;
+    };
+    const privateBeforeCompletion = (exchange, peerReading) => {
+      assert.equal(exchange.receipt, null, "Uncompleted exchanges must not expose a transfer receipt.");
+      for (const offered of exchange.partner?.offered || [])
+        assert.ok(Object.keys(offered).every((key) => ["id", "title", "type"].includes(key)), "A peer's pending offer must expose titles only, never reading contents.");
+      const serialized = JSON.stringify(exchange);
+      if (peerReading) assert.ok(!serialized.includes(peerReading.text), "Peer reading text must remain hidden until both players confirm the same offer revision.");
+      for (const participant of participants) {
+        assert.ok(!serialized.includes(participant.account.email), "Exchange projections must omit account email addresses.");
+        if (participant.character.profile.privateObjectives)
+          assert.ok(!serialized.includes(participant.character.profile.privateObjectives), "Exchange projections must omit private character objectives.");
+      }
+    };
+    for (const participant of participants) {
+      const ownExam = relic.examinations.find((exam) => exam.id !== "read-markings" && exam.conditions.skills.every((skill) => participant.character.profile.skills.includes(skill)));
+      assert.ok(ownExam, "Each starter character must have a distinct permitted specialist reading to exchange.");
+      const result = await request(participant.account, `${base}/adventure/action`, {
+        method: "POST", body: { requestId: randomUUID(), version: adventureVersion, characterId: participant.character.id, nodeId: relic.id, kind: "examine", examId: ownExam.id, code: relic.code },
+      });
+      participant.reading = result.journal.find((entry) => entry.nodeId === relic.id && entry.text === ownExam.text);
+      assert.ok(participant.reading, "An offered specialist reading must first exist in its owner's discovered journal.");
+      const available = await overview(participant);
+      assert.ok(available.readings.some((reading) => reading.id === participant.reading.id && reading.shareable), "The starter's newly discovered relic reading must be explicitly shareable.");
+      assert.equal(available.contacts.length, 0, "No contacts may be created by merely discovering a reading.");
+      for (const reading of available.readings)
+        assert.ok(!Object.hasOwn(reading, "text") && !Object.hasOwn(reading, "audio"), "The exchange reading picker must contain metadata only.");
+    }
+    assert.notEqual(participants[0].reading.id, participants[1].reading.id, "The two participants must offer independent discovered records.");
+    assert.ok(participants[0].reading.text !== participants[1].reading.text, "The two offered readings must contain distinct discoveries.");
+    const stateBefore = (await request(owner, `${base}/adventure/manage`)).progress.map(({ journalEntries, ...progress }) => progress);
+    const nodeState = (play) => play.nodes.map(({ retryAfterMs, ...node }) => node);
+    const nodesBefore = await Promise.all(participants.map(async (participant) => nodeState(await journal(participant))));
+    const inventoryBefore = await Promise.all(participants.map((participant) => request(participant.account, `${base}/characters/${participant.character.id}/inventory`)));
+
+    let introduction = await pair();
+    const introOwnerRequest = randomUUID();
+    const firstConfirmation = await mutate(participants[0], introduction.id, "confirm", introduction.version, {}, { requestId: introOwnerRequest });
+    assert.equal(firstConfirmation.exchange.status, "negotiating", "One confirmation must not complete an introduction.");
+    privateBeforeCompletion(firstConfirmation.exchange);
+    assert.equal((await overview(participants[0])).contacts.length, 0, "A one-sided confirmation must not create a contact.");
+    introduction = (await mutate(participants[1], introduction.id, "confirm", introduction.version)).exchange;
+    assert.equal(introduction.status, "completed", "Two confirmations must complete a zero-item introduction.");
+    assert.equal(introduction.receipt.introduced, true, "A zero-item exchange must record the bilateral introduction.");
+    assert.equal(introduction.receipt.received.length, 0, "An introduction must not silently transfer discoveries.");
+    for (const participant of participants) assert.equal((await overview(participant)).contacts.length, 1, "Bilateral completion must create exactly one contact for each participant.");
+    const introductionReplay = await mutate(participants[0], introduction.id, "confirm", introduction.version, {}, { requestId: introOwnerRequest });
+    assert.equal(introductionReplay.exchange.status, "completed", "A repeated confirmation must return the current completed session.");
+    assert.equal(introductionReplay.outcome.replayed, true, "A repeated confirmation must be acknowledged as an idempotent replay.");
+    await mutate(participants[0], introduction.id, "confirm", introduction.version + 1, {}, { requestId: introOwnerRequest, status: 409 });
+    pass("bilateral introductions require both confirmations and create durable contacts without transferring readings");
+
+    let session = await pair();
+    const expiry = session.expiresAt;
+    session = (await mutate(participants[0], session.id, "offer", session.version, { readingIds: [participants[0].reading.id] })).exchange;
+    session = (await mutate(participants[1], session.id, "offer", session.version, { readingIds: [participants[1].reading.id] })).exchange;
+    for (const [index, participant] of participants.entries()) privateBeforeCompletion((await detail(participant, session.id)).exchange, participants[1 - index].reading);
+    session = (await mutate(participants[0], session.id, "confirm", session.version)).exchange;
+    assert.equal(session.own.confirmed, true, "The first participant must see their own confirmed revision.");
+    session = (await mutate(participants[1], session.id, "offer", session.version, { readingIds: [] })).exchange;
+    assert.equal(session.own.confirmed, false, "Changing an offer must clear the changing player's confirmation.");
+    assert.equal(session.partner.confirmed, false, "Changing an offer must clear the other player's confirmation.");
+    assert.equal(session.expiresAt, expiry, "Offer changes must not extend the original exchange deadline.");
+    session = (await mutate(participants[1], session.id, "offer", session.version, { readingIds: [participants[1].reading.id] })).exchange;
+    await mutate(participants[0], session.id, "confirm", session.version);
+    let sharing = await request(owner, `${base}/sharing`);
+    const originalPolicies = sharing.nodes.map((node) => ({ nodeId: node.id, policy: node.policy }));
+    sharing = await request(owner, `${base}/sharing`, {
+      method: "PUT", body: { version: sharing.version, policies: originalPolicies.map((entry) => entry.nodeId === relic.id ? { ...entry, policy: "restricted" } : entry) },
+    });
+    session = (await detail(participants[0], session.id)).exchange;
+    assert.equal(session.own.confirmed, false, "A sharing policy change must clear the initiator's confirmation.");
+    assert.equal(session.partner.confirmed, false, "A sharing policy change must clear the recipient's confirmation.");
+    assert.ok(session.blockedReason, "A newly restricted pending reading must visibly block completion.");
+    await mutate(participants[1], session.id, "confirm", session.version, {}, { status: 403 });
+    await request(owner, `${base}/sharing`, { method: "PUT", body: { version: sharing.version, policies: originalPolicies } });
+    session = (await detail(participants[0], session.id)).exchange;
+    assert.equal(session.own.confirmed, false, "Restoring policy must still require fresh confirmation.");
+    assert.equal(session.partner.confirmed, false, "Restoring policy must require both players to confirm again.");
+    privateBeforeCompletion(session, participants[1].reading);
+    await request(owner, "/api/auth/logout", { method: "POST", body: {}, status: 204 });
+    owner.cookie = null;
+    await request(owner, "/api/auth/login", { method: "POST", body: { email: owner.email, password: owner.password } });
+    const resumed = (await detail(participants[0], session.id)).exchange;
+    assert.equal(resumed.id, session.id, "A new sign-in must resume the same pending exchange.");
+    assert.equal(resumed.version, session.version, "A new sign-in must preserve the authoritative offer revision.");
+    const ownConfirmationRequest = randomUUID();
+    await mutate(participants[0], session.id, "confirm", session.version, {}, { requestId: ownConfirmationRequest });
+    privateBeforeCompletion((await detail(participants[1], session.id)).exchange, participants[0].reading);
+    const finalRequestId = randomUUID();
+    session = (await mutate(participants[1], session.id, "confirm", session.version, {}, { requestId: finalRequestId })).exchange;
+    assert.equal(session.status, "completed", "Selected readings must transfer only after both current confirmations.");
+    const completedJournals = [];
+    for (const [index, participant] of participants.entries()) {
+      const completed = (await detail(participant, session.id)).exchange;
+      const peerReading = participants[1 - index].reading;
+      assert.ok(completed.receipt.received.some((reading) => reading.text === peerReading.text && reading.alreadyKnown === false), "The committed receipt must contain the actual newly received reading.");
+      const refreshed = await journal(participant);
+      assert.equal(refreshed.journal.filter((entry) => entry.type === "shared_reading" && entry.text === peerReading.text).length, 1, "A selected peer discovery must be copied exactly once into the recipient journal.");
+      assert.equal(refreshed.journal.filter((entry) => entry.type === "exchange_receipt").length, 2, "Each completed introduction or sharing exchange must add one receipt per participant.");
+      assert.equal((await overview(participant)).contacts.length, 1, "Repeated exchanges with the same character must not duplicate contacts.");
+      completedJournals.push(refreshed.journal);
+    }
+    const finalReplay = await mutate(participants[1], session.id, "confirm", session.version, {}, { requestId: finalRequestId });
+    assert.equal(finalReplay.outcome.replayed, true, "Retrying a lost final-confirm response must return the committed receipt.");
+    assert.ok(isDeepStrictEqual((await journal(participants[1])).journal, completedJournals[1]), "Retrying final completion must not copy discoveries or receipts twice.");
+    const stateAfter = (await request(owner, `${base}/adventure/manage`)).progress.map(({ journalEntries, ...progress }) => progress);
+    assert.ok(isDeepStrictEqual(stateAfter, stateBefore), "Sharing readings must not change adventure flags, completion, or failure state.");
+    const nodesAfter = await Promise.all(participants.map(async (participant) => nodeState(await journal(participant))));
+    assert.ok(isDeepStrictEqual(nodesAfter, nodesBefore), "Shared discoveries must not grant examination completion, puzzle attempts, hints, or scene attendance.");
+    const inventoryAfter = await Promise.all(participants.map((participant) => request(participant.account, `${base}/characters/${participant.character.id}/inventory`)));
+    assert.ok(isDeepStrictEqual(inventoryAfter, inventoryBefore), "Sharing readings must not change either character's inventory.");
+    pass("selected two-way sharing hides peer bodies until commit, invalidates changed offers and policies, resumes safely, and preserves gameplay state");
+
+    const completedId = session.id;
+    const receivedCopy = completedJournals[0].find((entry) => entry.type === "shared_reading" && entry.text === participants[1].reading.text);
+    let returnSession = await pair();
+    returnSession = (await mutate(participants[0], returnSession.id, "offer", returnSession.version, { readingIds: [receivedCopy.id] })).exchange;
+    await mutate(participants[0], returnSession.id, "confirm", returnSession.version);
+    returnSession = (await mutate(participants[1], returnSession.id, "confirm", returnSession.version)).exchange;
+    assert.ok(returnSession.receipt.received.some((reading) => reading.alreadyKnown === true), "Returning a reshared discovery to its original owner must report it as already known.");
+    assert.equal((await journal(participants[1])).journal.filter((entry) => entry.text === participants[1].reading.text).length, 1, "Canonical provenance must prevent duplicate readings when information returns to its origin.");
+    let rejected = await pair();
+    rejected = (await mutate(participants[1], rejected.id, "reject", rejected.version)).exchange;
+    assert.equal(rejected.status, "rejected", "A recipient must be able to reject a pending exchange.");
+    let cancelled = (await create(participants[0])).exchange;
+    cancelled = (await mutate(participants[0], cancelled.id, "cancel", cancelled.version)).exchange;
+    assert.equal(cancelled.status, "cancelled", "An initiator must be able to cancel a waiting exchange.");
+    assert.ok((await overview(participants[0])).sessions.some((entry) => entry.id === completedId && entry.status === "completed"), "Refreshing recent exchanges must preserve committed history.");
+    pass("exchange provenance prevents duplicate readings and completed history survives rejection, cancellation, and reload");
+    return completedId;
+  }
+
   async function adventureJourney(owner, player) {
     const catalog = await request(owner, "/api/adventure-templates");
     assert.deepEqual(catalog.templates.map((template) => template.id).sort(), ["cyberpunk", "fantasy", "wasteland"], "All three complete starter adventures must be available.");
@@ -397,6 +554,7 @@ if (publicOnly) {
       event = await patchEvent(owner, event, { status: "paused" });
       await act(firstRequest.account, firstRequest.character, relic, "examine", { examId: exam.id, code: relic.code }, { requestId: firstRequest.requestId, status: 409 });
       event = await patchEvent(owner, event, { status: "live" });
+      const completedExchange = theme === "fantasy" ? await exchangeJourney(owner, player, event, assigned, definition, version) : null;
       const original = await request(owner, playPath(assigned[0].character));
       const originalInventory = (await request(owner, `/api/events/${event.id}/characters/${assigned[0].character.id}/inventory`)).inventory;
       const { event: rehearsal } = await request(owner, `${base}/rehearsal`, { method: "POST", body: {}, status: 201 });
@@ -420,16 +578,45 @@ if (publicOnly) {
       });
       const rehearsalPlayPath = `${rehearsalBase}/play?characterId=${rehearsalCharacter.id}`;
       assert.ok((await request(owner, rehearsalPlayPath)).journal.length > 0, "The rehearsal reset check must clear actual persisted play.");
+      let rehearsalExchange;
+      if (completedExchange) {
+        const exchangeBase = `/api/events/${rehearsal.id}/exchanges`;
+        const beforeExchange = await request(owner, `${exchangeBase}?characterId=${rehearsalCharacter.id}`);
+        assert.equal(beforeExchange.sessions.length, 0, "A rehearsal copy must not inherit source exchange sessions.");
+        assert.equal(beforeExchange.contacts.length, 0, "A rehearsal copy must not inherit source contacts.");
+        const { invitation } = await request(owner, `/api/events/${rehearsal.id}/invites`, { method: "POST", body: { role: "player", maxUses: 1 }, status: 201 });
+        await request(player, "/api/events/join", { method: "POST", body: { code: invitation.code } });
+        const { character: rehearsalPeer } = await request(owner, `/api/events/${rehearsal.id}/characters/${rehearsalCharacters[1].id}/assign`, {
+          method: "POST", body: { version: rehearsalCharacters[1].version, userId: player.id },
+        });
+        rehearsalExchange = (await request(owner, exchangeBase, { method: "POST", body: { requestId: randomUUID(), characterId: rehearsalCharacter.id }, status: 201 })).exchange;
+        rehearsalExchange = (await request(player, `${exchangeBase}/join`, { method: "POST", body: { requestId: randomUUID(), characterId: rehearsalPeer.id, code: rehearsalExchange.code } })).exchange;
+        for (const [account, character] of [[owner, rehearsalCharacter], [player, rehearsalPeer]])
+          await request(account, `${exchangeBase}/${rehearsalExchange.id}/confirm`, { method: "POST", body: { requestId: randomUUID(), characterId: character.id, version: rehearsalExchange.version } });
+        assert.equal((await request(owner, `${exchangeBase}?characterId=${rehearsalCharacter.id}`)).contacts.length, 1, "The rehearsal reset check must include an actual completed exchange and contact.");
+      }
       await request(owner, `${base}/reset`, { method: "POST", body: { version, confirm: true }, status: 409 });
       await request(owner, `${rehearsalBase}/reset`, { method: "POST", body: { version: rehearsalManage.version, confirm: true } });
       rehearsalManage = await request(owner, `${rehearsalBase}/manage`);
       assert.ok(rehearsalManage.version > version, "A rehearsal reset must advance the adventure version.");
       assert.equal((await request(owner, rehearsalPlayPath)).journal.length, 0, "A rehearsal reset must remove its journal and play state.");
+      if (rehearsalExchange) {
+        const afterReset = await request(owner, `/api/events/${rehearsal.id}/exchanges?characterId=${rehearsalCharacter.id}`);
+        assert.equal(afterReset.sessions.length, 0, "Rehearsal reset must remove completed exchange sessions and receipts.");
+        assert.equal(afterReset.contacts.length, 0, "Rehearsal reset must remove contacts created during rehearsal.");
+        await request(owner, `/api/events/${rehearsal.id}/exchanges/${rehearsalExchange.id}?characterId=${rehearsalCharacter.id}`, { status: 404 });
+      }
       assert.ok(isDeepStrictEqual((await request(owner, playPath(assigned[0].character))).journal, original.journal), "Resetting a rehearsal must preserve the original event's journal.");
       assert.ok(isDeepStrictEqual((await request(owner, `/api/events/${event.id}/characters/${assigned[0].character.id}/inventory`)).inventory, originalInventory), "Resetting a rehearsal must preserve original character inventory.");
       await request(owner, `/api/events/${event.id}/members/${player.id}`, { method: "DELETE" });
       await request(player, playPath(assigned[1].character), { status: 404 });
       await act(player, assigned[1].character, scene, "join", {}, { status: 404 });
+      if (completedExchange) {
+        await request(player, `/api/events/${event.id}/exchanges/${completedExchange}?characterId=${assigned[1].character.id}`, { status: 404 });
+        const retained = (await request(owner, `/api/events/${event.id}/exchanges/${completedExchange}?characterId=${assigned[0].character.id}`)).exchange;
+        assert.equal(retained.status, "completed", "A completed receipt must remain available to its authorized owner after the peer leaves.");
+        assert.ok(retained.receipt, "Peer departure must not erase already completed exchange receipts.");
+      }
       completedSources.push({ event, journalEntries: original.journal.length });
       pass(`${theme} starter: two assigned characters, conditional readings, puzzle outcomes, scenes, replay, privacy, persistence, and isolated rehearsal reset`);
     }

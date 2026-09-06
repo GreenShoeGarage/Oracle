@@ -1,12 +1,14 @@
 // Cache only this exact public application shell. API responses, credentials,
-// badge/prop lookups, and gameplay actions always go directly to the network.
-const CACHE_NAME = "oracle-static-v0.4.0";
+// badge/prop/exchange lookups, and gameplay actions always go directly to the network.
+const CACHE_NAME = "oracle-static-v0.5.0";
 const STATIC_ASSETS = [
   "/", "/app.js", "/style.css", "/themes.css", "/favicon.svg", "/kit.js", "/builder.js",
   "/characters-ui.js", "/characters-model.js", "/characters.css", "/admin-ui.js", "/qr.js",
   "/vendor/qrcode-generator-2.0.4.js", "/vendor/jsqr-1.4.0.js",
   "/adventure-model.js", "/adventure-player.js", "/adventure-organizer.js",
   "/adventure.css", "/adventure-organizer.css", "/offline.js", "/prop-code.js",
+  "/exchange-model.js", "/exchanges-ui.js", "/exchanges.css", "/exchange-code.js",
+  "/sharing-ui.js", "/sharing.css",
 ];
 const paths = new Set(STATIC_ASSETS);
 function cacheableRequest(request) {

@@ -57,6 +57,7 @@ try {
   for (const path of [
     "/", "/app.js", "/builder.js", "/kit.js", "/characters-model.js", "/characters-ui.js", "/admin-ui.js",
     "/adventure-model.js", "/adventure-player.js", "/adventure-organizer.js", "/prop-code.js", "/offline.js", "/sw.js",
+    "/exchange-model.js", "/exchanges-ui.js", "/exchange-code.js", "/sharing-ui.js", "/exchanges.css", "/sharing.css",
     "/qr.js", "/vendor/qrcode-generator-2.0.4.js", "/vendor/jsqr-1.4.0.js",
     "/style.css", "/themes.css", "/adventure.css", "/adventure-organizer.css", "/api/session",
   ]) {

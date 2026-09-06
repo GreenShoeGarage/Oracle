@@ -1,14 +1,17 @@
 # ORACLE
 
-**LARP Field Kit** · v0.4.0 · Green Shoe Garage
+**LARP Field Kit** · v0.5.0 candidate · Green Shoe Garage
 
 ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. A prop display presents selected briefing material on a shared screen.
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 4 (v0.4.0, database schema 5) is live. CI, all three remote adventure workflows, Railway deployment, and exact-commit production checks passed. See [docs/STATUS.md](docs/STATUS.md) for release evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
+Batch 5 (v0.5.0, database schema 6) is implemented as a release candidate. Local verification has passed; real PostgreSQL CI, staging, and production promotion are pending. Production remains on the verified Batch 4 release until those gates pass. See [docs/STATUS.md](docs/STATUS.md) for evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
 
 ## What works in this release
+
+- Temporary player-to-player QR/code exchanges, selected discovered readings, mutual confirmation, contacts, and journal receipts.
+- Organizer sharing permissions, fixed expiry, cancellations, server-backed resume, and duplicate-copy prevention.
 
 - Three complete 30-minute cooperative adventures for 2–6 players, with two approved prewritten characters, printable prop labels, clues, a puzzle, and success/fallback scenes.
 - RELIC examination, DEAD DROP messages and uploaded recordings, CIPHERBOX puzzles/hints, and WAYFINDER scene reservations.
@@ -30,7 +33,7 @@ Batch 4 (v0.4.0, database schema 5) is live. CI, all three remote adventure work
 - Versioned JSON event packs: private organizer backups and player material with organizer-only content removed.
 - Dark and outdoor reading settings, reduced motion, collapsible navigation, and clear manual-save status.
 
-**Briefing**, **RELIC**, **DEAD DROP**, **CIPHERBOX**, and **WAYFINDER** are available optional instruments. The remaining eight gameplay instruments are planned. Character badges identify people; prop labels open event instruments. Selected information exchanges arrive in Batch 5. Trading, shared resource balances, broader cooperative challenges, and offline action synchronization remain later batches. Conditions and outcomes are bounded data; they do not run arbitrary scripts.
+**Briefing**, **RELIC**, **DEAD DROP**, **CIPHERBOX**, and **WAYFINDER** are available optional instruments. The remaining eight gameplay instruments are planned. Character badges identify people; prop labels open event instruments. Temporary exchange QR codes support mutually confirmed introductions and selected reading copies. Trading, shared resource balances, broader cooperative challenges, and offline action synchronization remain later batches. Conditions and outcomes are bounded data; they do not run arbitrary scripts.
 
 ## Stack and project layout
 
@@ -44,6 +47,9 @@ Node.js 22 (22.9 or newer) or 24, a small native HTTP server, PostgreSQL, and pl
 | `src/admin.js`, `public/admin-ui.js` | Operator provisioning and project administration |
 | `src/adventures.js`, `public/adventure-model.js` | Authoritative gameplay, journal, validation, and player projections |
 | `src/adventure-templates.js` | Server-only full adventures and solutions |
+| `src/exchanges.js`, `public/exchange-model.js` | Atomic information exchange, provenance, receipts, and request validation |
+| `src/sharing.js`, `public/sharing-ui.js` | Organizer sharing policies and player-discovery boundaries |
+| `public/exchanges-ui.js`, `public/exchange-code.js` | Temporary QR/code pairing, offers, confirmation, and resume |
 | `public/adventure-*.js`, `public/prop-code.js` | Organizer/player workflows and printed prop identity |
 | `public/offline.js`, `public/sw.js` | Account-scoped saved readings and public static caching |
 | `public/characters-ui.js`, `public/qr.js` | Character workflow, portraits, printable badges, and local scanning |
@@ -103,15 +109,28 @@ DEAD DROP supports a written message/transcript and optional uploaded MP3, Ogg, 
 
 **Preview as this character** is read-only and uses that character's current progress. To intervene, use an explicit **Release discovery**, **Solve puzzle**, or **Reset failed attempts** override; actions are logged. Resetting failed attempts preserves previously learned readings and applied flags. A scene's start/end times and capacity are checked on the server, and ineligible reservations do not occupy places.
 
-Save definitions while the event is Draft or Rehearsal and has no player progress. Once play has started, use a rehearsal copy to try changes. Copies accept source events with at most 100 character profiles and create new prop codes, character identities, unassigned approved characters, and initial inventory. They copy no memberships, invitations, discoveries, attempts, or reservations. **Reset rehearsal progress** works only on a dedicated copy in Rehearsal; it clears that copy's gameplay/journal/reservations and preserves the source event and character records.
+Save definitions while the event is Draft or Rehearsal and has no player progress. Once play has started, use a rehearsal copy to try changes. Copies accept source events with at most 100 character profiles and create new prop codes, character identities, unassigned approved characters, and initial inventory. Sharing policies are copied independently. Copies carry no memberships, invitations, discoveries, attempts, reservations, exchange sessions, contacts, or receipts. **Reset rehearsal progress** works only on a dedicated copy in Rehearsal; it clears that copy's exchanges, contacts, receipts, gameplay, journal, and reservations while preserving its policies, the source event, and character records.
 
 Print labels contain only event name, instrument title/type, code, and QR. Keep solutions in organizer fields. On a focused instrument, choose **Focus on this prop** for a compact display and optional fullscreen. It still uses the current approved character's permissions; it is not an anonymous or locked kiosk. Use a player account on an unattended device.
+
+## Exchange introductions and readings
+
+1. Both players join the same Live or Rehearsal event and select their own assigned approved character under **Exchanges**.
+2. One player chooses **Show my QR**. The other chooses **Scan Player**, scans that temporary exchange QR, or enters its 12-character code. Camera use requires consent; an image or typed code is also supported. Character badges remain a separate identity lookup.
+3. Each player selects up to ten permitted readings from their own journal and saves their offer. Both see the partner's current public character identity and offered titles; the other player's reading text/audio remains hidden before completion.
+4. Both players explicitly confirm the same offer revision. Only server-confirmed completion creates contacts, received journal readings, and receipts. Leave both offers empty for an introduction without sharing readings.
+
+The invitation expires 15 minutes after creation; changes do not extend it. Changing either offer clears both confirmations. A changed organizer policy also clears confirmations on pending exchanges. Either participant may cancel; the invited player may reject. Refresh/resume reads current server state. On an uncertain request, use the explicit retry to reconcile that same request. No pending exchange or offer is queued offline.
+
+An exchange can copy at most 2 MB of readings in total. Receiving an already-known original does not duplicate it, including a reading shared back to its original reader. Copies retain the reading as discovered; they do not complete instruments, set flags, grant skills, or transfer inventory or money. Completed receipts remain readable after expiry or a partner's departure while you retain access to the assigned character and event.
+
+Under **Sharing permissions**, organizers choose **Shareable**, **Restricted**, or **Organizer only** per instrument. Existing and newly authored instruments default to Restricted: personal discovery is allowed, exchange is not. New complete starter adventures explicitly make RELIC and DEAD DROP readings shareable. Organizer only prevents new player listings, lookups, discoveries, and overrides; organizer authoring/read-only preview remains available. Earlier authorized journal readings remain readable and cannot be retracted by changing a policy. Disabled or removed instruments cannot provide new exchange material.
 
 ## Saved readings and connectivity
 
 A successfully loaded player journal can be saved automatically on this device. **Saved readings** shows only previously revealed text/audio, with its last-check time and read-only status. The service worker caches the public app shell; it never caches API responses. The device must first load ORACLE and the readings while connected, and its browser must support the required storage.
 
-Offline mode cannot sign in, check current permissions, unlock a clue, submit an answer, change inventory, or reserve a scene. No actions are queued for replay. Reconnect to continue play. Saved readings belong to the last signed-in account; logout/account switching and known access revocation clear the relevant cache. **Clear saved readings** removes local copies. Revocation cannot be discovered while disconnected, so use device access controls for private readings on shared hardware. This is basic reading continuity, not a local event server or full offline synchronization.
+Offline mode cannot sign in, check current permissions, unlock a clue, submit an answer, change inventory, reserve a scene, or complete an exchange. No actions are queued for replay. Completed exchange readings and receipts use the same authorized journal archive; codes, offers, contacts, and pending requests are not stored offline. Reconnect to continue play. Saved readings belong to the last signed-in account; logout/account switching and known access revocation clear the relevant cache. **Clear saved readings** removes local copies. Revocation cannot be discovered while disconnected, so use device access controls for private readings on shared hardware. This is basic reading continuity, not a local event server or full offline synchronization.
 
 ## Build and run an event
 
@@ -160,7 +179,7 @@ Provisioning uses protected deployment settings, never an email address embedded
 
 From the event list, choose **Import briefing pack**, select the JSON file, inspect its validation preview, and select **Create from pack**. Import always creates a new Draft owned by the importing account. It keeps the pack's theme, rules, and content identifiers but creates a new event identity and fresh owner membership. Existing events remain intact. Memberships, account information, invitation codes, activity history, and live event state are never exported or imported.
 
-An organizer pack is a reusable content backup, **not a database backup**. Format 1 contains event setup and briefing material; it does not include adventure definitions/solutions, discoveries, reservations, characters, factions, character settings, inventories, participants, or event history. Use the separate character-copy workflow to reuse a character identity. A player pack can also seed a new event, but cannot recover omitted private material.
+An organizer pack is a reusable content backup, **not a database backup**. Format 1 contains event setup and briefing material; it does not include adventure definitions/solutions, discoveries, reservations, sharing policies, exchanges, contacts, receipts, characters, factions, character settings, inventories, participants, or event history. Use the separate character-copy workflow to reuse a character identity. A player pack can also seed a new event, but cannot recover omitted private material.
 
 Custom themes can be supplied inside a validated event pack. They may contain approved color, font, texture, icon, terminology, and sound choices; arbitrary CSS, markup, scripts, formulas, and external asset URLs are rejected. There is no custom theme editor in this release. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#event-pack-format) for the exact format and a valid example.
 
@@ -232,7 +251,7 @@ For the configured disposable staging environment:
 EXPECTED_COMMIT='<full-40-character-release-commit>' node scripts/staging-check.js
 ```
 
-This script waits for the expected deployment commit, app version, and schema. It then creates disposable staging accounts/events to exercise event isolation, invitation redemption, role restrictions, player/prop secret filtering, all three theme switches, pack round trips, stale saves, fresh-session persistence, and immediate access removal. Batch 3 extends the journey through two approved characters, faction/field settings, badge privacy and rotation, inventory initialization/reapproval, prewritten assignment, malformed-write rejection, and cross-event copies. Batch 4 extends it through all three complete adventures, protected readings, puzzle hints/failure/overrides, request replay, reservations, and rehearsal isolation. Cleanup archives test events and logs out test sessions. Mutations are restricted to the allowlisted staging origin. The `staging-smoke` GitHub job runs this after `verify` and uses `GITHUB_SHA` as the required deployed commit. After promotion, `production-smoke` waits for that same commit at the canonical production domain and runs public GET checks without creating users or events.
+This script waits for the expected deployment commit, app version, and schema. It then creates disposable staging accounts/events to exercise event isolation, invitation redemption, role restrictions, player/prop secret filtering, all three theme switches, pack round trips, stale saves, fresh-session persistence, and immediate access removal. Batch 3 extends the journey through two approved characters, faction/field settings, badge privacy and rotation, inventory initialization/reapproval, prewritten assignment, malformed-write rejection, and cross-event copies. Batch 4 extends it through all three complete adventures, protected readings, puzzle hints/failure/overrides, request replay, reservations, and rehearsal isolation. Batch 5 adds bilateral introductions, selected reading exchange, both-party consent, changed-policy/offer checks, duplicate prevention, receipt persistence, and rehearsal cleanup. Cleanup archives test events and logs out test sessions. Mutations are restricted to the allowlisted staging origin. The `staging-smoke` GitHub job runs this after `verify` and uses `GITHUB_SHA` as the required deployed commit. After promotion, `production-smoke` waits for that same commit at the canonical production domain and runs public GET checks without creating users or events.
 
 ## Railway deployment and recovery
 
@@ -247,6 +266,8 @@ Follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Staging and production use sepa
 - **Invitation fails:** Check its expiry, remaining uses, revocation, issuer role, and whether the event has ended. Staff/Organizer codes work once.
 - **Edit conflict:** Preserve any unsaved text you need, refresh the event, review the latest details, and reapply your change.
 - **Pack import is rejected:** Use event-pack format version 1. Review the validation message for unsupported fields, invalid rules, theme contrast, duplicate identifiers, or oversized content.
+- **An exchange cannot complete:** Check both approved character assignments, event status, the fixed expiry, current sharing permissions, and both confirmations. Changed offers require both players to review again.
+- **A reading cannot be offered:** Only your discovered, currently shareable readings from enabled instruments qualify. Receipts, inventory, and private character fields cannot be offered.
 - **An adventure action is blocked:** Confirm that the event is Live or Rehearsal, the character is approved and assigned to you, the instrument is enabled, and its earlier discoveries are complete.
 - **A message rejects the printed code:** Its release word is separate from the prop label; find that word in an earlier reading.
 - **Adventure editing is locked:** Make a rehearsal copy. Only a dedicated copy in Rehearsal can have its progress reset before editing.

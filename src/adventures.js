@@ -3,6 +3,7 @@ import { defaultAdventure, validateAdventure, ADVENTURE_CODE } from "../public/a
 import { characterRecord, characterText, characterInteger, validateCharacterProfile, defaultCharacterProfile } from "../public/characters-model.js";
 import { validateSetup } from "../public/kit.js";
 import { ADVENTURE_TEMPLATES, buildAdventureTemplate } from "./adventure-templates.js";
+import { readSharing, sharingPolicyFor, seedSharing, copySharing } from "./sharing.js";
 
 const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const code = () => Array.from({ length: 20 }, () => alphabet[randomInt(alphabet.length)]).join("");
@@ -38,7 +39,8 @@ export function createAdventureHandler({ pool, config, helpers }) {
     const attendance = (await db.query("SELECT a.node_id,count(*)::int AS count,bool_or(a.character_id=$2) AS joined FROM adventure_attendance a JOIN characters c ON c.event_id=a.event_id AND c.id=a.character_id JOIN users u ON u.id=c.user_id WHERE a.event_id=$1 AND c.status='approved' AND NOT u.is_disabled AND (u.is_superuser OR EXISTS(SELECT 1 FROM memberships m WHERE m.event_id=a.event_id AND m.user_id=c.user_id)) GROUP BY a.node_id", [event.id, character.id])).rows;
     result.journal = (await db.query("SELECT * FROM adventure_journal WHERE event_id=$1 AND character_id=$2 ORDER BY created_at,id", [event.id, character.id])).rows.map(journalProjection);
     if (!preview && character.status !== "approved") return { ...result, message: "This character cannot make new discoveries. Previously saved readings remain in the journal." };
-    result.nodes = record.definition.nodes.filter((node) => event.setup.enabledInstruments.includes(instrumentId(node.type))).map((node) => {
+    const sharing = await readSharing(db, event.id);
+    result.nodes = record.definition.nodes.filter((node) => event.setup.enabledInstruments.includes(instrumentId(node.type)) && (preview || sharingPolicyFor(sharing, node.id) !== "organizer_only")).map((node) => {
       const progress = progressFor(run, node.id), locked = !matches(node.conditions, character, run, event);
       const attending = attendance.find((entry) => entry.node_id === node.id);
       const common = { id: node.id, type: node.type, title: node.title, summary: node.summary, locked, lockReason: locked ? "Requirements are not met." : null, completed: progress.completed, failed: progress.failed, ...(node.type === "wayfinder" ? { joined: attending?.joined === true } : {}) };
@@ -108,6 +110,7 @@ export function createAdventureHandler({ pool, config, helpers }) {
         await guardEventCreation(db, user);
         const created = await newEvent(db, user, input.name === undefined ? pack.name : input.name, pack.description, setup);
         await db.query("INSERT INTO event_adventures(event_id,definition) VALUES($1,$2)", [created.id, JSON.stringify(definition)]);
+        await seedSharing(db, created.id, definition);
         await seedCharacters(db, created, pack.characters);
         await audit(db, created.id, user.id, "adventure.template_created", { templateId: template[1] });
         return created;
@@ -128,7 +131,7 @@ export function createAdventureHandler({ pool, config, helpers }) {
         if (!character || character.status !== "approved") fail(409, "Choose an approved character before scanning a prop.");
         const propCode = url.searchParams.get("code");
         if (!ADVENTURE_CODE.test(propCode || "")) fail(400, "Enter a valid 20-character prop code.");
-        const node = record.definition.nodes.find((node) => node.code === propCode && event.setup.enabledInstruments.includes(instrumentId(node.type)));
+        const node = record.definition.nodes.find((node) => node.code === propCode && result.nodes.some(visible => visible.id === node.id));
         if (!node) fail(404, "This prop is not available in this event.");
         if (!matches(node.conditions, character, await runFor(pool, event.id, character.id), event)) fail(403, "This character has not unlocked this prop.");
         result.focusNodeId = node.id;
@@ -158,6 +161,7 @@ export function createAdventureHandler({ pool, config, helpers }) {
         const copied = await newEvent(db, user, `${event.name.slice(0, 88)} rehearsal`, event.description, event.setup, "rehearsal");
         const definition = structuredClone(record.definition); for (const node of definition.nodes) node.code = code();
         await db.query("INSERT INTO event_adventures(event_id,definition,is_rehearsal,source_event_id) VALUES($1,$2,true,$3)", [copied.id, JSON.stringify(definition), event.id]);
+        await copySharing(db, event.id, copied.id);
         const oldFactions = (await db.query("SELECT * FROM factions WHERE event_id=$1", [event.id])).rows;
         const mapped = new Map(), newFactions = [];
         for (const faction of oldFactions) { const id = randomUUID(); mapped.set(faction.id, id); newFactions.push({ id, name: faction.name, description: faction.description }); await db.query("INSERT INTO factions(id,event_id,name,description) VALUES($1,$2,$3,$4)", [id, copied.id, faction.name, faction.description]); }
@@ -176,7 +180,9 @@ export function createAdventureHandler({ pool, config, helpers }) {
       if (action === "reset" && method === "POST") {
         requireManager(event); characterRecord(input, ["version", "confirm"], "Rehearsal reset"); requireVersion(input.version, record.version);
         if (!record.is_rehearsal || event.status !== "rehearsal" || input.confirm !== true) fail(409, "Only a dedicated rehearsal copy in rehearsal mode can be reset with confirmation.");
-        for (const table of ["adventure_attendance", "adventure_journal", "adventure_requests", "adventure_runs"]) await db.query(`DELETE FROM ${table} WHERE event_id=$1`, [eventId]);
+        // Remove exchange provenance before the readings it references. These
+        // tables belong only to this rehearsal; the source event is untouched.
+        for (const table of ["exchange_requests", "exchange_contacts", "exchange_receipts", "exchange_copies", "exchange_sessions", "adventure_attendance", "adventure_journal", "adventure_requests", "adventure_runs"]) await db.query(`DELETE FROM ${table} WHERE event_id=$1`, [eventId]);
         record = (await db.query("UPDATE event_adventures SET version=version+1,updated_at=now() WHERE event_id=$1 RETURNING *", [eventId])).rows[0];
         await audit(db, event.id, user.id, "adventure.rehearsal_reset", { version: record.version });
         return await manageSnapshot(db, event, record);
@@ -186,6 +192,9 @@ export function createAdventureHandler({ pool, config, helpers }) {
       requirePlayable(event);
       const hash = actionInput(input, override);
       const character = await characterFor(db, event, user, input.characterId, { preview: override, action: true });
+      const sharing = await readSharing(db, eventId);
+      const node = record.definition.nodes.find((node) => node.id === input.nodeId && event.setup.enabledInstruments.includes(instrumentId(node.type)) && sharingPolicyFor(sharing, node.id) !== "organizer_only");
+      if (!node) fail(404, "Instrument not found or unavailable.");
       // Permissions and lifecycle are checked before every replay, including
       // cached requests whose original action happened before revocation.
       const prior = (await db.query("SELECT payload_hash,outcome FROM adventure_requests WHERE event_id=$1 AND character_id=$2 AND request_id=$3", [eventId, character.id, input.requestId])).rows[0];
@@ -194,8 +203,6 @@ export function createAdventureHandler({ pool, config, helpers }) {
         return { ...(await snapshot(db, event, user, record, character, override)), outcome: { ...prior.outcome, replayed: true } };
       }
       requireVersion(input.version, record.version);
-      const node = record.definition.nodes.find((node) => node.id === input.nodeId && event.setup.enabledInstruments.includes(instrumentId(node.type)));
-      if (!node) fail(404, "Instrument not found or disabled.");
       const run = await runFor(db, eventId, character.id), progress = progressFor(run, node.id);
       if (!override && input.kind !== "leave" && !matches(node.conditions, character, run, event)) fail(403, "This character has not unlocked this instrument.");
       if ((await db.query("SELECT count(*)::int AS n FROM adventure_requests WHERE event_id=$1 AND character_id=$2", [eventId, character.id])).rows[0].n >= 5000) fail(429, "This character has reached the action request limit for this adventure.");

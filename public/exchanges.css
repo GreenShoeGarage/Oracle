@@ -1,0 +1,73 @@
+.exchanges-workspace { min-width: 0; }
+.exchange-character-picker { display: grid; grid-template-columns: minmax(180px, 360px) auto; justify-content: start; align-items: end; gap: .6rem .8rem; border: 1px solid var(--line); background: var(--panel); border-radius: .6rem; padding: 1rem; margin: 1.2rem 0; }
+.exchange-character-picker .error { grid-column: 1 / -1; }
+.exchange-character-picker .error:empty, #exchange-offer-form .error:empty { display: none; }
+.exchange-start-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin: 1.3rem 0 2rem; }
+.exchange-start-actions button { display: flex; flex-direction: column; gap: .4rem; text-align: left; padding: 1.3rem; }
+.exchange-start-actions strong { font-size: 1.2rem; }
+.exchange-start-actions span { font-size: .88rem; font-weight: 400; }
+.exchange-section { margin: 1.7rem 0; }
+.exchange-session-list { display: grid; gap: .7rem; }
+.exchange-session { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; width: 100%; text-align: left; padding: 1rem 1.2rem; }
+.exchange-session > span:first-child { display: grid; gap: .2rem; flex: 1; min-width: 130px; }
+.exchange-session > .hint { width: 100%; }
+.exchange-status.completed { color: var(--accent); border-color: var(--accent); }
+.exchange-status.cancelled, .exchange-status.rejected, .exchange-status.expired { color: var(--muted); }
+.exchange-status.waiting, .exchange-status.negotiating { border-style: dashed; }
+.exchange-session-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin: 1.8rem 0 .6rem; }
+.exchange-session-heading h2 { font-size: 1.65rem; margin-top: .4rem; overflow-wrap: anywhere; }
+.exchange-banner, .exchange-feedback, .exchange-pending { padding: 1rem 1.2rem; margin: 1rem 0; border: 1px solid var(--accent); border-left-width: 4px; border-radius: .4rem; background: var(--panel); }
+.exchange-pending h3 { margin-bottom: .5rem; }
+.exchange-invitation { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 300px); align-items: center; gap: 2rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--panel); padding: 1.4rem; margin: 1.3rem 0; }
+.exchange-qr-card { display: grid; justify-items: center; gap: .7rem; min-width: 0; }
+.exchange-qr { width: min(100%, 256px); min-height: 160px; background: #fff; color: #000; display: flex; justify-content: center; align-items: center; text-align: center; }
+.exchange-qr canvas { display: block; width: 100%; height: auto; }
+.exchange-code { font: 1.05rem ui-monospace, monospace; letter-spacing: .08em; user-select: all; overflow-wrap: anywhere; }
+.exchange-deadline { color: var(--accent); font-weight: 650; margin: .8rem 0; font-variant-numeric: tabular-nums; }
+.exchange-offer-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 1rem; margin: 1.5rem 0; }
+.exchange-identity { display: flex; align-items: center; gap: .8rem; margin: .8rem 0; }
+.exchange-identity > div { min-width: 0; }
+.exchange-identity h3 { font-size: 1.15rem; overflow-wrap: anywhere; }
+.exchange-avatar { width: 64px; height: 64px; flex: 0 0 64px; display: inline-flex; justify-content: center; align-items: center; border: 1px solid var(--muted); border-radius: .5rem; object-fit: cover; color: var(--accent); font: 700 1.3rem var(--heading-font); }
+.exchange-biography { margin: .8rem 0; font-size: .9rem; }
+.exchange-offer-picker { margin-top: 1rem; padding-top: .6rem; border-top: 1px solid var(--line); }
+#exchange-offer-form { margin-top: 1rem; }
+#exchange-offer-form > button { justify-self: start; }
+.exchange-reading-options { display: grid; gap: .5rem; max-height: 430px; overflow-y: auto; padding: .2rem; }
+.exchange-reading-option { display: flex; align-items: flex-start; gap: .75rem; padding: .8rem; margin: 0; border: 1px solid var(--line); border-radius: .4rem; cursor: pointer; }
+.exchange-reading-option input { width: 22px; min-width: 22px; height: 22px; min-height: 22px; margin: .15rem 0 0; accent-color: var(--accent); }
+.exchange-reading-option > span { display: grid; gap: .2rem; min-width: 0; overflow-wrap: anywhere; }
+.exchange-reading-option:has(input:checked) { border-color: var(--accent); }
+.exchange-reading-option:has(input:disabled:not(:checked)) { cursor: default; color: var(--muted); }
+.exchange-title-list { padding-left: 1.3rem; margin: .8rem 0; }
+.exchange-title-list li { margin: .4rem 0; overflow-wrap: anywhere; }
+.exchange-review { margin: 1.4rem 0; }
+.exchange-review-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; margin: 1.3rem 0; }
+.exchange-confirmations { display: grid; gap: .7rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 1rem 0; margin: 1rem 0; }
+.exchange-confirmations > p > span { display: inline-block; min-width: 1.4rem; color: var(--accent); }
+.exchange-session-footer { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 1.3rem 0; }
+.exchange-receipt { margin: 1.5rem 0; }
+.exchange-receipt > h2 { font-size: 1.8rem; margin: .5rem 0; }
+.exchange-received-list { display: grid; gap: 1rem; margin-top: 1rem; }
+.exchange-received { border-top: 1px solid var(--line); padding-top: 1rem; }
+.exchange-received .prose { color: var(--text); }
+.exchange-received audio { display: block; width: min(100%, 500px); margin-top: 1rem; }
+.exchange-contacts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: .8rem; }
+.exchange-contact { border: 1px solid var(--line); border-radius: .5rem; padding: 1rem; }
+.exchange-scanner { display: grid; gap: 1rem; margin-top: 1rem; }
+.exchange-scanner video { display: block; width: 100%; max-height: 360px; object-fit: cover; background: #000; border-radius: .5rem; }
+.exchange-scanner video[hidden] { display: none; }
+@media (max-width: 700px) {
+  .exchange-offer-columns, .exchange-review-columns, .exchange-invitation { grid-template-columns: minmax(0, 1fr); }
+  .exchange-session-heading { align-items: flex-start; flex-direction: column; }
+  .exchange-invitation { gap: 1.3rem; }
+  .exchange-invitation > div:first-child { order: 1; }
+  .exchange-offer, .exchange-review, .exchange-receipt { padding: 1rem; }
+}
+@media (max-width: 480px) {
+  .exchange-character-picker, .exchange-start-actions { grid-template-columns: minmax(0, 1fr); }
+  .exchange-character-picker > button { justify-self: start; }
+  .exchange-reading-options { max-height: 360px; }
+  .exchange-session { padding: .9rem; }
+  .exchange-review > .panel-head { flex-direction: column; align-items: flex-start; }
+}

@@ -1,0 +1,10 @@
+.sharing-explanation p + p { margin-top: .8rem; }
+.sharing-fields { border: 0; padding: 0; margin: 1rem 0 0; min-width: 0; }
+.sharing-fields > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.sharing-list { list-style: none; margin: 0; padding: 0; }
+.sharing-list li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(12rem, 22rem); gap: 1rem; align-items: center; padding: 1rem 0; border-bottom: 1px solid var(--line); }
+.sharing-list .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.sharing-list li:last-child { border-bottom: 0; }
+.sharing-list strong { overflow-wrap: anywhere; }
+.sharing-list label, .sharing-list select { width: 100%; min-width: 0; margin: 0; }
+@media (max-width: 600px) { .sharing-list li { grid-template-columns: minmax(0, 1fr); gap: .5rem; } }

@@ -2,16 +2,16 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 1.6 · September 6, 2026
+Development roadmap · Planning revision: 1.7 · September 6, 2026
 
-Status: Batch 4 (v0.4.0, schema 5) is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). CI, the complete remote three-theme adventure workflow, and exact-commit production checks passed. The existing operator account is confirmed enabled with its identity and password preserved. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 5 is next; Batches 5–12 remain planned.
+Status: Batch 5 (v0.5.0, schema 6) is implemented as a candidate; local verification has passed and CI/deployment gates remain pending. Production remains on verified Batch 4 at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com) until promotion succeeds. The existing operator account was last confirmed enabled during Batch 4. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 6 is the next development batch; Batches 6–12 remain planned.
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
 
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
-The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges arrive in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–4 status are recorded below; Batches 5–12 remain planned.
+The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are implemented in the v0.5 candidate. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–4 are deployed and Batch 5 awaits its release gates; Batches 6–12 remain planned.
 
 **Product commitments**
 
@@ -83,6 +83,12 @@ Deliver one complete adventure adapted for all three themes. Each includes chara
 Completion gate: An organizer and two players can complete the adventure on separate devices in each theme. Findings survive reloads, clues do not reveal unauthorized answers, and repeated requests cannot apply a one-time outcome twice. This is the first playable alpha.
 
 **Batch 5 — v0.5: Player-to-player QR exchanges**
+
+Implementation status: v0.5.0/schema 6 is a release candidate. Players pair through a temporary QR or 12-character code, choose their own discovered readings, and independently confirm. Confirming empty offers records an introduction. Contacts and journal receipts appear only after the server completes both sides. The fixed 15-minute deadline, cancellation/rejection, changed-offer confirmation resets, current policy checks, canonical-origin deduplication, and server-backed resume are implemented. No inventory, skills, flags, or story progression transfers.
+
+Organizers manage shareable/restricted/organizer-only policies. Existing adventures default to restricted; new complete starters make relic/message readings shareable. Organizer-only prevents new player reveals and overrides, while earlier journal snapshots remain readable. Policy changes clear pending confirmations. Rehearsal copies carry independent policies without exchange history; reset clears exchange records before journal data. Offline support remains authorized completed journal readings only, with no exchange queue.
+
+Local `npm run verify` passed 131 tests (129 passed, zero failures, two TCP-only skips). This includes six sharing tests, eleven adventure regression tests, and the QR/offline checks; the exchange engine passed 12 tests with one TCP-only skip. Nine full-app DOM/API flows passed with zero uncaught errors, six focused exchange UI checks passed, and the complete local HTTP staging rehearsal passed 188 reads/237 writes. Real PostgreSQL CI, remote staging, and production evidence remain pending; see [STATUS.md](STATUS.md). Additive migration 006 retains schema-5 event/adventure data and requires a schema-6-compatible roll-forward fix for recovery. Physical-device exchange/camera testing, the human field pilot, and scheduled backups remain outstanding.
 
 Add Show My QR, Scan Player, introductions, an in-world contacts list, and selected clue/message sharing. Temporary exchange sessions allow both players to choose offers, review them, confirm, and receive journal receipts. Support expiration, cancellation, reconnecting, and a short-code alternative.
 
@@ -181,4 +187,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next development batch: Batch 5 — player-to-player information exchanges. Batch 4 is fully deployed; scheduled database backups remain a separate operational item. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next development batch: Batch 6 — investigation and living story. Batch 5 has passed local verification and awaits CI/deployment gates; scheduled database backups remain a separate operational item. Public branding uses ORACLE with the subtitle “LARP Field Kit.”

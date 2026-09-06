@@ -83,6 +83,42 @@ test("maximum valid combined relic titles and scene readings survive offline sto
   assert.equal(saved[1].text, sceneText);
 });
 
+test("completed exchange journal receipts and received readings persist without pending exchange details", async (t) => {
+  const { offline, factory } = await fixture(t);
+  const input = await reading(offline);
+  const receiptTitle = "Completed exchange receipt".padEnd(250, ".");
+  const receiptText = "Sent: Inscription. Received: Map. Introduction completed.".padEnd(12250, ".");
+  const receivedTitle = `${"R".repeat(120)}: ${"E".repeat(120)}`;
+  const receivedText = `${"S".repeat(12000)}\n\nLocation: ${"L".repeat(200)}`;
+  input.journal = [
+    { ...input.journal[0], id: "received-1", type: "shared_reading", title: receivedTitle, text: receivedText, sourceExchange: "SECRET_SOURCE_EXCHANGE" },
+    { ...input.journal[0], id: "receipt-1", nodeId: "exchange", type: "exchange_receipt", title: receiptTitle, text: receiptText, offer: "SECRET_PENDING_OFFER" },
+  ];
+  input.exchange = {
+    status: "negotiating", code: "ABCD2345EFGH",
+    own: { offered: [{ text: "SECRET_UNCONFIRMED_READING" }] },
+    partner: { character: { profile: { email: "SECRET_PRIVATE_CONTACT", privateObjectives: "SECRET_PARTNER_OBJECTIVE" } } },
+    receipt: { received: [{ text: "SECRET_DIRECT_DETAIL_BODY" }] },
+  };
+  input.pendingOffers = ["SECRET_PENDING_OFFER"];
+  input.contacts = [{ email: "SECRET_PRIVATE_CONTACT" }];
+  assert.equal(await offline.cacheJournal(input), true);
+  const persisted = JSON.stringify(await storedRows(factory));
+  for (const secret of ["ABCD2345EFGH", "SECRET_SOURCE_EXCHANGE", "SECRET_PENDING_OFFER", "SECRET_UNCONFIRMED_READING", "SECRET_PRIVATE_CONTACT", "SECRET_PARTNER_OBJECTIVE", "SECRET_DIRECT_DETAIL_BODY"]) assert.ok(!persisted.includes(secret), secret);
+  const archive = await (await importFresh()).loadArchive();
+  const saved = archive.records[0].journal;
+  assert.deepEqual(saved.map(({ type, nodeId, title, text }) => ({ type, nodeId, title, text })), [
+    { type: "shared_reading", nodeId: "old-relic", title: receivedTitle, text: receivedText },
+    { type: "exchange_receipt", nodeId: "exchange", title: receiptTitle, text: receiptText },
+  ]);
+  for (const entry of saved) assert.deepEqual(Object.keys(entry).sort(), ["audio", "createdAt", "id", "nodeId", "text", "title", "type"]);
+  const html = offline.renderArchive({ esc, archive });
+  assert.ok(html.includes(receiptText));
+  assert.ok(html.includes(receivedText));
+  assert.ok(!html.includes("ABCD2345EFGH"));
+  assert.ok(!html.includes("SECRET_"));
+});
+
 test("logout and account changes clear previous readings and reject late responses", async (t) => {
   const { offline } = await fixture(t);
   const oldResponse = await reading(offline);
@@ -229,7 +265,7 @@ async function worker() {
 test("actual service worker request allowlist excludes all APIs, mutations, queries and foreign origins", async () => {
   const sw = await worker();
   for (const path of sw.assets) assert.equal(sw.accepts(path), true, path);
-  for (const path of ["/api/session", "/api/auth/logout", "/api/events", "/api/badges/ABCD", "/api/events/id/adventure/play", "/api/events/id/adventure/manage", "/health/ready", "/unknown", "/app.js?token=private", "/?badge=private", "https://evil.test/app.js", "/sw.js"]) {
+  for (const path of ["/api/session", "/api/auth/logout", "/api/events", "/api/badges/ABCD", "/api/events/id/adventure/play", "/api/events/id/adventure/manage", "/api/events/id/exchanges", "/api/events/id/exchanges/join", "/api/events/id/exchanges/session-id", "/health/ready", "/unknown", "/app.js?token=private", "/?badge=private", "https://evil.test/app.js", "/sw.js"]) {
     assert.equal(sw.accepts(path), false, path);
     assert.equal(await sw.run("fetch", path), undefined, "Excluded requests are not intercepted at all.");
   }

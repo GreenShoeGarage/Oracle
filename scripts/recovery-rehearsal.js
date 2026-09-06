@@ -72,7 +72,7 @@ try {
   // fictional record in this already-validated disposable database so the
   // dump/restore gate checks actual character, administrator and adventure data.
   await migrate(source);
-  const fixture = { user: randomUUID(), event: randomUUID(), faction: randomUUID(), character: randomUUID(), item: randomUUID() };
+  const fixture = { user: randomUUID(), peer: randomUUID(), event: randomUUID(), faction: randomUUID(), character: randomUUID(), peerCharacter: randomUUID(), item: randomUUID(), originJournal: randomUUID(), sharedJournal: randomUUID(), exchange: randomUUID() };
   const setup = defaultSetup("fantasy", "council");
   setup.enabledInstruments = ["briefing", "relic", "wayfinder"];
   const profile = {
@@ -99,19 +99,40 @@ try {
   const payloadHash = digest(JSON.stringify({ override: false, input: Object.fromEntries(Object.keys(actionInput).sort().map((key) => [key, actionInput[key]])) }));
   await transaction(source, async (client) => {
     await client.query("INSERT INTO users(id,email,display_name,password_hash,is_superuser,is_disabled) VALUES($1,$2,'Recovery rehearsal','not-a-login-credential',true,true)", [fixture.user, `recovery-${fixture.user}@example.invalid`]);
+    await client.query("INSERT INTO users(id,email,display_name,password_hash) VALUES($1,$2,'Recovery exchange peer','not-a-login-credential')", [fixture.peer, `recovery-${fixture.peer}@example.invalid`]);
     await client.query("INSERT INTO events(id,owner_user_id,name,setup,status) VALUES($1,$2,'Recovery rehearsal event',$3,'rehearsal')", [fixture.event, fixture.user, JSON.stringify(setup)]);
     await client.query("INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'owner')", [fixture.event, fixture.user]);
+    await client.query("INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'player')", [fixture.event, fixture.peer]);
     await client.query("INSERT INTO event_character_settings(event_id,require_approval,max_per_player,public_fields,version) VALUES($1,true,2,'[\"pronouns\",\"faction\"]',3)", [fixture.event]);
     await client.query("INSERT INTO factions(id,event_id,name,description) VALUES($1,$2,'Recovery guild','Preserve this faction description.')", [fixture.faction, fixture.event]);
     await client.query("INSERT INTO characters(id,event_id,user_id,status,profile,badge_code,review_notes,inventory_initialized,version) VALUES($1,$2,$3,'approved',$4,$5,'Approval survives recovery.',true,5)", [fixture.character, fixture.event, fixture.user, JSON.stringify(profile), badge]);
+    await client.query("INSERT INTO characters(id,event_id,user_id,status,profile,badge_code,inventory_initialized) VALUES($1,$2,$3,'approved',$4,$5,true)", [fixture.peerCharacter, fixture.event, fixture.peer, JSON.stringify({ ...defaultCharacterProfile(setup.rules), name: "Recovery exchange recipient" }), propCode()]);
     await client.query("INSERT INTO character_inventory(id,event_id,character_id,name,quantity,notes,version) VALUES($1,$2,$3,'Recovery lantern',1,'Current quantity after use.',2)", [fixture.item, fixture.event, fixture.character]);
     await client.query("INSERT INTO system_audit_entries(actor_id,target_user_id,action,details) VALUES($1,$1,'recovery.fixture',$2)", [fixture.user, JSON.stringify({ fictional: true, eventId: fixture.event })]);
     await client.query("INSERT INTO event_adventures(event_id,definition) VALUES($1,$2)", [fixture.event, JSON.stringify(definition)]);
     await client.query("INSERT INTO adventure_runs(event_id,character_id,progress,flags) VALUES($1,$2,$3,'{\"recovered\":true}')", [fixture.event, fixture.character, JSON.stringify(progress)]);
-    await client.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,audio,type) VALUES($1,$2,$3,$4,$5,$6,$7,NULL,'relic')", [randomUUID(), fixture.event, fixture.character, relic.id, `${relic.id}:exam:${relic.examinations[0].id}`, relic.title, relic.examinations[0].text]);
+    await client.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,audio,type) VALUES($1,$2,$3,$4,$5,$6,$7,NULL,'relic')", [fixture.originJournal, fixture.event, fixture.character, relic.id, `${relic.id}:exam:${relic.examinations[0].id}`, relic.title, relic.examinations[0].text]);
     await client.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,audio,type) VALUES($1,$2,$3,$4,$5,$6,$7,NULL,'wayfinder')", [randomUUID(), fixture.event, fixture.character, scene.id, `${scene.id}:success`, scene.title, scene.body]);
     await client.query("INSERT INTO adventure_requests(event_id,character_id,request_id,payload_hash,outcome) VALUES($1,$2,$3,$4,$5)", [fixture.event, fixture.character, requestId, payloadHash, JSON.stringify({ kind: "examine", message: "Reading saved to your journal.", replayed: false })]);
     await client.query("INSERT INTO adventure_attendance(event_id,node_id,character_id) VALUES($1,$2,$3)", [fixture.event, scene.id, fixture.character]);
+    await client.query("INSERT INTO event_sharing_settings(event_id,version,policies) VALUES($1,2,$2)", [fixture.event, JSON.stringify({ [relic.id]: "shareable", [scene.id]: "restricted" })]);
+    await client.query("INSERT INTO exchange_sessions(id,event_id,code,status,version,initiator_user_id,initiator_character_id,recipient_user_id,recipient_character_id,initiator_offer,recipient_offer,initiator_confirmed_version,recipient_confirmed_version,completed_at) VALUES($1,$2,$3,'completed',3,$4,$5,$6,$7,$8,'[]',3,3,clock_timestamp())", [fixture.exchange, fixture.event, propCode().slice(0, 12), fixture.user, fixture.character, fixture.peer, fixture.peerCharacter, JSON.stringify([fixture.originJournal])]);
+    await client.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,audio,type) VALUES($1,$2,$3,$4,$5,$6,$7,NULL,'shared_reading')", [fixture.sharedJournal, fixture.event, fixture.peerCharacter, relic.id, `exchange-reading:${fixture.originJournal}`, relic.title, relic.examinations[0].text]);
+    await client.query("INSERT INTO exchange_copies(event_id,recipient_character_id,origin_journal_id,journal_id,exchange_id,sender_character_id) VALUES($1,$2,$3,$4,$5,$6)", [fixture.event, fixture.peerCharacter, fixture.originJournal, fixture.sharedJournal, fixture.exchange, fixture.character]);
+    const completedAt = (await client.query("SELECT completed_at FROM exchange_sessions WHERE id=$1", [fixture.exchange])).rows[0].completed_at;
+    const receivedReading = { id: fixture.sharedJournal, title: relic.title, text: relic.examinations[0].text, audio: null, type: "shared_reading", alreadyKnown: false };
+    for (const [ownerUser, ownerCharacter, peerUser, peerCharacter, sent, received] of [
+      [fixture.user, fixture.character, fixture.peer, fixture.peerCharacter, [{ title: relic.title }], []],
+      [fixture.peer, fixture.peerCharacter, fixture.user, fixture.character, [], [receivedReading]],
+    ]) {
+      const receipt = { completedAt, partnerName: peerCharacter === fixture.peerCharacter ? "Recovery exchange recipient" : profile.name, sent, received, introduced: true };
+      await client.query("INSERT INTO exchange_receipts(exchange_id,event_id,owner_user_id,owner_character_id,receipt) VALUES($1,$2,$3,$4,$5)", [fixture.exchange, fixture.event, ownerUser, ownerCharacter, JSON.stringify(receipt)]);
+      await client.query("INSERT INTO exchange_contacts(id,event_id,owner_user_id,owner_character_id,peer_user_id,peer_character_id) VALUES($1,$2,$3,$4,$5,$6)", [randomUUID(), fixture.event, ownerUser, ownerCharacter, peerUser, peerCharacter]);
+      await client.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,type) VALUES($1,$2,$3,'exchange',$4,'Exchange receipt','Completed fictional exchange: contact and reading receipt preserved.','exchange_receipt')", [randomUUID(), fixture.event, ownerCharacter, `exchange-receipt:${fixture.exchange}`]);
+    }
+    const exchangeRequestId = randomUUID();
+    const exchangePayloadHash = digest(JSON.stringify({ action: "confirm", targetId: fixture.exchange, input: { requestId: exchangeRequestId, characterId: fixture.peerCharacter, version: 3 } }));
+    await client.query("INSERT INTO exchange_requests(event_id,actor_user_id,request_id,payload_hash,exchange_id) VALUES($1,$2,$3,$4,$5)", [fixture.event, fixture.peer, exchangeRequestId, exchangePayloadHash, fixture.exchange]);
   });
   await source.query(`CREATE DATABASE "${name}"`);
   const out = await open(backup, "wx", 0o600);
@@ -170,6 +191,12 @@ try {
     ["adventure_journal", "id"],
     ["adventure_requests", "event_id,character_id,request_id"],
     ["adventure_attendance", "event_id,node_id,character_id"],
+    ["event_sharing_settings", "event_id"],
+    ["exchange_sessions", "id"],
+    ["exchange_requests", "event_id,actor_user_id,request_id"],
+    ["exchange_copies", "event_id,recipient_character_id,origin_journal_id"],
+    ["exchange_receipts", "exchange_id,owner_user_id"],
+    ["exchange_contacts", "id"],
     ["schema_migrations", "version"],
   ]) {
     const a = (await source.query(`SELECT * FROM ${table} ORDER BY ${order}`))
@@ -208,7 +235,7 @@ try {
   const systemAudit = (await restored.query("INSERT INTO system_audit_entries(actor_id,target_user_id,action) VALUES($1,$1,'recovery.rehearsed') RETURNING id", [fixture.user])).rows[0];
   assert.ok(BigInt(systemAudit.id) > maximumSystemAudit, "Restored system audit identity sequence must advance safely.");
   console.log(
-    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventure definitions, progress, private journals, replay records, attendance, both audit sequences, and migration after restore passed.",
+    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventures, journals, sharing policies, exchange sessions, provenance, bilateral contacts and receipts, replay records, both audit sequences, and migration after restore passed.",
   );
 } finally {
   if (restored) await restored.end();
