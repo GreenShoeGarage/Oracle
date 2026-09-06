@@ -1,14 +1,22 @@
 # ORACLE
 
-**LARP Field Kit** · v0.10.0 · Green Shoe Garage
+**LARP Field Kit** · v0.11.0 candidate · Green Shoe Garage
 
 ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. Shared screens can present selected briefings, cooperative procedures, and explicitly fictional prop readings.
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 10 (v0.10.0, database schema 10), release `466b470eb6902fd84e903a0fbb1415b7f7a4fa8e`, is fully deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Field desk adds explicitly saved local notes and reviewed information-only requests, with install/update and connection handling. Both exact-commit PostgreSQL CI runs, Railway staging, and the complete all-twelve/all-three-theme remote workflow passed. Railway production passed exact readiness plus 68 public GET checks; the existing operator remains enabled with identity/password preserved. Full local verification passed 290 tests (278 passed, zero failures, 12 deliberate TCP-only skips), and both PostgreSQL runs passed 289 with one PGlite-only skip. See [docs/STATUS.md](docs/STATUS.md). Batch 11 is next; scheduled backups and actual device/human field testing remain outstanding.
+Batch 11's v0.11.0 usability and pilot-preparation candidate is implemented; exact-release CI, the 100-player isolated load measurement, Railway staging, the complete remote event workflow, and production verification are pending. Batch 10 release `466b470eb6902fd84e903a0fbb1415b7f7a4fa8e` remains the last verified live version. Database schema 10, pack formats 1, browser archive version 2, and the information-only/account-binding API contract are unchanged. See [docs/STATUS.md](docs/STATUS.md).
+
+Full local verification passed 306 tests: 294 passed, zero failures, and 12 deliberate TCP-only skips. The actual human/device pilot remains unrun. [docs/PILOT.md](docs/PILOT.md) provides 58 required observations and a local report validator; automated checks do not satisfy those gates. Scheduled live backups and measured Railway capacity also remain outstanding.
 
 ## What works in this release
+
+- Clear player and organizer entry paths, a next-step event guide, and explanations of invitation, badge, prop, and exchange codes.
+- Three immediate event actions with specialist tools under collapsed sections; existing instruments and permissions remain available.
+- Larger touch targets, adjustable text, mobile wrapping, outdoor/forced-colors support, visible focus, and recoverable loading/error states.
+- Confirmed clearing of saved device data, protected unsaved Field desk navigation, and removal of both local stores when leaving an event.
+- A local pilot report/checklist and a bounded isolated PostgreSQL load rehearsal, with physical observations and automated evidence kept separate.
 
 - Field desk notes saved explicitly on this device for a previously checked own character; account/event clearing protects local scope.
 - Saved invitation, join, and reading-only offer requests with visible pending/uncertain/review states, explicit review before sending, original request identifiers, and fresh authorization. Both players still confirm online.
@@ -96,7 +104,10 @@ Node.js 22 (22.9 or newer) or 24, a small native HTTP server, PostgreSQL, and pl
 | `public/characters-ui.js`, `public/qr.js` | Character workflow, portraits, printable badges, and local scanning |
 | `src/db.js` | Database pool, transactions, checked migrations |
 | `src/server.js` | Startup, readiness, graceful shutdown |
-| `public/app.js` | Account, membership, and event interface |
+| `public/app.js` | Account, membership, event navigation, focus/error recovery, and local scope clearing |
+| `public/guide-ui.js`, `public/guide.css` | Current-authorized player/organizer next steps and code explanations |
+| `scripts/pilot-report.js`, `docs/PILOT.md` | Local unrun pilot template, evidence validation, and physical-device acceptance |
+| `scripts/load-rehearsal.js` | Bounded 100-account isolated PostgreSQL measurement and cleanup |
 | `public/builder.js`, `public/themes.css` | Guided setup, audience views, and theme presentation |
 | `public/kit.js` | Shared browser/server theme, setup, and event-pack validation |
 | `migrations/` | Ordered, immutable PostgreSQL migrations |
@@ -105,6 +116,18 @@ Node.js 22 (22.9 or newer) or 24, a small native HTTP server, PostgreSQL, and pl
 | `.github/workflows/ci.yml` | PostgreSQL 18, recovery, Docker, exact-commit staging workflow, and read-only production checks |
 | `Dockerfile` | Non-root Railway production image |
 | `docs/` | Roadmap, architecture, deployment, and current status |
+
+## Find your next step
+
+On **My events**, players choose **Enter invitation code** and organizers choose **Choose a starter adventure**. Blank events and briefing-pack import are under **Other ways to start**. An event's guide uses its current status and your own checked character state; it does not mark tasks complete or grant access. Open the step list or **Which code should I use?** when needed. The player preview shows player guidance even for an organizer.
+
+Use Reading settings to adjust text size, outdoor readability, and reduced motion. Specialist tools remain available in collapsed sections. Field desk notes require explicit **Save**; other forms remain in page memory. Clearing saved device data asks for confirmation and removes local notes/readings/requests, not authoritative event records or requests the server may already have received.
+
+## Prepare a beta pilot
+
+Follow [docs/PILOT.md](docs/PILOT.md) with actual iPhone, Android, desktop organizer, and shared-tablet users. `node scripts/pilot-report.js init /tmp/oracle-pilot.json` creates a private local report with every observation unrun. `check` validates the report; `check /tmp/oracle-pilot.json --require-ready` exits 2 until its recorded human/device, load, and finding gates are satisfied. The tool sends no telemetry and performs no pilot itself. An unresolved critical finding always blocks acceptance.
+
+The separate `node scripts/load-rehearsal.js --report=qa/load-rehearsal.json` requires the guarded disposable loopback test PostgreSQL configuration. It measures synthetic authenticated clients, latency, errors, integrity, and cleanup; it never load-tests Railway or establishes human usability. Do not point it at a live database.
 
 ## Run locally
 

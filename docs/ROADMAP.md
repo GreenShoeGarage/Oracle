@@ -2,16 +2,16 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 2.2 · September 6, 2026
+Development roadmap · Planning revision: 2.3 · September 6, 2026
 
-Status: Batch 10 (v0.10.0, schema 10), release `466b470eb6902fd84e903a0fbb1415b7f7a4fa8e`, is fully deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Both exact-commit PostgreSQL CI runs, Railway staging, the complete remote all-twelve/all-three-theme workflow, and Railway production passed. Production exact readiness plus 68 public GET checks passed; the existing operator remains enabled with identity/password preserved. Batch 11 is next; Batches 11–12 remain planned. Scheduled backups, actual two-device/installed-browser acceptance, and human field testing remain outstanding. See [STATUS.md](STATUS.md).
+Status: Batch 11's v0.11.0 usability and pilot-preparation candidate is implemented; exact CI/load, staging, remote workflow, and production verification are pending. Batch 10 release `466b470eb6902fd84e903a0fbb1415b7f7a4fa8e` remains the last verified live release at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Actual human/physical-device acceptance remains unrun. Schema 10, pack formats 1, browser archive version 2, and existing gameplay contracts are preserved. See [STATUS.md](STATUS.md).
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
 
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
-The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are delivered in v0.9 and field resilience in v0.10; a beta pilot and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–10 are deployed; Batches 11–12 remain planned. Actual device and human field acceptance remains an explicit dependency for the beta/release gates.
+The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are delivered in v0.9 and field resilience in v0.10; a beta pilot and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–10 are deployed; Batch 11 implementation is awaiting its exact-release deployment gates and actual device/human acceptance. Batch 12 remains planned. Automated results cannot close the human field acceptance dependency.
 
 **Product commitments**
 
@@ -168,6 +168,12 @@ Completion gate: Put two devices through offline, reconnect, duplicate-request, 
 
 **Batch 11 — v0.11: Beta pilot and usability pass**
 
+Implementation status: Candidate implemented, deployment gates pending. Players and organizers now have separate entry paths, a current next-step guide, three immediate event actions, collapsed specialist tools, and plain explanations for the different QR/code workflows. The readability pass adds 44-pixel targets, text-size preference, mobile wrapping, outdoor/forced-colors support, and focus/loading/error recovery. Self-leave clears both local event stores; unsaved Field desk hash navigation and device clearing have explicit safeguards. Schema 10, formats 1, archive version 2, and the Batch 10 information-only/account-binding API remain unchanged.
+
+Nine local root DOM/API groups passed with zero uncaught errors; guide/pilot/load-tool checks passed five/eight/three, and 31 calculated color pairs plus eleven kit checks passed. Full local `npm run verify` passed 306 tests (294 passed, zero failures, 12 deliberate TCP-only skips), with complete footer and exit 0 in 145,383 ms. The full 100-player isolated PostgreSQL measurement will run on exact main CI before staging; two-player tooling tests are not a capacity result. Exact staging/remote/production gates remain pending. Actual iPhone/Android/shared-tablet use and the human pilot have not occurred.
+
+[PILOT.md](PILOT.md) supplies 58 required observations across all twelve instruments in all three themes, physical devices, organizer/new-player tasks, accessibility, failure recovery, and event closure. Its local report starts every row unrun and blocks acceptance for missing evidence, failed required checks, or unresolved critical findings. Complete those observations when participants and devices are available; deploying the implementation does not complete the human acceptance gate.
+
 Run a complete event rehearsal covering character creation, scanning, information exchange, investigation, trade, cooperative play, encounter dispatch, and event closure. Check camera behavior and manual-code alternatives on representative iPhone and Android browsers, desktop organizer screens, and a shared tablet.
 
 Observe organizer setup and new-player onboarding; remove unnecessary steps and unexplained terminology. Check keyboard access, readable contrast, touch targets, text scaling, reduced motion, and optional audio. Exercise loading, empty, permission-denied, and failure states rather than only successful demonstrations.
@@ -215,4 +221,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next development batch: Batch 11 — beta pilot and usability pass. Batch 10 is fully deployed; actual two-device/installed-browser acceptance, human field testing, load measurement, and scheduled database backups remain explicit outstanding items. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next: finish Batch 11 exact-release CI/load and deployment gates, then record its actual device/human pilot. Batch 12 production release and handoff remains planned with those acceptance dependencies. Scheduled live backups and measured Railway capacity remain outstanding. Public branding uses ORACLE with the subtitle “LARP Field Kit.”

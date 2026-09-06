@@ -1,6 +1,6 @@
 // Public, immutable application builds only. No API response or private game data
 // enters the shell cache. Browser-client/build IDs keep active tabs on one build.
-const VERSION = '0.10.0';
+const VERSION = '0.11.0';
 const CACHE_NAME = `oracle-static-v${VERSION}`;
 const CONTROL_CACHE = 'oracle-shell-control-v1';
 const COMPLETE_PATH = '/__oracle_shell_complete__';
@@ -19,6 +19,7 @@ const STATIC_ASSETS = [
   '/oath-model.js', '/oath-ui.js', '/oath.css', '/sigil-model.js', '/sigil-ui.js', '/sigil.css',
   '/static-model.js', '/static-ui.js', '/static.css', '/stagehand-model.js', '/stagehand-ui.js', '/stagehand-manage.js', '/stagehand.css',
   '/prop-effects.js', '/props.css', '/instrument-code.js',
+  '/guide-ui.js', '/guide.css',
   '/field-store.js', '/field-sync.js', '/field-ui.js', '/field.css', '/connection.js',
   '/manifest.webmanifest', '/install.js', '/app-icon.svg', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png',
 ];

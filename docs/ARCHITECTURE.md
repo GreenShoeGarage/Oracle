@@ -1,8 +1,14 @@
 # ORACLE architecture and data contracts
 
-Application v0.10.0 · Database schema 10 · Briefing-pack format 1 · Adventure format 1
+Application v0.11.0 candidate · Database schema 10 · Briefing-pack format 1 · Adventure format 1
 
-Batch 10 release `466b470eb6902fd84e903a0fbb1415b7f7a4fa8e` is deployed to staging and production. Both exact-commit PostgreSQL CI jobs, the complete remote all-twelve/all-three-theme workflow, and production exact readiness plus 68 public GET checks passed. Evidence, preserved operator status, and device/backup limits are recorded in [STATUS.md](STATUS.md).
+Batch 11's usability/pilot-preparation candidate is implemented; exact CI/load and staging/production verification are pending. Batch 10 release `466b470eb6902fd84e903a0fbb1415b7f7a4fa8e` remains the last verified deployed release. Current evidence and physical-device/backup limits are recorded in [STATUS.md](STATUS.md).
+
+**Usability layer.** `public/guide-ui.js` renders next steps from the already-authorized event, audience, and account-bound character snapshot. It performs no fetches or mutations and records no artificial task completion. An organizer's player preview receives player guidance; another account's or event's character snapshot is ignored. Existing destination handlers retain fresh authorization. The root offers player/organizer entry paths, three immediate event actions, and collapsed specialist tools. `public/guide.css` and shared styles handle mobile wrapping, touch targets, text preference, outdoor/forced-colors presentation, and accessible focus/loading/error states.
+
+**Local privacy and navigation.** Successful self-leave invalidates the event in both saved-readings and Field desk stores. In-flight stale work remains bounded by the existing account/event generations. Hash navigation checks unsaved Field desk work; confirmed device clearing describes deletion of local data only, without claiming server cancellation or deletion. Other authoring forms remain page-memory drafts. Batch 11 changes no SQL migration, pack format, browser archive version (2), or Batch 10 information-only/account-binding/replay contract.
+
+**Pilot and measurement boundary.** `scripts/pilot-report.js` only creates or validates a local, manually recorded evidence file. The 58 physical/human observations begin unrun and cannot be replaced by automated test results. `scripts/load-rehearsal.js` creates distinct authenticated synthetic players in one disposable loopback PostgreSQL event, measures bounded HTTP traffic/concurrency/latency, checks integrity, and cleans up. Its guarded CI configuration cannot be treated as a Railway load test or human pilot. Neither tool adds application telemetry or new runtime endpoints.
 
 **Identity and data ownership.** An account belongs to a person. Event membership grants a role within one event. Characters, inventories, and factions carry an event ID and authorize against current membership; future clues and encounters must follow the same contract. Copying content into another event creates new event-owned records. The client never decides ownership or privileges.
 

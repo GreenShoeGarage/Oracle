@@ -13,8 +13,10 @@ for (const dir of ["src", "scripts", "test", "public"]) {
 }
 const pkg = JSON.parse(await readFile("package.json", "utf8"));
 assert.equal(VERSION, pkg.version, "App/package versions must match.");
+const workerSource = await readFile("public/sw.js", "utf8");
+assert.ok(workerSource.includes(`const VERSION = '${VERSION}';`), "The cached public shell must match the server version.");
 const html = await readFile("public/index.html", "utf8");
-for (const asset of ["/style.css", "/themes.css", "/characters.css", "/adventure.css", "/adventure-organizer.css", "/exchanges.css", "/sharing.css", "/story.css", "/trace.css", "/economy.css", "/oath.css", "/sigil.css", "/static.css", "/stagehand.css", "/props.css", "/field.css", "/app.js", "/favicon.svg", "/manifest.webmanifest", "/apple-touch-icon.png"]) {
+for (const asset of ["/style.css", "/themes.css", "/characters.css", "/adventure.css", "/adventure-organizer.css", "/exchanges.css", "/sharing.css", "/story.css", "/trace.css", "/economy.css", "/oath.css", "/sigil.css", "/static.css", "/stagehand.css", "/props.css", "/field.css", "/guide.css", "/app.js", "/favicon.svg", "/manifest.webmanifest", "/apple-touch-icon.png"]) {
   assert.ok(html.includes(asset));
   await readFile(`public${asset}`);
 }

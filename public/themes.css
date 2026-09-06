@@ -5,6 +5,7 @@ h1, h2, h3, .world-icon { font-family: var(--heading-font); }
 .sidebar, .auth-form, input, textarea, select, dialog { background: var(--panel); }
 button, .nav-button.active, .event-card:hover { background: var(--panel); }
 .sidebar, .nav-button.active, button, input, textarea, select, dialog, .panel, .event-card { border-color: color-mix(in srgb, var(--muted) 48%, var(--panel)); }
+button, input, textarea, select { border-color: var(--muted); }
 .nav-button.active { color: var(--accent); }
 .primary, button.primary { color: var(--bg); background: var(--accent); border-color: var(--accent); }
 .badge.live { color: var(--text); background: var(--panel); border-color: var(--accent); }
@@ -22,7 +23,7 @@ button, .nav-button.active, .event-card:hover { background: var(--panel); }
 .display-controls { position: relative; margin-left: auto; font-size: .85rem; }
 summary { cursor: pointer; color: var(--text); font-weight: 650; min-height: 44px; display: list-item; align-content: center; }
 summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
-.reading-options { position: absolute; top: 100%; right: 0; padding: 1rem; border: 1px solid var(--muted); border-radius: .5rem; background: var(--panel); z-index: 20; min-width: 260px; display: grid; gap: .8rem; box-shadow: 0 8px 24px #0005; }
+.reading-options { position: absolute; top: 100%; right: 0; padding: 1rem; border: 1px solid var(--muted); border-radius: .5rem; background: var(--panel); z-index: 20; width: min(22rem, calc(100vw - 2rem)); min-width: 0; max-height: 70vh; max-height: 70dvh; overflow: auto; scroll-padding: 1rem; display: grid; gap: .8rem; box-shadow: 0 8px 24px #0005; }
 .topbar { flex-wrap: wrap; align-items: center; }
 .topbar > .eyebrow { flex: 1; }
 .world-header { max-width: 850px; margin: 2.5rem auto; text-align: center; }
@@ -76,9 +77,19 @@ legend { font-weight: 650; padding: 0 .5rem; }
 [data-display="outdoor"] body { background-image: none; }
 [data-display="outdoor"] .primary, [data-display="outdoor"] button.primary, [data-display="outdoor"] .view-switch [aria-pressed="true"] { color: #fff; }
 [data-display="outdoor"] .auth-intro, [data-display="outdoor"] .offline-banner { background: var(--panel); color: var(--text); }
+[data-display="outdoor"] .error { background: var(--panel); border-color: var(--danger); color: var(--text); }
 [data-display="outdoor"] .skip { color: #fff; }
 [data-motion="reduce"] *, [data-motion="reduce"] *::before, [data-motion="reduce"] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+/* Let the user's high-contrast palette remain authoritative over theme tokens. */
+@media (forced-colors: active) {
+  :root { --bg: Canvas !important; --panel: Canvas !important; --raised: Canvas !important; --text: CanvasText !important; --muted: CanvasText !important; --accent: LinkText !important; --line: CanvasText !important; --ink: Canvas !important; --danger: CanvasText !important; --green: CanvasText !important; }
+  body, .auth-intro, .error, .offline-banner { background: Canvas !important; color: CanvasText !important; }
+  button, .primary, button.primary, .view-switch [aria-pressed="true"] { background: ButtonFace !important; color: ButtonText !important; border-color: ButtonText !important; }
+  .nav-button.active, .view-switch [aria-pressed="true"] { border-style: double; border-width: 3px; }
+  input, textarea, select, dialog, .panel, .event-card { border-color: CanvasText !important; }
+  :focus-visible, summary:focus-visible { outline-color: Highlight !important; }
+}
 @media (max-width: 650px) {
   .theme-choices, .rule-columns { grid-template-columns: 1fr; }
   .theme-choice { grid-template-columns: auto auto 1fr; align-items: center; }
@@ -87,9 +98,11 @@ legend { font-weight: 650; padding: 0 .5rem; }
   .wizard-progress span { font-size: .75rem; }
   .wide-modal { padding: 1rem; }
   .kit-toolbar, .kit-overview .panel-head { align-items: flex-start; flex-direction: column; }
-  .three-fields { gap: .4rem; }
+  .three-fields { grid-template-columns: minmax(0, 1fr); gap: .7rem; }
   .three-fields input { padding: .6rem .4rem; }
   .reading-options { position: absolute; right: 0; }
+  .display-controls { position: static; }
+  .topbar { position: relative; }
   .topbar > .eyebrow { display: none; }
   .world-header { margin: 1.7rem auto; }
 }

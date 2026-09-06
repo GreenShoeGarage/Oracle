@@ -10,6 +10,7 @@ import { createFieldSync } from "./field-sync.js";
 import { createFieldUI } from "./field-ui.js";
 import { createInstallUI } from "./install.js";
 import { requestJSON } from "./connection.js";
+import { renderWelcomeGuide, renderEventGuide } from "./guide-ui.js";
 import { createExchangeUI } from "./exchanges-ui.js";
 import { createSharingUI } from "./sharing-ui.js";
 import { createStoryUI } from "./story-ui.js";
@@ -33,6 +34,7 @@ const state = {
   busy: false,
 };
 let noticeTimer;
+let operationTimer, modalOpener;
 let authEpoch = 0, connectionEpoch = 0;
 let pendingApiWrites = 0;
 let interactionEpoch = 0;
@@ -111,7 +113,7 @@ const sigil = createSigilUI({ state, api, shell, esc, openModal, closeModal, loa
 const signals = createStaticUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openJournal: (characterId) => { signals.reset(); return adventure.open({ characterId }); } });
 const stagehand = createStagehandUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openStory: () => story.open({ manage: true }), openAdventure: (options) => adventure.open(options) });
 const fieldSync = createFieldSync({ api, store: fieldStore });
-const field = createFieldUI({ state, api, shell: (html) => state.session?.user ? shell(html) : (app.innerHTML = `<main class="workspace" id="main">${html}</main>`), esc, openModal, closeModal, loadEvent, toast, isManager, err, render, offline, store: fieldStore, sync: fieldSync, openExchanges: (characterId) => exchanges.open({ characterId }) });
+const field = createFieldUI({ state, api, shell: (html) => state.session?.user ? shell(html) : (app.innerHTML = `<main class="workspace" id="main" tabindex="-1">${html}</main>`), esc, openModal, closeModal, loadEvent, toast, isManager, err, render, offline, store: fieldStore, sync: fieldSync, openExchanges: (characterId) => exchanges.open({ characterId }) });
 const install = createInstallUI({ getDirty: () => true, confirmDiscard: () => {
   if (pendingApiWrites || fieldSync.busy) { toast("Wait for the current server request to finish before applying an app update."); return false; }
   return field.canUpdate ? field.canUpdate() : true;
@@ -189,18 +191,7 @@ async function api(path, method = "GET", data, options = {}) {
     if (response.status === 404 && ["Event not found or access has been removed.", "Character not found or not assigned to you."].includes(result.error)) {
       const eventId = path.match(/^\/api\/events\/([0-9a-f-]{36})(?:[/?]|$)/i)?.[1];
       if (eventId) {
-        eventEpochs.set(eventId, (eventEpochs.get(eventId) || 0) + 1);
-        state.offlineArchive = null;
-        if (result.error === "Event not found or access has been removed.") state.events = state.events.filter((event) => event.id !== eventId);
-        if (state.event?.id === eventId) {
-          resetPrivateViews();
-          state.event = null;
-          state.view = "events";
-          closeModal(true);
-          render();
-        }
-        const archivePurge = offline.purgeEvent(eventId), fieldPurge = fieldStore.purgeEvent(eventId);
-        await Promise.allSettled([archivePurge, fieldPurge]);
+        await forgetEventAccess(eventId, result.error === "Event not found or access has been removed.");
       }
     }
     const error = new Error(result.error || "Request failed. Please try again.");
@@ -211,8 +202,10 @@ async function api(path, method = "GET", data, options = {}) {
   return result;
 }
 function openModal(heading, content) {
-  modalContent.innerHTML = `<div class="modal-head"><h2 id="modal-title">${esc(heading)}</h2><button type="button" data-action="close" aria-label="Close dialog">×</button></div>${content}`;
+  if (!modal.open) modalOpener = document.activeElement;
+  modalContent.innerHTML = `<div class="modal-head"><h2 id="modal-title" tabindex="-1">${esc(heading)}</h2><button type="button" data-action="close" aria-label="Close dialog">×</button></div>${content}`;
   if (!modal.open) modal.showModal();
+  document.querySelector("#modal-title")?.focus({ preventScroll: true });
 }
 function closeModal(force = false) {
   if (!force && (!kit.confirmDiscard() || !characters.confirmDiscard() || !adventureOrganizer.confirmDiscard("modal") || !exchanges.confirmDiscard("modal") || !story.confirmDiscard("modal") || !trace.confirmDiscard("modal") || !economy.confirmDiscard("modal") || !oaths.confirmDiscard("modal") || !sigil.confirmDiscard("modal") || !signals.confirmDiscard("modal") || !stagehand.confirmDiscard("modal") || !field.confirmDiscard("modal"))) return;
@@ -233,6 +226,36 @@ function closeModal(force = false) {
   modal.classList.remove("wide-modal");
   modal.close();
   modalContent.replaceChildren();
+  const opener = modalOpener, epoch = authEpoch;
+  modalOpener = null;
+  window.requestAnimationFrame(() => {
+    if (epoch !== authEpoch || modal.open) return;
+    if (opener?.isConnected && !opener.disabled) opener.focus({ preventScroll: true });
+    else if (document.activeElement === document.body) focusMain();
+  });
+}
+function focusMain() {
+  const target = document.querySelector("#main h1, #main h2, #main");
+  if (target) { target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true }); }
+}
+function beginOperation(interaction, button) {
+  clearTimeout(operationTimer);
+  const status = document.querySelector("#operation-status");
+  if (status) status.hidden = true;
+  button?.setAttribute("aria-busy", "true");
+  operationTimer = setTimeout(() => {
+    if (interaction !== interactionEpoch || !status) return;
+    status.textContent = "Working…";
+    status.hidden = false;
+  }, 400);
+}
+function endOperation(interaction, button) {
+  button?.removeAttribute("aria-busy");
+  if (interaction !== interactionEpoch) return;
+  clearTimeout(operationTimer);
+  const status = document.querySelector("#operation-status");
+  if (status) { status.hidden = true; status.textContent = ""; }
+  if (document.activeElement === document.body && !modal.open) focusMain();
 }
 function setError(form, error) {
   const el = form.querySelector(".error");
@@ -241,15 +264,17 @@ function setError(form, error) {
       error.message ||
       "Unable to connect. Check your connection and try again.";
     el.scrollIntoView({ block: "nearest" });
+    el.setAttribute("tabindex", "-1");
+    el.focus({ preventScroll: true });
   } else toast(error.message || "Unable to connect.");
 }
 function auth() {
   kit.apply();
   const signup = state.authMode === "register";
-  app.innerHTML = `<div class="auth-wrap"><section class="auth-intro"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><h1>Bring your people<br>into the story.</h1><p>Prepare an event, assemble your crew, and give your next world a place to begin.</p><p class="auth-footer">Green Shoe Garage · v${esc(state.session?.version || "0.10.0")}</p></section><main id="main" class="auth-form"><p class="eyebrow">Your field kit</p><h2>${signup ? "Create your account" : "Welcome back"}</h2><p>${signup ? "One account. A place in every world you join." : "Sign in to open your events."}</p><form id="auth-form">${err}${signup ? '<div><label for="displayName">Display name</label><input id="displayName" name="displayName" minlength="2" maxlength="80" required autocomplete="nickname"><p class="hint">Shown to the people in your events.</p></div>' : ""}<div><label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"></div><div><label for="password">Password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" required autocomplete="${signup ? "new-password" : "current-password"}">${signup ? '<p class="hint">At least 12 characters. A passphrase works well.</p>' : ""}</div>${signup ? '<details><summary>Have an operator setup code?</summary><label for="setupCode">Operator setup code</label><input id="setupCode" name="setupCode" type="password" maxlength="512" autocomplete="off"><p class="hint">Only needed for an account reserved by the project operator.</p></details>' : ""}<button class="primary" type="submit">${signup ? "Create account" : "Sign in"}</button></form>${state.session?.registrationEnabled ? `<button class="switch" data-action="auth-switch">${signup ? "Already have an account? Sign in" : "New to ORACLE? Create an account"}</button>` : ""}<p class="auth-footer">${state.session?.environment === "staging" ? "Staging environment — use test accounts and events." : "Your email is kept private. Events are visible to their members."}</p></main></div>`;
+  app.innerHTML = `<div class="auth-wrap"><section class="auth-intro"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><h1>Bring your people<br>into the story.</h1><p>Join an event, create your character, and carry your discoveries into the story. Organizers can prepare a world for their crew.</p><p class="auth-footer">Green Shoe Garage · v${esc(state.session?.version || "0.11.0")}</p></section><main id="main" class="auth-form" tabindex="-1"><p class="eyebrow">Your field kit</p><h2>${signup ? "Create your account" : "Welcome back"}</h2><p>${signup ? "Create an account, then join with your organizer’s invitation code or start your own event." : "Sign in to open your events."}</p><form id="auth-form">${err}${signup ? '<div><label for="displayName">Display name</label><input id="displayName" name="displayName" minlength="2" maxlength="80" required autocomplete="nickname"><p class="hint">Shown to the people in your events.</p></div>' : ""}<div><label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"></div><div><label for="password">Password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" required autocomplete="${signup ? "new-password" : "current-password"}">${signup ? '<p class="hint">At least 12 characters. A passphrase works well.</p>' : ""}</div>${signup ? '<details><summary>Have an operator setup code?</summary><label for="setupCode">Operator setup code</label><input id="setupCode" name="setupCode" type="password" maxlength="512" autocomplete="off"><p class="hint">Only needed for an account reserved by the project operator.</p></details>' : ""}<button class="primary" type="submit">${signup ? "Create account" : "Sign in"}</button></form>${state.session?.registrationEnabled ? `<button class="switch" data-action="auth-switch">${signup ? "Already have an account? Sign in" : "New to ORACLE? Create an account"}</button>` : ""}<p class="auth-footer">${state.session?.environment === "staging" ? "Staging environment — use test accounts and events." : "Your email is kept private. Events are visible to their members."}</p></main></div>`;
 }
 function shell(content) {
-  app.innerHTML = `<div class="layout"><aside class="sidebar"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><nav aria-label="Main navigation"><button class="nav-button ${!["account", "admin"].includes(state.view) ? "active" : ""}" data-action="events">${state.session.user.isSuperuser ? "All events" : "My events"}</button><button class="nav-button ${state.view === "account" ? "active" : ""}" data-action="account">Account</button><button class="nav-button" data-action="offline-open">Saved readings</button><button class="nav-button ${state.view === "field" ? "active" : ""}" data-action="field-open">Field desk</button>${state.session.user.isSuperuser ? `<button class="nav-button ${state.view === "admin" ? "active" : ""}" data-action="admin-open">Administration</button>` : ""}</nav><div class="sidebar-footer"><div><p class="account-name">${esc(state.session.user.displayName)}</p>${state.session.user.isSuperuser ? '<p class="hint">Project superuser</p>' : ""}<p class="version">ORACLE / v${esc(state.session.version)}</p></div><div data-install-controls>${install.render()}</div><button class="quiet" data-action="logout">Sign out</button></div></aside><main class="workspace" id="main"><div class="topbar"><button class="quiet menu-toggle" data-action="kit-collapse" aria-label="Toggle navigation" aria-expanded="true">☰ Menu</button><span class="eyebrow">Green Shoe Garage / Field instruments</span>${kit.controls()}${state.session.environment !== "production" ? `<span class="environment">${esc(state.session.environment)}</span>` : ""}</div>${content}</main></div>`;
+  app.innerHTML = `<div class="layout"><aside class="sidebar"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><nav aria-label="Main navigation"><button class="nav-button ${!["account", "admin"].includes(state.view) ? "active" : ""}" data-action="events">${state.session.user.isSuperuser ? "All events" : "My events"}</button><button class="nav-button ${state.view === "account" ? "active" : ""}" data-action="account">Account</button><button class="nav-button" data-action="offline-open">Saved readings</button><button class="nav-button ${state.view === "field" ? "active" : ""}" data-action="field-open">Field desk</button>${state.session.user.isSuperuser ? `<button class="nav-button ${state.view === "admin" ? "active" : ""}" data-action="admin-open">Administration</button>` : ""}</nav><div class="sidebar-footer"><div><p class="account-name">${esc(state.session.user.displayName)}</p>${state.session.user.isSuperuser ? '<p class="hint">Project superuser</p>' : ""}<p class="version">ORACLE / v${esc(state.session.version)}</p></div><div data-install-controls>${install.render()}</div><button class="quiet" data-action="logout">Sign out</button></div></aside><main class="workspace" id="main" tabindex="-1"><div class="topbar"><button class="quiet menu-toggle" data-action="kit-collapse" aria-label="Toggle navigation" aria-expanded="true">☰ Menu</button><span class="eyebrow">Green Shoe Garage / Field instruments</span>${kit.controls()}${state.session.environment !== "production" ? `<span class="environment">${esc(state.session.environment)}</span>` : ""}</div>${content}</main></div>`;
   kit.apply();
 }
 function render() {
@@ -275,19 +300,26 @@ function render() {
   events();
 }
 function events() {
-  const active = state.events.filter((x) =>
-    ["live", "paused", "rehearsal"].includes(x.status),
-  ).length;
-  shell(
-    `<header class="page-head"><div><p class="eyebrow">Event workspace</p><h1>Your worlds, ready to begin.</h1><p class="muted">Open an event to prepare your crew and manage the day.</p></div><div class="actions"><button data-action="kit-import">Import briefing pack</button><button data-action="join">Join an event</button><button data-action="create">+ Blank event</button><button class="primary" data-action="advedit-starter">Start an adventure</button></div></header><div class="summary"><div><strong>${state.events.length}</strong><span>events</span></div><div><strong>${active}</strong><span>in rehearsal or running</span></div><div><strong>${state.events.filter((x) => ["owner", "organizer", "superuser"].includes(x.role)).length}</strong><span>you organize</span></div></div>${state.events.length ? `<div class="cards">${state.events.map((ev) => `<button class="event-card" data-action="open-event" data-id="${esc(ev.id)}"><div class="card-top">${badge(ev.status)}<span class="role">${esc(ev.role)}</span></div><div><h2>${esc(ev.name)}</h2><p class="hint">${esc(ev.location || "Location to be decided")}</p></div><p class="description">${esc(ev.description || "A new event, ready for its story.")}</p><div class="card-bottom"><span>${ev.member_count} ${ev.member_count === 1 ? "member" : "members"}</span><span>${ev.starts_at ? esc(new Date(ev.starts_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })) : "Open event →"}</span></div></button>`).join("")}</div>` : `<section class="empty"><div class="number">01 / Assemble your crew</div><h2>Every world starts somewhere.</h2><p>Create your first event, or enter an invitation code from your organizer. Your events will appear here.</p><div class="actions"><button class="primary" data-action="advedit-starter">Start your first adventure</button><button data-action="create">Create a blank event</button><button data-action="join">I have an invitation</button></div></section>`}<p class="footer-note">${state.session.user.isSuperuser ? "Your superuser access includes every event." : "Only events you belong to appear here."}</p>`,
-  );
+  const cards = state.events.map((ev) => `<button class="event-card" data-action="open-event" data-id="${esc(ev.id)}"><div class="card-top">${badge(ev.status)}<span class="role">${esc(ev.role)}</span></div><div><h2>${esc(ev.name)}</h2><p class="hint">${esc(ev.location || "Location to be decided")}</p></div><p class="description">${esc(ev.description || "A new event, ready for its story.")}</p><div class="card-bottom"><span>${ev.member_count} ${ev.member_count === 1 ? "member" : "members"}</span><span>${ev.starts_at ? esc(new Date(ev.starts_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })) : "Open event →"}</span></div></button>`).join("");
+  shell(`<header class="page-head"><div><p class="eyebrow">ORACLE · LARP Field Kit</p><h1>Your events</h1><p class="muted">Choose an event to open its briefing, characters, and field tools.</p></div></header>${state.events.length ? `<div class="cards">${cards}</div><details class="panel mt"><summary>Join or organize another event</summary>${renderWelcomeGuide({ eventCount: state.events.length })}</details>` : renderWelcomeGuide()}<p class="footer-note">${state.session.user.isSuperuser ? "Your superuser access includes every event." : "Only events you belong to appear here."}</p>`);
 }
 function detail() {
-  if (isManager() && kit.isOrganizerView()) { organizerDetail(); kit.enhanceOrganizer(); }
+  const managerView = isManager() && kit.isOrganizerView();
+  if (managerView) { organizerDetail(); kit.enhanceOrganizer(); }
   else kit.renderPlayer();
-  if (document.documentElement.dataset.prop !== "true") {
-    document.querySelector(".workspace .page-head, .workspace .world-header")?.insertAdjacentHTML("afterend", `<section class="panel character-entry"><div class="panel-head"><div><h2>Your field kit</h2><p class="hint">Choose a character, follow discoveries, and find your next scene.</p></div><div class="actions"><button data-action="character-open">Characters</button><button class="primary" data-action="adv-open">Open adventure</button><button data-action="exchange-open">Exchanges</button>${state.event.setup.enabledInstruments.includes("trace") ? '<button data-action="trace-open">TRACE · Investigation</button>' : ""}${state.event.setup.enabledInstruments.some(id => ["whisper", "broadside"].includes(id)) ? '<button data-action="story-open">Rumors & news</button>' : ""}${state.event.setup.enabledInstruments.includes("bazaar") ? '<button data-action="bazaar-open">BAZAAR · Shops & balances</button>' : ""}${state.event.setup.enabledInstruments.includes("oathbook") ? '<button data-action="oath-open">OATHBOOK · Agreements</button>' : ""}${state.event.setup.enabledInstruments.includes("sigil") ? '<button data-action="sigil-open">SIGIL · Cooperative challenges</button>' : ""}${state.event.setup.enabledInstruments.includes("static") ? '<button data-action="static-open">STATIC · Fictional readings</button>' : ""}${state.event.setup.enabledInstruments.includes("stagehand") ? '<button data-action="stagehand-open">STAGEHAND · Parties & scenes</button>' : ""}</div></div>${isManager() || state.event.role === "staff" ? `<details class="mt"><summary>Organizer tools</summary><div class="actions mt"><button data-action="story-manage">Prepare rumors & news</button><button data-action="sigil-manage">Prepare SIGIL</button><button data-action="static-manage">Prepare STATIC</button><button data-action="stagehand-manage">STAGEHAND operations</button>${isManager() ? '<button data-action="advedit-open">Prepare adventure</button><button data-action="sharing-open">Sharing rules</button><button data-action="bazaar-manage">Manage BAZAAR</button><button data-action="oath-manage">Review OATHBOOK</button>' : ""}</div></details>` : ""}</section>`);
-  }
+  if (document.documentElement.dataset.prop === "true") return;
+  const enabled = state.event.setup.enabledInstruments;
+  const tools = [
+    ["trace", "trace-open", "Investigations · TRACE"],
+    ["bazaar", "bazaar-open", "Shops & balances · BAZAAR"],
+    ["oathbook", "oath-open", "Agreements · OATHBOOK"],
+    ["sigil", "sigil-open", "Cooperative challenges · SIGIL"],
+    ["static", "static-open", "Fictional readings · STATIC"],
+    ["stagehand", "stagehand-open", "Parties & scenes · STAGEHAND"],
+  ].filter(([id]) => enabled.includes(id)).map(([, action, label]) => `<button data-action="${action}">${label}</button>`).join("");
+  const news = enabled.some((id) => ["whisper", "broadside"].includes(id));
+  const guidance = renderEventGuide({ event: state.event, accountId: state.session.user.id, isManager: Boolean(isManager()), audience: managerView ? "organizer" : "player", members: state.members, online: connectionState === "online" });
+  document.querySelector(".workspace .page-head, .workspace .world-header")?.insertAdjacentHTML("afterend", `${guidance}<section class="panel character-entry"><h2>Your field tools</h2><div class="actions"><button data-action="character-open">Characters</button><button class="primary" data-action="adv-open">Open adventure</button><button data-action="exchange-open">Exchanges</button></div>${tools || news ? `<details class="mt"><summary>More tools for this event</summary><div class="actions mt">${news ? '<button data-action="story-open">Rumors & news</button>' : ""}${tools}</div></details>` : ""}${isManager() || state.event.role === "staff" ? `<details class="mt"><summary>Organizer and staff tools</summary><div class="actions mt">${news ? '<button data-action="story-manage">Prepare rumors & news</button>' : ""}${enabled.includes("sigil") ? '<button data-action="sigil-manage">Prepare cooperative challenges</button>' : ""}${enabled.includes("static") ? '<button data-action="static-manage">Prepare fictional readings</button>' : ""}${enabled.includes("stagehand") ? '<button data-action="stagehand-manage">Run encounters</button>' : ""}${isManager() ? `<button data-action="advedit-open">Prepare adventure</button><button data-action="sharing-open">Sharing rules</button>${enabled.includes("bazaar") ? '<button data-action="bazaar-manage">Manage shops & balances</button>' : ""}${enabled.includes("oathbook") ? '<button data-action="oath-manage">Review agreements</button>' : ""}` : ""}</div></details>` : ""}</section>`);
 }
 function organizerDetail() {
   const ev = state.event;
@@ -415,13 +447,18 @@ async function action(button) {
     case "offline-refresh":
       await start();
       break;
-    case "offline-clear":
-      await offline.clearArchive({ keepAccount: Boolean(state.session?.user) });
-      await fieldStore.clearAll();
-      if (state.session?.user) await fieldStore.setAccount(state.session.user.id);
+    case "offline-clear": {
+      if (!window.confirm("Delete all saved readings, Field desk notes, and queued requests on this device? Requests already sent may have reached the server; clearing this device does not cancel them.")) break;
+      const epoch = authEpoch, accountId = state.session?.user?.id;
+      const archiveClear = offline.clearArchive({ keepAccount: Boolean(accountId) }), fieldClear = fieldStore.clearAll();
+      await Promise.all([archiveClear, fieldClear]);
+      if (epoch !== authEpoch) return;
+      if (accountId) await fieldStore.setAccount(accountId);
+      if (epoch !== authEpoch) return;
       await openOffline();
       toast("Saved readings, local drafts, and pending requests cleared from this device.");
       break;
+    }
     case "close":
       closeModal();
       break;
@@ -517,11 +554,13 @@ async function action(button) {
       break;
     }
     case "confirm-remove": {
-      const eventId = state.event.id;
+      const eventId = state.event.id, accountId = state.session.user.id, epoch = authEpoch;
       await api(`/api/events/${eventId}/members/${id}`, "DELETE");
-      closeModal();
-      if (id === state.session.user.id) await loadEvents();
-      else await loadEvent(eventId);
+      if (id === accountId) {
+        await forgetEventAccess(eventId);
+        if (epoch !== authEpoch) return;
+        await loadEvents();
+      } else { closeModal(); await loadEvent(eventId); }
       toast("Membership updated.");
       break;
     }
@@ -564,11 +603,13 @@ async function action(button) {
   }
 }
 document.addEventListener("click", async (e) => {
+  if (e.target.closest('a.skip[href="#main"]')) { e.preventDefault(); focusMain(); return; }
   const button = e.target.closest("button[data-action]");
   if (!button || button.disabled || state.busy && button.dataset.action !== "logout") return;
   const interaction = ++interactionEpoch;
   state.busy = true;
   button.disabled = true;
+  beginOperation(interaction, button);
   try {
     await action(button);
   } catch (error) {
@@ -577,6 +618,7 @@ document.addEventListener("click", async (e) => {
   } finally {
     if (interaction === interactionEpoch) state.busy = false;
     button.disabled = false;
+    endOperation(interaction, button);
   }
 });
 document.addEventListener("change", (e) => {
@@ -595,6 +637,7 @@ document.addEventListener("submit", async (e) => {
   state.busy = true;
   const submit = form.querySelector('button[type="submit"]');
   if (submit) submit.disabled = true;
+  beginOperation(interaction, submit);
   const input = Object.fromEntries(new FormData(form));
   const error = form.querySelector(".error");
   if (error) error.textContent = "";
@@ -626,7 +669,7 @@ document.addEventListener("submit", async (e) => {
         const result = await api(`/api/auth/${state.authMode}`, "POST", input);
         if (loginEpoch !== authEpoch) return;
         unlockDevice();
-        state.session ||= { version: "0.10.0", user: null };
+        state.session ||= { version: "0.11.0", user: null };
         state.session.user = result.user;
         await offline.setAccount(result.user.id).catch(() => {});
         if (loginEpoch !== authEpoch || state.session?.user?.id !== result.user.id || pendingSignout()) return;
@@ -695,11 +738,12 @@ document.addEventListener("submit", async (e) => {
   } finally {
     if (interaction === interactionEpoch) state.busy = false;
     if (submit) submit.disabled = false;
+    endOperation(interaction, submit);
   }
 });
 window.addEventListener("hashchange", async () => {
   try {
-    if (["#prop/", "#exchange/", "#badge/", "#sigil/", "#static/"].some((prefix) => location.hash.startsWith(prefix)) && (!kit.confirmDiscard() || !characters.confirmDiscard() || !adventure.confirmDiscard() || !adventureOrganizer.confirmDiscard() || !sharing.confirmDiscard() || !exchanges.confirmDiscard() || !story.confirmDiscard() || !trace.confirmDiscard() || !economy.confirmDiscard() || !oaths.confirmDiscard() || !sigil.confirmDiscard() || !signals.confirmDiscard() || !stagehand.confirmDiscard())) {
+    if (["#prop/", "#exchange/", "#badge/", "#sigil/", "#static/"].some((prefix) => location.hash.startsWith(prefix)) && (!field.confirmDiscard() || !kit.confirmDiscard() || !characters.confirmDiscard() || !adventure.confirmDiscard() || !adventureOrganizer.confirmDiscard() || !sharing.confirmDiscard() || !exchanges.confirmDiscard() || !story.confirmDiscard() || !trace.confirmDiscard() || !economy.confirmDiscard() || !oaths.confirmDiscard() || !sigil.confirmDiscard() || !signals.confirmDiscard() || !stagehand.confirmDiscard())) {
       history.replaceState(null, "", `${location.pathname}${location.search}`);
       return;
     }
@@ -720,13 +764,26 @@ window.addEventListener("online", () => { void checkConnection(); });
 async function forgetLocalAccess() {
   authEpoch++; connectionEpoch++;
   interactionEpoch++; state.busy = false;
+  endOperation(interactionEpoch);
   const archiveClear = offline.clearArchive(), fieldClear = fieldStore.clearAll();
   resetPrivateViews();
-  state.session = { ...(state.session || { version: "0.10.0" }), user: null };
+  state.session = { ...(state.session || { version: "0.11.0" }), user: null };
   state.event = null; state.events = []; state.members = []; state.transitions = [];
   state.offlineArchive = null; state.view = "events";
   closeModal(true); render();
   await Promise.allSettled([archiveClear, fieldClear]);
+}
+async function forgetEventAccess(eventId, removeEvent = true) {
+  eventEpochs.set(eventId, (eventEpochs.get(eventId) || 0) + 1);
+  // Both stores publish their invalidation before either storage operation is awaited.
+  const archivePurge = offline.purgeEvent(eventId), fieldPurge = fieldStore.purgeEvent(eventId);
+  state.offlineArchive = null;
+  if (removeEvent) state.events = state.events.filter((event) => event.id !== eventId);
+  if (state.event?.id === eventId || ["offline", "field"].includes(state.view)) {
+    resetPrivateViews(); state.event = null; state.members = []; state.transitions = [];
+    state.view = "events"; closeModal(true); render();
+  }
+  await Promise.allSettled([archivePurge, fieldPurge]);
 }
 async function finishSignout({ forLogin = false } = {}) {
   const pending = pendingSignout();
@@ -783,6 +840,7 @@ function externalPrivacyChange(change) {
     state.events = state.events.filter((event) => event.id !== change.eventId);
     if (state.event?.id === change.eventId || ["offline", "field"].includes(state.view)) {
       interactionEpoch++; state.busy = false;
+      endOperation(interactionEpoch);
       resetPrivateViews(); state.event = null; state.members = []; state.transitions = [];
       state.view = "events"; closeModal(true); render();
     }
@@ -790,9 +848,10 @@ function externalPrivacyChange(change) {
   }
   authEpoch++; connectionEpoch++;
   interactionEpoch++; state.busy = false;
+  endOperation(interactionEpoch);
   resetPrivateViews(); state.offlineArchive = null;
   state.event = null; state.events = []; state.members = []; state.transitions = [];
-  state.session = { ...(state.session || { version: "0.10.0" }), user: null };
+  state.session = { ...(state.session || { version: "0.11.0" }), user: null };
   state.view = "events"; closeModal(true); render();
   toast("Local account access changed in another tab. Reconnect before continuing.");
 }

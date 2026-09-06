@@ -1,4 +1,49 @@
-# ORACLE v0.10.0 — Batch 10 release status
+# ORACLE v0.11.0 — Batch 11 candidate status
+
+Recorded September 6, 2026.
+
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Application `0.11.0`; database schema `10`; briefing/adventure formats `1`; browser journal archive version `2`. Batch 11's usability and pilot-preparation implementation is complete. The candidate's exact GitHub/PostgreSQL and load gates, Railway staging, full remote all-twelve/all-three-theme workflow, and production verification are pending. The last verified live release remains Batch 10 commit `466b470eb6902fd84e903a0fbb1415b7f7a4fa8e`. Actual human/physical-device acceptance has not occurred and remains blocked until people and devices are available.
+
+## Batch 11 implemented
+
+- Two clear entry paths for players and organizers; event next steps use current authorized event/character facts, with player guidance retained in organizer preview.
+- Three immediate actions and collapsed specialist tools, plain action labels, and explanations distinguishing invitation, character badge, prop, and exchange codes.
+- 44-pixel touch targets, adjustable text size, narrow-screen wrapping, outdoor/forced-colors support, and retained reduced-motion/audio alternatives.
+- Root focus preservation, visible loading state, actionable retry after failures, and protection against connection changes discarding active form text.
+- Successful self-leave clears the affected event from both saved-readings and Field desk stores. Hash navigation guards unsaved Field desk work. Clearing all saved device data asks for confirmation and accurately describes its local effect.
+- A dependency-free local pilot template/validator with 58 required human/device observations, evidence metadata, explicit not-run/pass/fail/blocked states, and findings that cannot schedule away unresolved critical defects.
+- A bounded 100-authenticated-player isolated PostgreSQL load rehearsal with measured latency/concurrency, integrity checks, and disposable cleanup. The full capacity run is pending exact-candidate CI; the small lifecycle test is not that measurement.
+- No SQL, pack, archive-format, or gameplay API-contract change. Existing operator identity/password and all persisted event data must remain preserved.
+
+## Batch 11 candidate verification
+
+| Check | Recorded result |
+| --- | --- |
+| Root DOM/API walkthrough | Nine groups passed with zero uncaught errors using actual modules and local HTTP state; does not establish physical-browser behavior |
+| Next-step guide | Five focused tests passed |
+| Pilot report validator | Eight focused tests passed; no actual human pilot was run |
+| Load tooling | Three focused tests passed, including a two-player lifecycle; 100-player capacity measurement pending exact CI |
+| Readability audit | 31 calculated color pairs passed; eleven kit checks passed; physical outdoor/assistive-device acceptance remains unrun |
+| Full local `npm run verify` | Passed: 306 tests, 294 passed, zero failures, 12 deliberate TCP-only skips; complete footer and exit 0 recorded, duration 145,383 ms; syntax/version/static asset checks passed |
+| Exact-release main PostgreSQL CI | Pending; must include all twelve TCP gates, 100-player isolated measurement, populated schema-10 recovery, startup, and production-image checks |
+| Exact-release staging PostgreSQL CI | Pending after main succeeds |
+| Railway staging and remote workflow | Pending; retain all twelve instruments in all three themes, copied play/reset, current authorization, and cleanup |
+| Railway production and public smoke | Pending after staging succeeds; expect exact version/schema/commit readiness and 70 public GET routes, then record actual result |
+| Human and physical-device pilot | Not run; actual iPhone/Android/desktop/shared-tablet, camera/install/offline/update and organizer/new-player observations required by [PILOT.md](PILOT.md) |
+
+Main is checked first so a failing new load gate cannot trigger a staging release. Only the same exact verified candidate may advance to staging, then production after complete remote acceptance. A successful push is not deployment evidence.
+
+## Batch 11 acceptance still outstanding
+
+- Complete the 58 actual observations in [PILOT.md](PILOT.md), including all twelve instruments in every theme, event closure, two-device offline/ambiguous retries, shared-device account privacy, installation/cameras, and accessibility. Automated DOM/HTTP/storage tests cannot substitute for those observations.
+- Record the 100-player isolated measurement only after the actual run. It is CI-laboratory capacity for the documented workload/configuration, not a Railway production capacity claim or a human event.
+- Resolve/recheck critical findings; schedule other accepted findings with an owner, reason, and target. Required failed or blocked checks remain blockers even when a finding is scheduled.
+- Scheduled live database backups remain unavailable/unconfigured under the existing Railway plan. Disposable recovery tests do not create a live backup.
+- Batch 12 release preparation may proceed, but final beta/human acceptance and any production-capacity claim remain conditional on actual evidence.
+
+---
+
+## Previous verified release — ORACLE v0.10.0 / Batch 10
 
 Recorded September 6, 2026.
 

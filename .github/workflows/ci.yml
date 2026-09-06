@@ -40,6 +40,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+      - name: Measure 100 authenticated players on disposable PostgreSQL
+        run: node scripts/load-rehearsal.js --report=qa/load-rehearsal.json
       - name: Rehearse backup and restore on disposable databases
         env:
           PG_TOOL_CONTAINER: ${{ job.services.postgres.id }}

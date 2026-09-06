@@ -316,7 +316,7 @@ test("external archive metadata invalidates visible listeners and pending scopes
 
 async function worker({ version = '0.10.0', stores = new Map(), clients = [] } = {}) {
   let source = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
-  source = source.replace("const VERSION = '0.10.0';", `const VERSION = '${version}';`);
+  source = source.replace("const VERSION = '0.11.0';", `const VERSION = '${version}';`);
   const origin = 'https://oracle.example.test', listeners = new Map(), requests = [];
   let network = async request => {
     const path = new URL(request.url).pathname;

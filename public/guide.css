@@ -1,0 +1,39 @@
+/* Quick starts inherit validated event colors and the existing reading settings. */
+.oracle-guide { margin: 1.25rem 0 1.75rem; border: 1px solid var(--muted); border-radius: .6rem; background: var(--panel); color: var(--text); overflow-wrap: anywhere; }
+.oracle-guide h2, .oracle-guide h3, .oracle-guide p { margin-top: 0; }
+.oracle-guide h2 { margin-bottom: .65rem; font-size: clamp(1.35rem, 4vw, 1.8rem); }
+.oracle-guide h3 { margin-bottom: .4rem; font-size: 1.15rem; }
+.oracle-guide p { margin-bottom: .8rem; max-width: 75ch; }
+.oracle-guide button, .oracle-guide summary { min-height: 44px; }
+.oracle-guide button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.guide-intro { padding: 1.25rem; }
+.guide-intro .eyebrow { color: var(--muted); }
+.guide-entry-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--muted); }
+.guide-entry-grid article { display: flex; flex-direction: column; align-items: flex-start; gap: .25rem; min-width: 0; padding: 1.25rem; }
+.guide-entry-grid article + article { border-left: 1px solid var(--muted); }
+.guide-entry-grid article > button { margin-top: auto; }
+.guide-more { border-top: 1px solid var(--muted); padding: .35rem 1.25rem; }
+.guide-more > summary { padding: .55rem .1rem; }
+.guide-more[open] { padding-bottom: 1.25rem; }
+.guide-more .actions { margin-top: .8rem; }
+.guide-steps { padding: 0; margin: .5rem 0 1rem; list-style: none; counter-reset: guide-step; }
+.guide-steps li { counter-increment: guide-step; display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; gap: .75rem; padding: 1rem 0; border-bottom: 1px solid var(--muted); align-items: start; }
+.guide-steps li::before { content: counter(guide-step) "."; color: var(--accent); font-weight: 700; font-size: 1.15rem; }
+.guide-steps li > button { align-self: center; }
+.guide-step-state { display: block; margin-bottom: .3rem; color: var(--muted); font-size: .85rem; }
+.guide-steps li p { margin-bottom: 0; }
+.guide-codes { margin: .6rem 0; }
+.guide-codes > div { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(0, 3fr); gap: 1rem; margin-bottom: .8rem; }
+.guide-codes dt { font-weight: 700; }
+.guide-codes dd { margin: 0; }
+.guide-connection { margin: 1rem 0 0 !important; padding: .6rem .8rem; border-left: 3px solid var(--accent); }
+@media (max-width: 650px) {
+  .guide-entry-grid { grid-template-columns: 1fr; }
+  .guide-entry-grid article + article { border-left: 0; border-top: 1px solid var(--muted); }
+  .guide-steps li { grid-template-columns: 1.5rem minmax(0, 1fr); gap: .5rem; }
+  .guide-steps li > button { grid-column: 2; justify-self: start; }
+  .guide-codes > div { grid-template-columns: 1fr; gap: .25rem; }
+  .guide-intro, .guide-entry-grid article { padding: 1rem; }
+  .guide-more { padding-right: 1rem; padding-left: 1rem; }
+}
+@media print { .oracle-guide { display: none !important; } }

@@ -247,6 +247,8 @@ export function createApp({
           "/field-sync.js": ["field-sync.js", "text/javascript"],
           "/field-ui.js": ["field-ui.js", "text/javascript"],
           "/field.css": ["field.css", "text/css"],
+          "/guide-ui.js": ["guide-ui.js", "text/javascript"],
+          "/guide.css": ["guide.css", "text/css"],
           "/install.js": ["install.js", "text/javascript"],
           "/manifest.webmanifest": ["manifest.webmanifest", "application/manifest+json"],
           "/icon-192.png": ["icon-192.png", "image/png"],

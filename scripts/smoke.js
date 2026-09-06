@@ -61,6 +61,8 @@ for (const path of [
   "/field-sync.js",
   "/field-ui.js",
   "/field.css",
+  "/guide-ui.js",
+  "/guide.css",
   "/install.js",
   "/manifest.webmanifest",
   "/icon-192.png",

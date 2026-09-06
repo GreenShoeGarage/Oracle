@@ -30,13 +30,15 @@
     <link rel="stylesheet" href="/stagehand.css" />
     <link rel="stylesheet" href="/props.css" />
     <link rel="stylesheet" href="/field.css" />
+    <link rel="stylesheet" href="/guide.css" />
     <script src="/app.js" type="module"></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
     <div id="connection-status" class="connection-status" role="status" aria-live="polite" hidden></div>
+    <div id="operation-status" class="operation-status" role="status" aria-live="polite" hidden></div>
     <div id="app">
-      <main class="boot" id="main">
+      <main class="boot" id="main" tabindex="-1">
         <div class="wordmark">ORACLE</div>
         <p>LARP Field Kit</p>
         <p role="status">Opening your field kit…</p>

@@ -11,7 +11,7 @@
   --danger: #ffabab;
   --green: #9be0ac;
   font:
-    16px/1.55 ui-sans-serif,
+    100%/1.55 ui-sans-serif,
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
@@ -49,11 +49,7 @@ button:disabled {
 a {
   color: var(--accent);
 }
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
+:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 4px;
 }
@@ -64,6 +60,10 @@ button {
   background: var(--raised);
   color: var(--text);
   font-weight: 600;
+  min-height: 44px;
+  min-width: 44px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 button:hover {
   border-color: var(--muted);
@@ -99,6 +99,11 @@ label {
   font-size: 0.9rem;
   color: var(--text);
   margin-bottom: 0.35rem;
+  overflow-wrap: anywhere;
+}
+label:has(input[type="checkbox"]),
+label:has(input[type="radio"]) {
+  min-height: 44px;
 }
 form {
   display: grid;
@@ -109,6 +114,7 @@ h2,
 h3,
 p {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 h1 {
   font-size: clamp(1.9rem, 3.5vw, 2.7rem);
@@ -154,15 +160,20 @@ p {
 }
 .skip {
   position: fixed;
-  top: -80px;
+  top: 12px;
   left: 16px;
+  transform: translateY(calc(-100% - 24px));
+  max-width: calc(100vw - 32px);
   background: var(--accent);
   color: var(--ink);
   padding: 12px;
   z-index: 100;
 }
 .skip:focus {
-  top: 12px;
+  transform: none;
+}
+#main:focus-visible {
+  outline-offset: -3px;
 }
 .layout {
   display: grid;
@@ -216,6 +227,7 @@ p {
   max-width: 1540px;
   width: 100%;
   margin: auto;
+  min-width: 0;
 }
 .topbar {
   display: flex;
@@ -312,6 +324,7 @@ p {
   border-top: 1px solid var(--line);
   font-size: 0.85rem;
   color: var(--muted);
+  flex-wrap: wrap;
 }
 .event-card .description {
   font-size: 0.94rem;
@@ -400,6 +413,7 @@ p {
   align-items: center;
   gap: 1rem;
   margin-bottom: 1rem;
+  flex-wrap: wrap;
 }
 .prose {
   white-space: pre-wrap;
@@ -481,7 +495,7 @@ p {
 .auth-wrap {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   max-width: 1300px;
   margin: auto;
 }
@@ -573,7 +587,9 @@ dialog {
   width: min(550px, calc(100vw - 2rem));
   padding: 1.6rem;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow: auto;
+  scroll-padding: 1rem;
 }
 dialog::backdrop {
   background: #000b;
@@ -608,7 +624,7 @@ dialog::backdrop {
 }
 .two-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1rem;
 }
 .auth-wrap .wordmark {
@@ -655,7 +671,7 @@ dialog::backdrop {
   .sidebar {
     position: relative;
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
     border-right: 0;
     border-bottom: 1px solid var(--line);
@@ -665,6 +681,12 @@ dialog::backdrop {
     display: flex;
     align-items: center;
     gap: 0.3rem;
+    flex-wrap: wrap;
+    grid-column: 1 / -1;
+  }
+  .sidebar nav .nav-button {
+    flex: 1 1 8rem;
+    width: auto;
   }
   .nav-button {
     padding: 0.55rem 0.65rem;
@@ -683,6 +705,12 @@ dialog::backdrop {
     align-items: center;
     padding: 0;
     margin: 0;
+    flex-wrap: wrap;
+    gap: .75rem;
+  }
+  .sidebar-footer > div {
+    min-width: 0;
+    max-width: 100%;
   }
   .sidebar-footer .account-name {
     font-size: 0.8rem;
@@ -756,11 +784,14 @@ dialog::backdrop {
   gap: .75rem;
   padding: .75rem 1rem;
   border-bottom: 2px solid currentColor;
-  background: #f2e6b8;
-  color: #24291e;
+  background: var(--panel);
+  color: var(--text);
   font-size: .9rem;
 }
 .connection-status .actions { flex-wrap: wrap; }
-.connection-status button { color: #24291e; border-color: #777752; min-height: 44px; }
+.connection-status button { color: var(--text); background: var(--panel); border-color: var(--muted); }
 [data-install-controls] { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .6rem; }
 @media print { .connection-status, [data-install-controls] { display: none !important; } }
+
+.operation-status:not([hidden]) { position: fixed; z-index: 100; top: .75rem; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 2rem); padding: .6rem 1rem; color: var(--text); background: var(--panel); border: 1px solid var(--muted); border-radius: .4rem; box-shadow: 0 2px 12px #0004; pointer-events: none; }
+@media print { .operation-status { display: none !important; } }

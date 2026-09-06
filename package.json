@@ -1,6 +1,6 @@
 {
   "name": "oracle-larp-field-kit",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "description": "ORACLE \u2014 LARP Field Kit. Themed adventures, live event operations, and offline field resilience.",
   "type": "module",
