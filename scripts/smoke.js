@@ -56,6 +56,18 @@ for (const path of [
   "/adventure.css",
   "/adventure-organizer.css",
   "/offline.js",
+  "/connection.js",
+  "/field-store.js",
+  "/field-sync.js",
+  "/field-ui.js",
+  "/field.css",
+  "/install.js",
+  "/manifest.webmanifest",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/icon-maskable-512.png",
+  "/apple-touch-icon.png",
+  "/app-icon.svg",
   "/prop-code.js",
   "/sw.js",
   "/exchange-model.js",
@@ -104,6 +116,8 @@ for (const path of [
     signal: AbortSignal.timeout(10000),
   });
   assert.equal(response.status, 200, `${path} must respond successfully`);
+  if (!path.startsWith("/health/") && !path.startsWith("/api/"))
+    assert.equal(response.headers.get("x-oracle-shell-version"), VERSION, `${path} must belong to this complete shell version`);
   if (path === "/health/ready") {
     const data = await response.json();
     assert.equal(data.status, "ready");
@@ -123,5 +137,16 @@ for (const path of [
     assert.match(response.headers.get("content-type") || "", /^text\/javascript\b/);
   if (path.endsWith(".css"))
     assert.match(response.headers.get("content-type") || "", /^text\/css\b/);
+  if (path.endsWith(".png")) {
+    assert.equal(response.headers.get("content-type"), "image/png");
+    const png = Buffer.from(await response.arrayBuffer());
+    assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+  }
+  if (path === "/manifest.webmanifest") {
+    assert.match(response.headers.get("content-type") || "", /^application\/manifest\+json\b/);
+    const manifest = await response.json();
+    assert.equal(manifest.start_url, "/"); assert.equal(manifest.scope, "/");
+    assert.equal(manifest.display, "standalone"); assert.match(manifest.name, /ORACLE/);
+  }
   console.log(`PASS ${path}`);
 }

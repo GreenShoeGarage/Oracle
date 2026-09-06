@@ -5,6 +5,11 @@ import { createAdminUI } from "./admin-ui.js";
 import { createAdventurePlayer } from "./adventure-player.js";
 import { createAdventureOrganizer } from "./adventure-organizer.js";
 import * as offline from "./offline.js";
+import * as fieldStore from "./field-store.js";
+import { createFieldSync } from "./field-sync.js";
+import { createFieldUI } from "./field-ui.js";
+import { createInstallUI } from "./install.js";
+import { requestJSON } from "./connection.js";
 import { createExchangeUI } from "./exchanges-ui.js";
 import { createSharingUI } from "./sharing-ui.js";
 import { createStoryUI } from "./story-ui.js";
@@ -28,6 +33,49 @@ const state = {
   busy: false,
 };
 let noticeTimer;
+let authEpoch = 0, connectionEpoch = 0;
+let pendingApiWrites = 0;
+let interactionEpoch = 0;
+const writeIdleWaiters = new Set();
+const writesIdle = () => pendingApiWrites ? new Promise((resolve) => writeIdleWaiters.add(resolve)) : Promise.resolve();
+const eventEpochs = new Map();
+let signoutFlight = null;
+let connectionState = navigator.onLine === false ? "offline" : "checking";
+const LOCAL_SIGNOUT_KEY = "oracle-local-signout";
+let memorySignout = null;
+function pendingSignout() {
+  let value;
+  try { value = localStorage.getItem(LOCAL_SIGNOUT_KEY); } catch { return memorySignout; }
+  if (!value) return memorySignout;
+  try {
+    const saved = JSON.parse(value), uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuid.test(saved?.accountId) && uuid.test(saved?.id) ? saved : { invalid: true };
+  } catch { return { invalid: true }; }
+}
+function lockDevice(accountId) {
+  memorySignout = { accountId, id: crypto.randomUUID() };
+  try { localStorage.setItem(LOCAL_SIGNOUT_KEY, JSON.stringify(memorySignout)); } catch { /* Memory lock and store tombstones still apply. */ }
+  authEpoch++;
+}
+function unlockDevice() {
+  memorySignout = null;
+  try { localStorage.removeItem(LOCAL_SIGNOUT_KEY); } catch { /* Retained lock fails closed on reload. */ }
+}
+function connectionBanner() {
+  const target = document.querySelector("#connection-status");
+  if (!target) return;
+  const localLogout = pendingSignout();
+  target.hidden = connectionState === "online" && !localLogout;
+  target.dataset.state = connectionState;
+  const message = localLogout ? "Signed out on this device. Reconnect to finish ending the server session."
+    : connectionState === "checking" ? "Checking the connection… Your drafts remain open."
+    : connectionState === "offline" ? "Offline or unreachable. Saved readings and Field desk notes are available. Live actions wait for server confirmation."
+    : "Connected.";
+  target.innerHTML = `<span>${esc(message)}</span><div class="actions"><button class="quiet" data-action="connection-check">Check connection</button><button class="quiet" data-action="field-open">Field desk</button><button class="quiet" data-action="offline-open">Saved readings</button></div>`;
+}
+function updateInstallUI() {
+  for (const target of document.querySelectorAll("[data-install-controls]")) target.innerHTML = install.render();
+}
 const esc = (v) =>
   String(v ?? "").replace(
     /[&<>"']/g,
@@ -53,7 +101,7 @@ const characters = createCharacterUI({ state, api, shell, esc, openModal, closeM
 const admin = createAdminUI({ state, api, shell, esc, openModal, closeModal, toast, err, render });
 const adventure = createAdventurePlayer({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, offline, openManager: () => adventureOrganizer.open() });
 const adventureOrganizer = createAdventureOrganizer({ state, api, shell, esc, openModal, closeModal, loadEvent, loadEvents, toast, isManager, err, render, openPlayer: async (options) => { if (adventureOrganizer.confirmDiscard()) await adventure.open(options); } });
-const exchanges = createExchangeUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, offline, openJournal: (characterId) => adventure.open({ characterId }) });
+const exchanges = createExchangeUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, offline, openJournal: (characterId) => adventure.open({ characterId }), queueFieldRequest: (request) => field.queue(request), captureFieldScope: () => field.captureContextScope(), rememberFieldContext: (event, characters, scope) => field.rememberContext(event, characters, scope), openField: () => field.open() });
 const sharing = createSharingUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render });
 const story = createStoryUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openJournal: (characterId) => adventure.open({ characterId }), openExchanges: (characterId) => exchanges.open({ characterId }) });
 const trace = createTraceUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openJournal: (characterId) => adventure.open({ characterId }), openExchanges: (characterId) => exchanges.open({ characterId }) });
@@ -62,7 +110,15 @@ const oaths = createOathUI({ state, api, shell, esc, openModal, closeModal, load
 const sigil = createSigilUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openJournal: (characterId) => { sigil.reset(); return adventure.open({ characterId }); } });
 const signals = createStaticUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openJournal: (characterId) => { signals.reset(); return adventure.open({ characterId }); } });
 const stagehand = createStagehandUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openStory: () => story.open({ manage: true }), openAdventure: (options) => adventure.open(options) });
+const fieldSync = createFieldSync({ api, store: fieldStore });
+const field = createFieldUI({ state, api, shell: (html) => state.session?.user ? shell(html) : (app.innerHTML = `<main class="workspace" id="main">${html}</main>`), esc, openModal, closeModal, loadEvent, toast, isManager, err, render, offline, store: fieldStore, sync: fieldSync, openExchanges: (characterId) => exchanges.open({ characterId }) });
+const install = createInstallUI({ getDirty: () => true, confirmDiscard: () => {
+  if (pendingApiWrites || fieldSync.busy) { toast("Wait for the current server request to finish before applying an app update."); return false; }
+  return field.canUpdate ? field.canUpdate() : true;
+}, onChange: updateInstallUI, toast });
 function resetPrivateViews() {
+  field.reset();
+  fieldSync.reset();
   adventure.reset();
   adventureOrganizer.reset();
   exchanges.reset();
@@ -84,15 +140,36 @@ function toast(message) {
     el.hidden = true;
   }, 5000);
 }
-async function api(path, method = "GET", data) {
+async function api(path, method = "GET", data, options = {}) {
+  const requestEpoch = authEpoch;
+  const capturedEvents = new Map(eventEpochs);
   const requestedUserId = state.session?.user?.id;
-  const response = await fetch(path, {
-    method,
-    credentials: "same-origin",
-    headers: method === "GET" ? {} : { "Content-Type": "application/json" },
-    body: data === undefined ? undefined : JSON.stringify(data),
-  });
-  const result = response.status === 204 ? {} : await response.json();
+  let response, result;
+  if (method !== "GET" && method !== "HEAD") pendingApiWrites++;
+  try {
+    ({ response, result } = await requestJSON(path, method, data, { ...options, expectedAccount: options.expectedAccount || requestedUserId }));
+  } catch (error) {
+    if (error.offline) { connectionState = "offline"; connectionBanner(); }
+    throw error;
+  } finally {
+    if (method !== "GET" && method !== "HEAD" && --pendingApiWrites === 0) {
+      for (const resolve of writeIdleWaiters) resolve();
+      writeIdleWaiters.clear();
+    }
+  }
+  if (requestEpoch !== authEpoch) {
+    const error = new Error("This device's account access changed while the request was in progress. Reconnect before continuing.");
+    error.status = 401; error.uncertain = method !== "GET";
+    throw error;
+  }
+  const responseEventId = path.match(/^\/api\/events\/([0-9a-f-]{36})(?:[/?]|$)/i)?.[1] || result.event?.id || result.character?.eventId;
+  if (responseEventId && (capturedEvents.get(responseEventId) || 0) !== (eventEpochs.get(responseEventId) || 0)) {
+    const error = new Error("Access to this event changed while the request was in progress. Open the event again before continuing.");
+    error.status = 409; error.uncertain = method !== "GET";
+    throw error;
+  }
+  if (Array.isArray(result.events)) result.events = result.events.filter((event) => (capturedEvents.get(event.id) || 0) === (eventEpochs.get(event.id) || 0));
+  connectionState = "online"; connectionBanner();
   if (requestedUserId && requestedUserId !== state.session?.user?.id) {
     const error = new Error("The account changed. Open the event again to continue.");
     error.status = 409;
@@ -100,35 +177,19 @@ async function api(path, method = "GET", data) {
   }
   const responseAccount = response.headers.get("x-oracle-account");
   if (requestedUserId && responseAccount && responseAccount !== requestedUserId) {
-    await offline.clearArchive().catch(() => {});
-    resetPrivateViews();
-    state.session.user = null;
-    state.offlineArchive = null;
-    state.event = null;
-    state.events = [];
-    state.view = "events";
-    closeModal(true);
-    render();
+    await forgetLocalAccess();
     const error = new Error("Your account changed in another tab. Sign in again to continue.");
     error.status = 401;
     throw error;
   }
   if (!response.ok) {
     if (response.status === 401 && state.session?.user) {
-      state.session.user = null;
-      await offline.clearArchive().catch(() => {});
-      resetPrivateViews();
-      state.event = null;
-      state.events = [];
-      state.offlineArchive = null;
-      state.view = "events";
-      closeModal(true);
-      render();
+      await forgetLocalAccess();
     }
     if (response.status === 404 && ["Event not found or access has been removed.", "Character not found or not assigned to you."].includes(result.error)) {
       const eventId = path.match(/^\/api\/events\/([0-9a-f-]{36})(?:[/?]|$)/i)?.[1];
       if (eventId) {
-        await offline.purgeEvent(eventId).catch(() => {});
+        eventEpochs.set(eventId, (eventEpochs.get(eventId) || 0) + 1);
         state.offlineArchive = null;
         if (result.error === "Event not found or access has been removed.") state.events = state.events.filter((event) => event.id !== eventId);
         if (state.event?.id === eventId) {
@@ -138,6 +199,8 @@ async function api(path, method = "GET", data) {
           closeModal(true);
           render();
         }
+        const archivePurge = offline.purgeEvent(eventId), fieldPurge = fieldStore.purgeEvent(eventId);
+        await Promise.allSettled([archivePurge, fieldPurge]);
       }
     }
     const error = new Error(result.error || "Request failed. Please try again.");
@@ -152,7 +215,7 @@ function openModal(heading, content) {
   if (!modal.open) modal.showModal();
 }
 function closeModal(force = false) {
-  if (!force && (!kit.confirmDiscard() || !characters.confirmDiscard() || !adventureOrganizer.confirmDiscard("modal") || !exchanges.confirmDiscard("modal") || !story.confirmDiscard("modal") || !trace.confirmDiscard("modal") || !economy.confirmDiscard("modal") || !oaths.confirmDiscard("modal") || !sigil.confirmDiscard("modal") || !signals.confirmDiscard("modal") || !stagehand.confirmDiscard("modal"))) return;
+  if (!force && (!kit.confirmDiscard() || !characters.confirmDiscard() || !adventureOrganizer.confirmDiscard("modal") || !exchanges.confirmDiscard("modal") || !story.confirmDiscard("modal") || !trace.confirmDiscard("modal") || !economy.confirmDiscard("modal") || !oaths.confirmDiscard("modal") || !sigil.confirmDiscard("modal") || !signals.confirmDiscard("modal") || !stagehand.confirmDiscard("modal") || !field.confirmDiscard("modal"))) return;
   adventure.cleanupModal();
   adventureOrganizer.cleanupModal();
   characters.cleanupModal();
@@ -165,6 +228,7 @@ function closeModal(force = false) {
   sigil.cleanupModal?.();
   signals.cleanupModal?.();
   stagehand.cleanupModal?.();
+  field.cleanupModal?.();
   if (force) kit.resetDraft();
   modal.classList.remove("wide-modal");
   modal.close();
@@ -182,14 +246,16 @@ function setError(form, error) {
 function auth() {
   kit.apply();
   const signup = state.authMode === "register";
-  app.innerHTML = `<div class="auth-wrap"><section class="auth-intro"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><h1>Bring your people<br>into the story.</h1><p>Prepare an event, assemble your crew, and give your next world a place to begin.</p><p class="auth-footer">Green Shoe Garage · v${esc(state.session?.version || "0.9.0")}</p></section><main id="main" class="auth-form"><p class="eyebrow">Your field kit</p><h2>${signup ? "Create your account" : "Welcome back"}</h2><p>${signup ? "One account. A place in every world you join." : "Sign in to open your events."}</p><form id="auth-form">${err}${signup ? '<div><label for="displayName">Display name</label><input id="displayName" name="displayName" minlength="2" maxlength="80" required autocomplete="nickname"><p class="hint">Shown to the people in your events.</p></div>' : ""}<div><label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"></div><div><label for="password">Password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" required autocomplete="${signup ? "new-password" : "current-password"}">${signup ? '<p class="hint">At least 12 characters. A passphrase works well.</p>' : ""}</div>${signup ? '<details><summary>Have an operator setup code?</summary><label for="setupCode">Operator setup code</label><input id="setupCode" name="setupCode" type="password" maxlength="512" autocomplete="off"><p class="hint">Only needed for an account reserved by the project operator.</p></details>' : ""}<button class="primary" type="submit">${signup ? "Create account" : "Sign in"}</button></form>${state.session?.registrationEnabled ? `<button class="switch" data-action="auth-switch">${signup ? "Already have an account? Sign in" : "New to ORACLE? Create an account"}</button>` : ""}<p class="auth-footer">${state.session?.environment === "staging" ? "Staging environment — use test accounts and events." : "Your email is kept private. Events are visible to their members."}</p></main></div>`;
+  app.innerHTML = `<div class="auth-wrap"><section class="auth-intro"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><h1>Bring your people<br>into the story.</h1><p>Prepare an event, assemble your crew, and give your next world a place to begin.</p><p class="auth-footer">Green Shoe Garage · v${esc(state.session?.version || "0.10.0")}</p></section><main id="main" class="auth-form"><p class="eyebrow">Your field kit</p><h2>${signup ? "Create your account" : "Welcome back"}</h2><p>${signup ? "One account. A place in every world you join." : "Sign in to open your events."}</p><form id="auth-form">${err}${signup ? '<div><label for="displayName">Display name</label><input id="displayName" name="displayName" minlength="2" maxlength="80" required autocomplete="nickname"><p class="hint">Shown to the people in your events.</p></div>' : ""}<div><label for="email">Email address</label><input id="email" name="email" type="email" maxlength="254" required autocomplete="email"></div><div><label for="password">Password</label><input id="password" name="password" type="password" minlength="12" maxlength="128" required autocomplete="${signup ? "new-password" : "current-password"}">${signup ? '<p class="hint">At least 12 characters. A passphrase works well.</p>' : ""}</div>${signup ? '<details><summary>Have an operator setup code?</summary><label for="setupCode">Operator setup code</label><input id="setupCode" name="setupCode" type="password" maxlength="512" autocomplete="off"><p class="hint">Only needed for an account reserved by the project operator.</p></details>' : ""}<button class="primary" type="submit">${signup ? "Create account" : "Sign in"}</button></form>${state.session?.registrationEnabled ? `<button class="switch" data-action="auth-switch">${signup ? "Already have an account? Sign in" : "New to ORACLE? Create an account"}</button>` : ""}<p class="auth-footer">${state.session?.environment === "staging" ? "Staging environment — use test accounts and events." : "Your email is kept private. Events are visible to their members."}</p></main></div>`;
 }
 function shell(content) {
-  app.innerHTML = `${!navigator.onLine ? '<div class="offline-banner">You are offline. Changes need a connection in this release.</div>' : ""}<div class="layout"><aside class="sidebar"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><nav aria-label="Main navigation"><button class="nav-button ${!["account", "admin"].includes(state.view) ? "active" : ""}" data-action="events">${state.session.user.isSuperuser ? "All events" : "My events"}</button><button class="nav-button ${state.view === "account" ? "active" : ""}" data-action="account">Account</button><button class="nav-button" data-action="offline-open">Saved readings</button>${state.session.user.isSuperuser ? `<button class="nav-button ${state.view === "admin" ? "active" : ""}" data-action="admin-open">Administration</button>` : ""}</nav><div class="sidebar-footer"><div><p class="account-name">${esc(state.session.user.displayName)}</p>${state.session.user.isSuperuser ? '<p class="hint">Project superuser</p>' : ""}<p class="version">ORACLE / v${esc(state.session.version)}</p></div><button class="quiet" data-action="logout">Sign out</button></div></aside><main class="workspace" id="main"><div class="topbar"><button class="quiet menu-toggle" data-action="kit-collapse" aria-label="Toggle navigation" aria-expanded="true">☰ Menu</button><span class="eyebrow">Green Shoe Garage / Field instruments</span>${kit.controls()}${state.session.environment !== "production" ? `<span class="environment">${esc(state.session.environment)}</span>` : ""}</div>${content}</main></div>`;
+  app.innerHTML = `<div class="layout"><aside class="sidebar"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><nav aria-label="Main navigation"><button class="nav-button ${!["account", "admin"].includes(state.view) ? "active" : ""}" data-action="events">${state.session.user.isSuperuser ? "All events" : "My events"}</button><button class="nav-button ${state.view === "account" ? "active" : ""}" data-action="account">Account</button><button class="nav-button" data-action="offline-open">Saved readings</button><button class="nav-button ${state.view === "field" ? "active" : ""}" data-action="field-open">Field desk</button>${state.session.user.isSuperuser ? `<button class="nav-button ${state.view === "admin" ? "active" : ""}" data-action="admin-open">Administration</button>` : ""}</nav><div class="sidebar-footer"><div><p class="account-name">${esc(state.session.user.displayName)}</p>${state.session.user.isSuperuser ? '<p class="hint">Project superuser</p>' : ""}<p class="version">ORACLE / v${esc(state.session.version)}</p></div><div data-install-controls>${install.render()}</div><button class="quiet" data-action="logout">Sign out</button></div></aside><main class="workspace" id="main"><div class="topbar"><button class="quiet menu-toggle" data-action="kit-collapse" aria-label="Toggle navigation" aria-expanded="true">☰ Menu</button><span class="eyebrow">Green Shoe Garage / Field instruments</span>${kit.controls()}${state.session.environment !== "production" ? `<span class="environment">${esc(state.session.environment)}</span>` : ""}</div>${content}</main></div>`;
   kit.apply();
 }
 function render() {
-  if (state.view === "offline") { app.innerHTML = offline.renderArchive({ esc, archive: state.offlineArchive }); return; }
+  connectionBanner();
+  if (state.view === "field") return field.render();
+  if (state.view === "offline") { app.innerHTML = offline.renderArchive({ esc, archive: state.offlineArchive }); document.querySelector(".page-head .actions")?.insertAdjacentHTML("beforeend", '<button data-action="field-open">Field desk</button>'); return; }
   if (!state.session?.user) return auth();
   if (state.view === "account") return account();
   if (state.view === "admin") return admin.render();
@@ -292,7 +358,20 @@ function confirmModal(heading, message, action, attributes, label) {
 }
 async function action(button) {
   const destination = button.dataset.action;
-  if (["events", "account", "logout", "open-event", "create", "kit-import", "character-open", "adv-open", "advedit-open", "advedit-starter", "offline-open", "admin-open", "exchange-open", "sharing-open", "story-open", "story-manage", "trace-open", "bazaar-open", "bazaar-manage", "oath-open", "oath-manage", "sigil-open", "sigil-manage", "static-open", "static-manage", "stagehand-open", "stagehand-manage"].includes(destination)) {
+  if (destination === "logout") {
+    const accountId = state.session?.user?.id;
+    lockDevice(accountId);
+    await forgetLocalAccess();
+    toast("Signed out on this device. Local readings, drafts, and pending requests were cleared.");
+    void finishSignout();
+    return;
+  }
+  if (destination.startsWith("field-") && pendingSignout()) {
+    toast("This device is signed out. Reconnect and sign in before opening private Field desk data.");
+    return;
+  }
+  if (["events", "account", "logout", "open-event", "create", "kit-import", "character-open", "adv-open", "advedit-open", "advedit-starter", "offline-open", "admin-open", "exchange-open", "sharing-open", "story-open", "story-manage", "trace-open", "bazaar-open", "bazaar-manage", "oath-open", "oath-manage", "sigil-open", "sigil-manage", "static-open", "static-manage", "stagehand-open", "stagehand-manage", "field-open"].includes(destination)) {
+    if (state.view === "field" && !field.confirmDiscard()) return;
     if (state.view === "characters" && !characters.confirmDiscard()) return;
     if (state.view === "adventure" && !adventure.confirmDiscard()) return;
     if (state.view === "adventure-manage" && !adventureOrganizer.confirmDiscard()) return;
@@ -309,6 +388,8 @@ async function action(button) {
     if (state.view === "static" && !destination.startsWith("static-")) signals.reset();
     if (state.view === "stagehand" && !destination.startsWith("stagehand-")) stagehand.reset();
   }
+  if (await install.action(button)) return;
+  if (await field.action(button)) return;
   if (await exchanges.action(button)) return;
   if (await sharing.action(button)) return;
   if (await story.action(button)) return;
@@ -325,6 +406,9 @@ async function action(button) {
   if (await kit.action(button)) return;
   const id = button.dataset.id;
   switch (button.dataset.action) {
+    case "connection-check":
+      await checkConnection();
+      break;
     case "offline-open":
       await openOffline();
       break;
@@ -333,8 +417,10 @@ async function action(button) {
       break;
     case "offline-clear":
       await offline.clearArchive({ keepAccount: Boolean(state.session?.user) });
+      await fieldStore.clearAll();
+      if (state.session?.user) await fieldStore.setAccount(state.session.user.id);
       await openOffline();
-      toast("Saved readings cleared from this device.");
+      toast("Saved readings, local drafts, and pending requests cleared from this device.");
       break;
     case "close":
       closeModal();
@@ -348,18 +434,6 @@ async function action(button) {
       break;
     case "account":
       state.view = "account";
-      render();
-      break;
-    case "logout":
-      await api("/api/auth/logout", "POST", {});
-      await offline.clearArchive().catch(() => {});
-      resetPrivateViews();
-      state.session.user = null;
-      state.view = "events";
-      state.offlineArchive = null;
-      state.events = [];
-      state.event = null;
-      closeModal(true);
       render();
       break;
     case "create":
@@ -491,16 +565,17 @@ async function action(button) {
 }
 document.addEventListener("click", async (e) => {
   const button = e.target.closest("button[data-action]");
-  if (!button || button.disabled || state.busy) return;
+  if (!button || button.disabled || state.busy && button.dataset.action !== "logout") return;
+  const interaction = ++interactionEpoch;
   state.busy = true;
   button.disabled = true;
   try {
     await action(button);
   } catch (error) {
     const visible = modal.open ? modalContent : app;
-    setError(visible, error);
+    if (interaction === interactionEpoch) setError(visible, error);
   } finally {
-    state.busy = false;
+    if (interaction === interactionEpoch) state.busy = false;
     button.disabled = false;
   }
 });
@@ -516,6 +591,7 @@ document.addEventListener("submit", async (e) => {
   e.preventDefault();
   const form = e.target;
   if (state.busy) return;
+  const interaction = ++interactionEpoch;
   state.busy = true;
   const submit = form.querySelector('button[type="submit"]');
   if (submit) submit.disabled = true;
@@ -523,6 +599,7 @@ document.addEventListener("submit", async (e) => {
   const error = form.querySelector(".error");
   if (error) error.textContent = "";
   try {
+    if (await field.submit(form)) return;
     if (await exchanges.submit(form)) return;
     if (await sharing.submit(form)) return;
     if (await story.submit(form)) return;
@@ -539,9 +616,22 @@ document.addEventListener("submit", async (e) => {
     if (await kit.submit(form)) return;
     switch (form.id) {
       case "auth-form": {
+        // An older logout response must finish before a new login can set its
+        // cookie. Aborted/uncertain logout does not authorize a racing login.
+        if (pendingSignout()) {
+          const ended = await finishSignout({ forLogin: true });
+          if (!ended) throw new Error("The previous sign-out is still unconfirmed. Reconnect and try signing in again after it finishes.");
+        }
+        const loginEpoch = authEpoch;
         const result = await api(`/api/auth/${state.authMode}`, "POST", input);
+        if (loginEpoch !== authEpoch) return;
+        unlockDevice();
+        state.session ||= { version: "0.10.0", user: null };
         state.session.user = result.user;
         await offline.setAccount(result.user.id).catch(() => {});
+        if (loginEpoch !== authEpoch || state.session?.user?.id !== result.user.id || pendingSignout()) return;
+        await fieldStore.setAccount(result.user.id).catch(() => {});
+        if (loginEpoch !== authEpoch || state.session?.user?.id !== result.user.id || pendingSignout()) return;
         await loadEvents();
         break;
       }
@@ -601,9 +691,9 @@ document.addEventListener("submit", async (e) => {
         break;
     }
   } catch (error) {
-    setError(form, error);
+    if (interaction === interactionEpoch) setError(form, error);
   } finally {
-    state.busy = false;
+    if (interaction === interactionEpoch) state.busy = false;
     if (submit) submit.disabled = false;
   }
 });
@@ -621,35 +711,136 @@ window.addEventListener("hashchange", async () => {
   } catch (error) { toast(error.message); }
 });
 modal.addEventListener("cancel", (e) => { e.preventDefault(); closeModal(); });
+// Connectivity changes update only the status strip, preserving active forms.
 window.addEventListener("offline", () => {
-  if (!["sigil", "static", "stagehand"].includes(state.view)) render();
-  toast("Connection lost. Changes need a connection.");
+  connectionEpoch++; connectionState = "offline"; connectionBanner();
+  toast("Connection lost. Your open drafts remain here. Field desk notes are saved on this device.");
 });
-window.addEventListener("online", () => {
-  if (!["sigil", "static", "stagehand"].includes(state.view)) render();
-  toast("Connection restored. Refresh the event to see current information.");
+window.addEventListener("online", () => { void checkConnection(); });
+async function forgetLocalAccess() {
+  authEpoch++; connectionEpoch++;
+  interactionEpoch++; state.busy = false;
+  const archiveClear = offline.clearArchive(), fieldClear = fieldStore.clearAll();
+  resetPrivateViews();
+  state.session = { ...(state.session || { version: "0.10.0" }), user: null };
+  state.event = null; state.events = []; state.members = []; state.transitions = [];
+  state.offlineArchive = null; state.view = "events";
+  closeModal(true); render();
+  await Promise.allSettled([archiveClear, fieldClear]);
+}
+async function finishSignout({ forLogin = false } = {}) {
+  const pending = pendingSignout();
+  if (!pending || navigator.onLine === false) { connectionBanner(); return false; }
+  if (pending.invalid) {
+    if (forLogin) { unlockDevice(); return true; }
+    connectionBanner(); return false;
+  }
+  try {
+    if (!signoutFlight) {
+      const flight = (async () => {
+        // A pending password change may set a replacement cookie. Let all
+        // already-transmitted writes settle before revoking this browser's
+        // final cookie; local privacy clearing has already completed.
+        await writesIdle();
+        return requestJSON("/api/auth/logout", "POST", {}, { expectedAccount: pending.accountId, timeoutMs: 12000 });
+      })();
+      signoutFlight = flight;
+      void flight.finally(() => { if (signoutFlight === flight) signoutFlight = null; }).catch(() => {});
+    }
+    const { response } = await signoutFlight;
+    if ((response.ok || response.status === 401 || forLogin && response.status === 409) && pendingSignout()?.id === pending.id) {
+      unlockDevice(); connectionState = "online"; connectionBanner();
+      toast(response.status === 409 ? "Local access cleared. Sign in to the account you want to use." : "Signed out. The previous browser session is no longer active.");
+      return true;
+    }
+    if (!pendingSignout()) return true;
+  } catch { /* Local sign-out remains effective while server logout is uncertain. */ }
+  connectionBanner(); return false;
+}
+async function checkConnection() {
+  const epoch = ++connectionEpoch;
+  connectionState = "checking"; connectionBanner();
+  if (pendingSignout()) { await finishSignout(); return; }
+  try {
+    const session = await api("/api/session");
+    if (epoch !== connectionEpoch) return;
+    if (state.session?.user && session.user?.id !== state.session.user.id) {
+      await forgetLocalAccess();
+      toast("Your session expired or changed. Sign in again. Local private data has been cleared.");
+      return;
+    }
+    connectionState = "online"; connectionBanner();
+    toast("Connected. Review pending information requests in the Field desk before sending.");
+  } catch (error) {
+    if (epoch === connectionEpoch) { connectionState = "offline"; connectionBanner(); }
+  }
+}
+function externalPrivacyChange(change) {
+  if (!change?.external || !["account", "clear", "event"].includes(change.type)) return;
+  if (change.type === "event" && change.eventId) {
+    eventEpochs.set(change.eventId, (eventEpochs.get(change.eventId) || 0) + 1);
+    state.offlineArchive = null;
+    state.events = state.events.filter((event) => event.id !== change.eventId);
+    if (state.event?.id === change.eventId || ["offline", "field"].includes(state.view)) {
+      interactionEpoch++; state.busy = false;
+      resetPrivateViews(); state.event = null; state.members = []; state.transitions = [];
+      state.view = "events"; closeModal(true); render();
+    }
+    return;
+  }
+  authEpoch++; connectionEpoch++;
+  interactionEpoch++; state.busy = false;
+  resetPrivateViews(); state.offlineArchive = null;
+  state.event = null; state.events = []; state.members = []; state.transitions = [];
+  state.session = { ...(state.session || { version: "0.10.0" }), user: null };
+  state.view = "events"; closeModal(true); render();
+  toast("Local account access changed in another tab. Reconnect before continuing.");
+}
+offline.subscribeArchive?.(externalPrivacyChange);
+fieldStore.subscribe?.((change) => {
+  if (change?.external && change.type === "invalidate") externalPrivacyChange({ ...change, type: change.eventId ? "event" : "clear" });
+});
+window.addEventListener("storage", (event) => {
+  if (event.key === LOCAL_SIGNOUT_KEY && event.newValue) {
+    memorySignout = null;
+    externalPrivacyChange({ external: true, type: "clear" });
+  }
 });
 async function openOffline() {
-  state.offlineArchive = await offline.loadArchive().catch(() => ({ accountId: null, records: [], lastChecked: null }));
+  if (pendingSignout()) { await forgetLocalAccess(); return; }
+  const epoch = authEpoch, capturedEvents = new Map(eventEpochs);
+  const archive = await offline.loadArchive().catch(() => ({ accountId: null, records: [], lastChecked: null }));
+  if (epoch !== authEpoch || pendingSignout()) return;
+  archive.records = archive.records.filter((record) => (capturedEvents.get(record.event.id) || 0) === (eventEpochs.get(record.event.id) || 0));
+  state.offlineArchive = archive;
   state.view = "offline";
   closeModal(true);
   render();
 }
 async function start() {
+  if (pendingSignout()) {
+    await finishSignout();
+    if (pendingSignout()) { await forgetLocalAccess(); return; }
+  }
   try {
+    const epoch = authEpoch;
     const previousUser = state.session?.user?.id;
-    state.session = await api("/api/session");
-    if (previousUser !== state.session.user?.id) {
-      resetPrivateViews();
-    }
+    const session = await api("/api/session");
+    if (epoch !== authEpoch || pendingSignout()) return;
+    state.session = session;
+    if (previousUser !== state.session.user?.id) resetPrivateViews();
     await offline.setAccount(state.session.user?.id || null).catch(() => {});
+    if (epoch !== authEpoch || pendingSignout()) return;
+    await fieldStore.setAccount(state.session.user?.id || null).catch(() => {});
+    if (epoch !== authEpoch || pendingSignout()) return;
     state.offlineArchive = null;
     state.view = "events";
     if (state.session.user) await loadEvents();
     else render();
-  } catch {
+  } catch (error) {
+    if (error.status === 401 || pendingSignout()) { render(); return; }
     await openOffline();
   }
 }
-offline.registerOfflineShell().catch(() => {});
+install.init().catch(() => {});
 start();

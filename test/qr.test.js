@@ -194,3 +194,51 @@ test("hiding the page releases a running camera", async (t) => {
   assert.equal(camera.pending.size, 0);
   assert.equal(camera.video.srcObject, null);
 });
+
+test("camera permission deadline provides manual fallback and stops a late grant", async (t) => {
+  let grant, fixtureStream, message;
+  const camera = cameraFixture(t, (_constraints, stream) => { fixtureStream = stream; return new Promise(resolve => { grant = resolve; }); });
+  const stop = await startScanner(camera.video, () => assert.fail("No result after timeout"), error => { message = error.message; }, { permissionTimeoutMs: 10 });
+  assert.match(message, /printed code|photo/);
+  assert.equal(camera.pending.size, 0);
+  grant(fixtureStream); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(camera.stats().stopped, 1);
+  assert.equal(camera.video.srcObject, null);
+  assert.equal(camera.listeners.size, 0);
+  stop();
+});
+
+test("a stalled camera playback releases tracks after its deadline", async (t) => {
+  const camera = cameraFixture(t, async (_constraints, stream) => stream);
+  camera.video.play = () => new Promise(() => {});
+  let message;
+  await startScanner(camera.video, () => assert.fail("No result"), error => { message = error.message; }, { permissionTimeoutMs: 10 });
+  assert.match(message, /could not start in time/);
+  assert.equal(camera.stats().stopped, 1);
+  assert.equal(camera.video.srcObject, null);
+  assert.equal(camera.listeners.size, 0);
+});
+
+test("an unproductive scan stops automatically without retaining a camera", async (t) => {
+  const camera = cameraFixture(t, async (_constraints, stream) => stream);
+  let message;
+  await startScanner(camera.video, () => assert.fail("No frame requested"), error => { message = error.message; }, { scanTimeoutMs: 10 });
+  await new Promise(resolve => setTimeout(resolve, 25));
+  assert.match(message, /camera has stopped/);
+  assert.match(message, /printed code/);
+  assert.equal(camera.stats().stopped, 1);
+  assert.equal(camera.pending.size, 0);
+  assert.equal(camera.listeners.size, 0);
+});
+
+test("a stalled image decode times out and revokes its local URL", async (t) => {
+  let image, revoked = 0, removed = 0;
+  class StalledImage { constructor() { image = this; } set src(_value) {} removeAttribute(name) { assert.equal(name, "src"); removed++; } }
+  globals(t, { Image: StalledImage });
+  t.mock.method(URL, "createObjectURL", () => "blob:stalled");
+  t.mock.method(URL, "revokeObjectURL", () => { revoked++; });
+  const file = new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0])], { type: "image/png" });
+  await assert.rejects(scanImage(file, { timeoutMs: 10 }), /time|printed code/);
+  assert.equal(revoked, 1); assert.equal(removed, 1);
+  assert.equal(image.onload, null); assert.equal(image.onerror, null);
+});

@@ -12,9 +12,9 @@ const fail = (message) => { const error = new Error(message); error.status = 400
 export function exchangeIdentifier(value, label = "Identifier") { if (typeof value !== "string" || !UUID.test(value)) fail(`${label} must be a UUID.`); return value.toLowerCase(); }
 export function validateExchangeRequest(value, action) {
   const fieldMap = { create: ["requestId", "characterId"], join: ["requestId", "characterId", "code"], offer: ["requestId", "characterId", "version", "readingIds", "items", "resources"], confirm: ["requestId", "characterId", "version"], cancel: ["requestId", "characterId", "version"], reject: ["requestId", "characterId", "version"] };
-  const fields = Object.hasOwn(fieldMap, action) ? fieldMap[action] : null;
+  const fields = Object.hasOwn(fieldMap, action) ? [...fieldMap[action], ...(["create", "join", "offer"].includes(action) ? ["informationOnly"] : [])] : null;
   if (!fields) fail("Unsupported exchange action.");
-  characterRecord(value, fields, "Exchange request", fields.filter(field => !["items", "resources"].includes(field)));
+  characterRecord(value, fields, "Exchange request", fields.filter(field => !["items", "resources", "informationOnly"].includes(field)));
   const result = { requestId: exchangeIdentifier(value.requestId, "Request identifier"), characterId: exchangeIdentifier(value.characterId, "Character identifier") };
   if (fields.includes("version")) result.version = characterInteger(value.version, "Exchange version", 1, 2147483647);
   if (action === "join") { if (typeof value.code !== "string" || !EXCHANGE_CODE_PATTERN.test(value.code)) fail("Enter the 12-character exchange code."); result.code = value.code; }
@@ -28,6 +28,10 @@ export function validateExchangeRequest(value, action) {
     const assets = validateTradeAssets({ items: Object.hasOwn(value, "items") ? value.items : [], resources: Object.hasOwn(value, "resources") ? value.resources : [] });
     if (Object.hasOwn(value, "items")) result.items = assets.items;
     if (Object.hasOwn(value, "resources")) result.resources = assets.resources;
+  }
+  if (Object.hasOwn(value, "informationOnly")) {
+    if (value.informationOnly !== true || Object.hasOwn(value, "items") || Object.hasOwn(value, "resources")) fail("Saved information requests must be marked information-only and cannot contain item or resource fields.");
+    result.informationOnly = true;
   }
   return result;
 }

@@ -1,14 +1,19 @@
 # ORACLE
 
-**LARP Field Kit** · v0.9.0 · Green Shoe Garage
+**LARP Field Kit** · v0.10.0 · Green Shoe Garage
 
 ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. Shared screens can present selected briefings, cooperative procedures, and explicitly fictional prop readings.
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-Batch 9 (v0.9.0, database schema 10), release commit `4133a6b51a9a4f2471723f88bd6d6f695a798b2a`, is fully deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). STAGEHAND completes all twelve gameplay instruments. Both exact-commit PostgreSQL CI runs, Railway staging, and the complete remote all-twelve/all-three-theme workflow passed; Railway production and all 56 exact-commit public GET checks passed. The existing operator remains enabled with identity/password preserved. See [docs/STATUS.md](docs/STATUS.md) for evidence. Scheduled database backups remain outstanding because the Railway workspace reports zero managed-backup capacity.
+Batch 10 (v0.10.0, database schema 10) is implemented and awaiting exact-commit GitHub/Railway release gates. Field desk adds explicitly saved local notes and reviewed information-only requests, with install/update and connection handling. The complete local three-theme rehearsal passed 1,075 reads/1,155 writes; full verification passed 290 tests (278 passed, zero failures, 12 deliberate TCP-only skips). The last verified live release remains Batch 9, commit `4133a6b51a9a4f2471723f88bd6d6f695a798b2a`, with all twelve instruments and 56 production public checks passed. See [docs/STATUS.md](docs/STATUS.md). Scheduled backups and physical-device/human field testing remain outstanding.
 
 ## What works in this release
+
+- Field desk notes saved explicitly on this device for a previously checked own character; account/event clearing protects local scope.
+- Saved invitation, join, and reading-only offer requests with visible pending/uncertain/review states, explicit review before sending, original request identifiers, and fresh authorization. Both players still confirm online.
+- Install instructions and app icons, a complete versioned public offline shell, bounded connection failures, and explicitly applied updates that protect other active tabs.
+- Camera/photo/manual-code fallbacks and timestamped player/organizer paper aids prepared with current permission checks.
 
 - STAGEHAND encounter preparation, performer/prop/staff readiness, scoped staff access, party queues, explicit member acceptance, and whole-party dispatch within current capacity.
 - Server return deadlines and overdue indicators, acknowledged returns/cancellations, scene/event pauses, and whole-party redirection that clears prior consent.
@@ -56,7 +61,7 @@ Batch 9 (v0.9.0, database schema 10), release commit `4133a6b51a9a4f2471723f88bd
 - Versioned JSON event packs: private organizer backups and player material with organizer-only content removed.
 - Dark and outdoor reading settings, reduced motion, collapsible navigation, and clear manual-save status.
 
-**Briefing** and twelve gameplay instruments—**RELIC**, **DEAD DROP**, **CIPHERBOX**, **WAYFINDER**, **TRACE**, **WHISPER**, **BROADSIDE**, **BAZAAR**, **OATHBOOK**, **SIGIL**, **STATIC**, and **STAGEHAND**—are available optional instruments. Character badges identify people; prop labels open event instruments. Temporary exchange QR codes support mutually confirmed introductions, selected reading copies, and atomic item/resource barter. Coordinated multi-device timing and offline action synchronization remain later work. Conditions and outcomes are bounded data; they do not run arbitrary scripts.
+**Briefing** and twelve gameplay instruments—**RELIC**, **DEAD DROP**, **CIPHERBOX**, **WAYFINDER**, **TRACE**, **WHISPER**, **BROADSIDE**, **BAZAAR**, **OATHBOOK**, **SIGIL**, **STATIC**, and **STAGEHAND**—are available optional instruments. Character badges identify people; prop labels open event instruments. Temporary exchange QR codes support mutually confirmed introductions, selected reading copies, and atomic item/resource barter. Coordinated multi-device timing remains later work. Field desk supports only the explicitly reviewed information requests described below; it does not queue trades or live instrument actions. Conditions and outcomes are bounded data; they do not run arbitrary scripts.
 
 ## Stack and project layout
 
@@ -84,7 +89,10 @@ Node.js 22 (22.9 or newer) or 24, a small native HTTP server, PostgreSQL, and pl
 | `src/trace.js`, `public/trace-model.js`, `public/trace-ui.js` | Private/shared investigation records and permission-filtered citations/connections |
 | `public/exchanges-ui.js`, `public/exchange-code.js` | Temporary QR/code pairing, offers, confirmation, and resume |
 | `public/adventure-*.js`, `public/prop-code.js` | Organizer/player workflows and printed prop identity |
-| `public/offline.js`, `public/sw.js` | Account-scoped saved readings and public static caching |
+| `public/offline.js`, `public/sw.js` | Account-scoped saved readings and complete versioned public static caching |
+| `public/field-store.js`, `public/field-sync.js` | Scoped local field notes and explicitly reviewed information-only requests |
+| `public/field-ui.js`, `public/field.css` | Field desk, visible request states, and authorized paper fallback aids |
+| `public/connection.js`, `public/install.js`, `public/manifest.webmanifest` | Bounded transport, install guidance, and protected app updates |
 | `public/characters-ui.js`, `public/qr.js` | Character workflow, portraits, printable badges, and local scanning |
 | `src/db.js` | Database pool, transactions, checked migrations |
 | `src/server.js` | Startup, readiness, graceful shutdown |
@@ -153,7 +161,7 @@ Print labels contain only event name, instrument title/type, code, and QR. Keep 
 3. Each player selects up to ten permitted readings from their own journal and, with BAZAAR enabled, owned inventory quantities and fictional resources, then saves their offer. Both see the partner's current public character identity and offered titles; the other player's reading text/audio remains hidden before completion.
 4. Both players explicitly confirm the same offer revision. Only server-confirmed completion creates contacts, received journal readings, atomic item/resource transfers, and receipts. Leave both offers empty for an introduction without sharing readings.
 
-The invitation expires 15 minutes after creation; changes do not extend it. Changing either offer clears both confirmations. A changed organizer policy also clears confirmations on pending exchanges. Either participant may cancel; the invited player may reject. Refresh/resume reads current server state. On an uncertain request, use the explicit retry to reconcile that same request. No pending exchange or offer is queued offline.
+The invitation expires 15 minutes after creation; changes do not extend it. Changing either offer clears both confirmations. A changed organizer policy also clears confirmations on pending exchanges. Either participant may cancel; the invited player may reject. Refresh/resume reads current server state. On an uncertain request, use the explicit retry to reconcile that same request. Field desk can separately save a reviewed invitation/join/reading-only offer request for later transmission; asset offers and confirmations require the live exchange.
 
 An exchange can copy at most 2 MB of readings in total. Receiving an already-known original does not duplicate it, including a reading shared back to its original reader. Copies retain the reading as discovered; they do not complete instruments, set flags, or grant skills. Items and resources move only when separately included in the reviewed trade terms. Peer offers show selected names and quantities, never private inventory notes or the player's other balances/items. If an offered item changes, or any final balance, stock, or inventory limit fails, the entire confirmation rolls back and both players must review current terms. Completed receipts remain readable after expiry or a partner's departure while you retain access to the assigned character and event.
 
@@ -170,7 +178,7 @@ Under **Sharing permissions**, organizers choose **Shareable**, **Restricted**, 
 
 Agreements support 2–8 participant characters from distinct accounts, up to five independent witnesses, and up to 16 fixed resource transfers. Expiration prevents new acceptance, witnessing, or settlement; organizers may still record a narrative ruling. Private agreement access belongs to the captured account and currently assigned character, or authorized event managers. Reassignment does not hand the original agreement or trade journal receipt to a new player. If a newly proposed revision names a new participant, that account can see the current terms and subsequent authorized history, not earlier private terms; event managers retain the full review history. Item loans, borrowing, escrow, external payments, and automatic narrative adjudication are outside this batch.
 
-Current balances, shops, offers, agreements, and detailed transaction records require connectivity. An already-authorized completed trade journal receipt may remain in the ordinary saved-readings archive; it does not establish current balances or spending rights. Unsaved text and uncertain requests remain only in the open tab. Use the explicit retry after an uncertain response to reconcile the same request; a local tap never establishes completion.
+Current balances, shops, offers, agreements, and detailed transaction records require connectivity. An already-authorized completed trade journal receipt may remain in the ordinary saved-readings archive; it does not establish current balances or spending rights. Unsaved economy/agreement text and their uncertain requests remain only in the open tab. Use the explicit retry after an uncertain response to reconcile the same request; a local tap never establishes completion.
 
 ## Investigate and follow the living story
 
@@ -199,11 +207,25 @@ Rumors and publications remain server-backed. A withdrawal or audience change pr
 
 SIGIL timing is server-authoritative. A visible active host renews a 20-second connectivity lease; missed contact pauses at the lease boundary and preserves the remaining active time. If the actual challenge deadline arrives first, it fails and records its outcome on the next authorized server interaction. If access or the configured outcome becomes invalid, staff can see a recorded cancellation instead of a result. The interface freezes controls when connectivity is uncertain; it never declares local success. After reconnecting, review the server's current state and explicitly resume a paused attempt. Coordinated multi-device timing is outside this release.
 
-## Saved readings and connectivity
+## Saved readings, Field desk, and connectivity
 
-A successfully loaded player journal can be saved automatically on this device. **Saved readings** shows only previously revealed text/audio, with its last-check time and read-only status. The service worker caches the public app shell; it never caches API responses. The device must first load ORACLE and the readings while connected, and its browser must support the required storage.
+Load ORACLE while connected first. **Install ORACLE** provides browser install instructions, including Safari's Share → Add to Home Screen. The install panel reports when the complete public app is available offline. Installation support depends on the browser; actual iPhone/Android installation and physical-device testing remain outstanding. The service worker caches only allowlisted public assets, never API responses or credentials. **Apply update and reload this tab** asks you to review unsaved work; it does not force other active tabs to reload. Save Field desk notes first and finish camera/cooperative interactions before applying an update. Other authoring forms remain in page memory.
 
-Offline mode cannot sign in, check current permissions, unlock a clue, submit an answer, change inventory, reserve a scene, or complete an exchange. No actions are queued for replay. Completed exchange readings, receipts, and authorized WHISPER snapshots use the same journal archive. Each snapshot retains the existing limit of 1,000 journal entries and 3 MB; larger journals require connectivity for their complete contents. Codes, offers, contacts, pending requests, TRACE notebooks, hidden truth, current news, current balances, shops, pending trade offers, detailed transaction objects, and agreement terms/signatures are not stored offline. Completed trade journal receipt text may be saved with other already-authorized journal readings. Reconnect to continue play. Saved readings belong to the last signed-in account; logout/account switching and known access revocation clear the relevant cache. **Clear saved readings** removes local copies. Revocation cannot be discovered while disconnected, so use device access controls for private readings on shared hardware. This is basic reading continuity, not a local event server or full offline synchronization.
+A successfully loaded player journal can be saved automatically on this device. **Saved readings** shows previously authorized text/audio with its last-check time and read-only status. Each snapshot retains the 1,000-entry/3 MB limit; larger journals require connectivity. Completed exchange receipts and authorized WHISPER, SIGIL, and STATIC journal text can be included. Current inventories, balances, shops, trade terms, agreements, TRACE notebooks, staff rosters, hidden answers, live scenes/timers, and current fictional signals are excluded.
+
+To keep a field note or prepare an information request:
+
+1. Open **Field desk** and, while connected, select **Check my characters in this event**. Choose your own approved character. Stored labels describe the last permission check, not a current session.
+2. Enter a field note and select **Save note on this device**. This saves that note only; it does not update your character, journal, or another authoring form. Typed text remains in the tab until saved.
+3. Use **Save invitation request** or **Save join request**, or save a reading-only offer from a currently opened exchange. These keep an explicit request on this device; they create no invitation or transfer until sent. No items/resources or confirmations are queued.
+4. When connected, choose **Review and send**, review the exact saved request, acknowledge it, and select **Check access and send**. ORACLE checks the actual account, event access, character assignment, current policy, and exchange terms. Both players must still review and confirm the exchange online.
+5. Use **Discard unsent request** before its first transmission. After a lost response, **Review exact retry** retains the original identifier. **Stop local retries** does not cancel anything the server may already have received. **Remove local receipt** removes only the local record.
+
+Nothing sends automatically on reconnect. Local requests require review after 24 hours; a server invitation may expire sooner. Changed terms, revoked access, expired sessions, or restricted readings require visible review, with no automatic repair or confirmation. Saving an invitation request does not reserve a code before transmission. A confirmed request means that individual server request succeeded; it does not mean both players completed an exchange. Field desk holds at most 50 requests, 30 checked contexts, and 12,000 characters per note. If storage is blocked or full, the interface reports the failure instead of claiming the data was saved.
+
+Offline mode cannot sign in, verify current permissions, make a protected discovery, submit a puzzle answer, change inventory, spend resources, reserve a scene, advance a timer, or complete an exchange. Saved content belongs to the last checked account. Logout/account switching and known access revocation clear relevant local scope; **Clear device data** clears both field data and saved readings. Disconnected devices cannot discover remote revocation until reconnecting. Device access controls remain important for private readings. ORACLE is not a local event server.
+
+Under **Prepare paper fallback aids**, use **Prepare player aid** for your approved identity, optional selected journal readings, code guidance, and blank observation rows. An organizer can prepare a minimal list of approved character names and scene titles/status/capacity with blank tracking columns. **Recheck and print** checks access again. These timestamped historical lists contain no hidden answers or private staff notes by default, are not automatically stored offline, and cannot authorize transfers, discoveries, or scene places.
 
 ## Build and run an event
 
@@ -374,6 +396,8 @@ Follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Staging and production use sepa
 - **An adventure action is blocked:** Confirm that the event is Live or Rehearsal, the character is approved and assigned to you, the instrument is enabled, and its earlier discoveries are complete.
 - **A message rejects the printed code:** Its release word is separate from the prop label; find that word in an earlier reading.
 - **Adventure editing is locked:** Make a rehearsal copy. Only a dedicated copy in Rehearsal can have its progress reset before editing.
+- **A saved request needs review:** Sign in to the original account and open current exchanges. Check current character access, expiry, terms, and sharing policy. Do not create a replacement UUID to guess whether an uncertain request succeeded.
+- **An app update is waiting for other tabs:** Finish and close older ORACLE tabs, then apply the update explicitly. Save Field desk notes before reloading; other unsaved forms are not durable drafts.
 - **No readings appear offline:** Open the adventure and reveal its readings while connected first. Browser storage may be unavailable or have been cleared.
 - **A badge is unavailable:** Sign in to the correct event. Only approved characters resolve; an edit, retirement, removed membership, or replaced code may invalidate an old badge.
 - **A character cannot be created or assigned:** Check that player creation is enabled and the current event member has room under the active-character limit.

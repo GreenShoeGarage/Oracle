@@ -2,16 +2,16 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 2.1 · September 6, 2026
+Development roadmap · Planning revision: 2.2 · September 6, 2026
 
-Status: Batch 9 (v0.9.0, schema 10), release commit `4133a6b51a9a4f2471723f88bd6d6f695a798b2a`, is fully deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Both exact-commit PostgreSQL CI runs, Railway staging, the complete remote all-twelve/all-three-theme workflow, and Railway production passed; all 56 production public GET checks passed. STAGEHAND completes all twelve gameplay instruments. The existing operator remains enabled with identity/password preserved. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 10 is next; Batches 10–12 remain planned. See [STATUS.md](STATUS.md).
+Status: Batch 10 (v0.10.0, schema 10) is implemented and awaiting exact-commit GitHub/Railway release gates. Its complete local rehearsal passed 1,075 reads/1,155 writes across all twelve instruments and three themes. Batch 9, release `4133a6b51a9a4f2471723f88bd6d6f695a798b2a`, remains the last verified live release. Batch 11 follows this release; Batches 11–12 remain planned. Scheduled backups, actual two-device/installed-browser acceptance, and human field testing remain outstanding. See [STATUS.md](STATUS.md).
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
 
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
-The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are delivered in v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–9 are deployed; Batches 10–12 remain planned.
+The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are delivered in v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–9 are deployed; Batch 10 implementation awaits exact release gates; Batches 11–12 remain planned.
 
 **Product commitments**
 
@@ -152,6 +152,12 @@ Completion gate: An organizer can run multiple encounters, delay or cancel one, 
 
 **Batch 10 — v0.10: Offline behavior and field resilience**
 
+Implementation status: Implemented; exact-commit release gates pending. Field desk explicitly saves separate field notes and immutable invitation/join/reading-only-offer requests for a previously checked own approved character. Reconnect never sends automatically: the player reviews one request, current account/access/terms/policy are checked, and both exchange confirmations remain online. Pending, uncertain, review-needed, and server-confirmed request states stay distinct; an unsent request can be discarded, while an attempted request can only stop local retries. Stable UUID replay does not duplicate effects or bypass current permissions. Cross-tab storage generations/leases prevent stale scope restoration and competing sends.
+
+The installable public shell is cached completely with version checks and bounded fetching; updates require explicit application and protect other active tabs. Camera denial/timeouts retain photo/manual alternatives. Player aids and minimal organizer lists require current permission checks and are timestamped historical paper, not a private roster cache. Only Field desk notes use explicit durable local Save; other authoring forms remain in page memory. Schema 10 and pack formats 1 remain unchanged, but recovery builds must retain the new information-only/account-binding API contract.
+
+The complete local HTTP rehearsal passed 1,075 reads/1,155 writes, preserving all twelve instruments in Fantasy, Cyberpunk, and Wasteland and adding guarded information-only replay, expired/invalidated authentication, stale terms, current sharing policy, rejected asset payloads, unchanged inventory/balances, one-time online receipts, and revocation. The focused new exchange suite passed seven tests; existing exchange coverage passed fourteen with one TCP-only skip. Store/sync checks passed ten/five; independent HTTP/shared IndexedDB integration passed ten; Field desk/exchange UI passed eight/four; the root DOM/API walkthrough passed nine groups with zero uncaught errors. Transport passed three, while offline/cache, QR, and install checks passed twenty-one/fourteen/four (39 total), including archive upgrade/preservation. Full local `npm run verify` passed 290 tests (278 passed, zero failures, 12 deliberate TCP-only skips), with a complete exit-0 footer and syntax/version/static asset checks. Exact-commit GitHub/Railway evidence remains pending. These automated checks do not establish actual installed-browser/two-device behavior or a human field pilot. The physical-device portion of the completion gate below remains outstanding and must be recorded in Batch 11 rather than claimed as passed.
+
 Harden the mobile installable web app, caching, low-bandwidth behavior, camera fallbacks, and reconnect handling. Preserve allowed journal content and local drafts. Introductions and information-sharing requests may be queued with an explicit pending status and revalidated on reconnect. Pending work can be canceled before transmission.
 
 Keep authoritative trades, protected reveals, shared stock, and live encounter state dependent on server confirmation. Queue entries carry stable request identifiers so reconnects do not repeat effects. Expired sessions and revoked membership require fresh authorization; account switching/sign-out clears the relevant local cache. Sensitive unrevealed content stays on the server.
@@ -209,4 +215,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next development batch: Batch 10 — offline behavior and field resilience. Batch 9 is fully deployed and all twelve instruments passed the connected three-theme workflow; scheduled database backups remain a separate operational item. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next development batch after the pending Batch 10 release gates: Batch 11 — beta pilot and usability pass. Batch 9 remains the last verified deployed release; actual two-device/installed-browser acceptance, human field testing, and scheduled database backups remain explicit outstanding items. Public branding uses ORACLE with the subtitle “LARP Field Kit.”

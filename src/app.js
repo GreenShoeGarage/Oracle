@@ -242,6 +242,18 @@ export function createApp({
           "/adventure.css": ["adventure.css", "text/css"],
           "/adventure-organizer.css": ["adventure-organizer.css", "text/css"],
           "/offline.js": ["offline.js", "text/javascript"],
+          "/connection.js": ["connection.js", "text/javascript"],
+          "/field-store.js": ["field-store.js", "text/javascript"],
+          "/field-sync.js": ["field-sync.js", "text/javascript"],
+          "/field-ui.js": ["field-ui.js", "text/javascript"],
+          "/field.css": ["field.css", "text/css"],
+          "/install.js": ["install.js", "text/javascript"],
+          "/manifest.webmanifest": ["manifest.webmanifest", "application/manifest+json"],
+          "/icon-192.png": ["icon-192.png", "image/png"],
+          "/icon-512.png": ["icon-512.png", "image/png"],
+          "/icon-maskable-512.png": ["icon-maskable-512.png", "image/png"],
+          "/apple-touch-icon.png": ["apple-touch-icon.png", "image/png"],
+          "/app-icon.svg": ["app-icon.svg", "image/svg+xml"],
           "/prop-code.js": ["prop-code.js", "text/javascript"],
           "/sw.js": ["sw.js", "text/javascript"],
           "/exchange-model.js": ["exchange-model.js", "text/javascript"],
@@ -293,7 +305,7 @@ export function createApp({
         const file = await readFile(
           new URL(`../public/${asset[0]}`, import.meta.url),
         );
-        res.writeHead(200, { "Content-Type": `${asset[1]}; charset=utf-8` });
+        res.writeHead(200, { "Content-Type": asset[1].startsWith("image/") ? asset[1] : `${asset[1]}; charset=utf-8`, "X-ORACLE-Shell-Version": VERSION });
         return res.end(method === "HEAD" ? undefined : file);
       }
       if (
@@ -310,6 +322,17 @@ export function createApp({
             )
           ).rows[0]
         : null;
+      // Bind resumed work to the account that authored it before any API
+      // handler can disclose data or apply effects using a changed cookie.
+      if (user) res.setHeader("X-ORACLE-Account", user.id);
+      const expectedAccount = req.headers["x-oracle-expected-account"];
+      if (expectedAccount !== undefined) {
+        if (typeof expectedAccount !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(expectedAccount))
+          fail(401, "The expected account is invalid. Sign in again to continue.");
+        if (!user) fail(401, "Sign in to the original account before sending saved work.");
+        if (expectedAccount.toLowerCase() !== user.id)
+          fail(409, "Your account changed. Sign in to the original account before sending saved work.");
+      }
       if (path === "/api/session" && method === "GET")
         return send(res, 200, {
           user: user ? safeUser(user) : null,

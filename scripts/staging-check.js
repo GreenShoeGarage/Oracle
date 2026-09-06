@@ -28,9 +28,10 @@ if (publicOnly) {
   const publicMarker = `Public staging marker ${runId}`;
   const pass = (message) => console.log(`PASS ${message}`);
 
-  async function request(account, path, { method = "GET", body, status = 200 } = {}) {
+  async function request(account, path, { method = "GET", body, status = 200, expectedAccount = account?.id } = {}) {
     const headers = { Accept: "application/json" };
     if (account?.cookie) headers.Cookie = account.cookie;
+    if (expectedAccount && !path.startsWith("/api/auth/")) headers["X-Oracle-Expected-Account"] = expectedAccount;
     if (method !== "GET") {
       headers.Origin = origin;
       headers["Content-Type"] = "application/json";
@@ -1052,6 +1053,128 @@ if (publicOnly) {
     return { event, sceneA, sceneB, nodeId: destination.id, source, currentBulletinId, activePartyIds: [endingDispatch.id, endingWait.id], characterCount: (await request(owner, `${base}/characters`)).characters.length };
   }
 
+  async function fieldJourney(owner, player, event, assigned, definition, theme) {
+    const base = `/api/events/${event.id}`, exchangeBase = `${base}/exchanges`, [a, b] = assigned;
+    const relic = definition.nodes.find((node) => node.id === "evidence-core");
+    const overview = (participant) => request(participant.account, `${exchangeBase}?characterId=${participant.character.id}`);
+    const detail = async (participant, id) => (await request(participant.account, `${exchangeBase}/${id}?characterId=${participant.character.id}`)).exchange;
+    const post = (participant, suffix, body, status = 200, extra = {}) => request(participant.account, `${exchangeBase}${suffix}`, { method: "POST", body, status, ...extra });
+    const offer = (participant, id, body, status = 200, extra = {}) => request(participant.account, `${exchangeBase}/${id}/offer`, { method: "PUT", body, status, ...extra });
+    const assets = async (participant) => {
+      const current = await request(participant.account, `${base}/bazaar?characterId=${participant.character.id}`);
+      return { inventory: current.inventory, balances: current.balances, receipts: current.receipts };
+    };
+    const beforeAssets = await Promise.all(assigned.map(assets));
+    const beforeJournals = await Promise.all(assigned.map((participant) => request(participant.account, `${base}/adventure/play?characterId=${participant.character.id}`)));
+    for (const participant of assigned) {
+      assert.equal((await request(participant.account, "/api/session")).user.id, participant.account.id, "Reconnect must verify the actual current account before sending stored work.");
+      await request(participant.account, base);
+      const current = (await request(participant.account, `${base}/characters/${participant.character.id}`)).character;
+      assert.equal(current.userId, participant.account.id, "Reconnect must verify current ownership of the chosen character.");
+      assert.equal(current.status, "approved");
+    }
+    const createInput = { requestId: randomUUID(), characterId: a.character.id, informationOnly: true };
+    await post(a, "", createInput, 409, { expectedAccount: null });
+    await post(a, "", createInput, 409, { expectedAccount: b.account.id });
+    await post(a, "", createInput, 401, { expectedAccount: "invalid-account-marker" });
+    await post(b, "", { ...createInput, requestId: randomUUID() }, 404);
+    const created = await post(a, "", createInput, 201);
+    const exchangeId = created.exchange.id, originalExpiry = created.exchange.expiresAt;
+    const lifetime = Date.parse(originalExpiry) - Date.parse(created.exchange.serverTime);
+    assert.ok(lifetime > 14 * 60000 && lifetime <= 15 * 60000, "The marked creation retains the server's bounded fifteen-minute invitation deadline.");
+    const createdReplay = await post(a, "", createInput);
+    assert.equal(createdReplay.outcome.replayed, true);
+    assert.equal(createdReplay.exchange.id, exchangeId, "Recovering an unacknowledged create response must return its original exchange.");
+    assert.equal((await overview(a)).sessions.filter((row) => row.id === exchangeId).length, 1);
+    const joinInput = { requestId: randomUUID(), characterId: b.character.id, code: created.exchange.code, informationOnly: true };
+    await post(b, "/join", joinInput, 409, { expectedAccount: a.account.id });
+    assert.equal((await detail(a, exchangeId)).status, "waiting", "An account mismatch must not pair another account's queued invitation.");
+    let paired = (await post(b, "/join", joinInput)).exchange;
+    const joinedReplay = await post(b, "/join", joinInput);
+    assert.equal(joinedReplay.outcome.replayed, true);
+    assert.equal(joinedReplay.exchange.version, paired.version, "Join replay must not repeat pairing or advance the offer version.");
+    assert.equal(paired.own.confirmed, false);
+    assert.equal(paired.partner.confirmed, false);
+    const readings = await Promise.all(assigned.map(async (participant) => {
+      const reading = (await overview(participant)).readings.find((row) => row.shareable && row.type === "relic");
+      assert.ok(reading, "The reconnect offer must refer only to an existing permitted journal reading.");
+      return reading;
+    }));
+    const offerInput = { requestId: randomUUID(), characterId: a.character.id, version: paired.version, readingIds: [readings[0].id], informationOnly: true };
+    await offer(a, exchangeId, { ...offerInput, items: [] }, 400);
+    await offer(a, exchangeId, { ...offerInput, resources: [] }, 400);
+    await post(a, `/${exchangeId}/confirm`, { requestId: randomUUID(), characterId: a.character.id, version: paired.version, informationOnly: true }, 400);
+    paired = (await offer(a, exchangeId, offerInput)).exchange;
+    const offeredReplay = await offer(a, exchangeId, offerInput);
+    assert.equal(offeredReplay.outcome.replayed, true);
+    assert.equal(offeredReplay.exchange.version, paired.version, "An identical reading-offer retry must not change its version or terms.");
+    assert.deepEqual(offeredReplay.exchange.own.offered, paired.own.offered);
+    const staleOffer = { ...offerInput, requestId: randomUUID(), version: paired.version, readingIds: [] };
+    paired = (await offer(b, exchangeId, { requestId: randomUUID(), characterId: b.character.id, version: paired.version, readingIds: [readings[1].id] })).exchange;
+    await offer(a, exchangeId, staleOffer, 409);
+    const afterConflict = await detail(a, exchangeId);
+    assert.equal(afterConflict.version, paired.version, "A stale queued offer must not silently adopt the newer revision.");
+    assert.deepEqual(afterConflict.own.offered.map((row) => row.id), [readings[0].id]);
+    let sharing = await request(owner, `${base}/sharing`);
+    const policies = sharing.nodes.map((node) => ({ nodeId: node.id, policy: node.policy }));
+    sharing = await request(owner, `${base}/sharing`, { method: "PUT", body: { version: sharing.version, policies: policies.map((row) => row.nodeId === relic.id ? { ...row, policy: "restricted" } : row) } });
+    paired = await detail(a, exchangeId);
+    await offer(a, exchangeId, { ...offerInput, requestId: randomUUID(), version: paired.version }, 403);
+    await offer(a, exchangeId, offerInput, 403);
+    await request(owner, `${base}/sharing`, { method: "PUT", body: { version: sharing.version, policies } });
+    paired = await detail(a, exchangeId);
+    assert.equal(paired.own.confirmed, false);
+    assert.equal(paired.partner.confirmed, false);
+    assert.equal(paired.expiresAt, originalExpiry, "Retries, stale terms, and policy changes must not extend the original invitation deadline.");
+    assert.equal(paired.receipt, null, "Sending queued creation, pairing and offer changes never confirms or completes an exchange.");
+    for (const [index, participant] of assigned.entries()) {
+      const journal = await request(participant.account, `${base}/adventure/play?characterId=${participant.character.id}`);
+      assert.deepEqual(journal.journal, beforeJournals[index].journal, "Queued information requests alone must not copy readings or create completion receipts.");
+    }
+    // Confirmation is deliberately a fresh online interaction, never a queued kind.
+    await post(a, `/${exchangeId}/confirm`, { requestId: randomUUID(), characterId: a.character.id, version: paired.version });
+    const completed = await post(b, `/${exchangeId}/confirm`, { requestId: randomUUID(), characterId: b.character.id, version: paired.version });
+    assert.equal(completed.exchange.status, "completed");
+    const completedJournals = await Promise.all(assigned.map((participant) => request(participant.account, `${base}/adventure/play?characterId=${participant.character.id}`)));
+    for (const [index, participant] of assigned.entries()) {
+      const oldReceipts = beforeJournals[index].journal.filter((row) => row.type === "exchange_receipt").length;
+      assert.equal(completedJournals[index].journal.filter((row) => row.type === "exchange_receipt").length, oldReceipts + 1, "Explicit bilateral confirmation creates exactly one new receipt per participant.");
+      assert.deepEqual(await assets(participant), beforeAssets[index], "Information-only completion must leave inventory, balances, and economic receipts untouched.");
+    }
+    for (const result of [await post(a, "", createInput), await post(b, "/join", joinInput), await offer(a, exchangeId, offerInput)]) {
+      assert.equal(result.outcome.replayed, true);
+      assert.equal(result.exchange.status, "completed", "Late exact retries must return current server-confirmed history.");
+    }
+    for (const [index, participant] of assigned.entries()) assert.deepEqual((await request(participant.account, `${base}/adventure/play?characterId=${participant.character.id}`)).journal, completedJournals[index].journal, "Late queued retries must not duplicate completed readings or receipts.");
+
+    const staleSession = { ...player }, reconnectCreate = { requestId: randomUUID(), characterId: b.character.id, informationOnly: true };
+    await request(player, "/api/auth/logout", { method: "POST", body: {}, status: 204 });
+    player.cookie = null;
+    await request(staleSession, exchangeBase, { method: "POST", body: reconnectCreate, status: 401 });
+    await request(player, "/api/auth/login", { method: "POST", body: { email: player.email, password: player.password } });
+    assert.equal((await request(player, "/api/session")).user.id, player.id);
+    const closing = (await post(b, "", reconnectCreate, 201)).exchange;
+    await post(b, `/${closing.id}/cancel`, { requestId: randomUUID(), characterId: b.character.id, version: closing.version });
+    await post(a, "/join", { requestId: randomUUID(), characterId: a.character.id, code: closing.code, informationOnly: true }, 409);
+    assert.equal((await detail(b, closing.id)).status, "cancelled", "A stored invitation cannot revive a closed server exchange after reconnect.");
+
+    let trade = (await post(a, "", { requestId: randomUUID(), characterId: a.character.id }, 201)).exchange;
+    const tradeCode = trade.code;
+    const item = beforeAssets[0].inventory.find((row) => row.quantity > 0);
+    assert.ok(item, "An ordinary online trade offer must use an actually owned item.");
+    trade = (await offer(a, trade.id, { requestId: randomUUID(), characterId: a.character.id, version: trade.version, readingIds: [], items: [{ itemId: item.id, quantity: 1, version: item.version }], resources: [] })).exchange;
+    const markedTradeOffer = { requestId: randomUUID(), characterId: a.character.id, version: trade.version, readingIds: [readings[0].id], informationOnly: true };
+    await offer(a, trade.id, markedTradeOffer, 409);
+    await post(b, "/join", { requestId: randomUUID(), characterId: b.character.id, code: tradeCode, informationOnly: true }, 409);
+    assert.deepEqual((await detail(a, trade.id)).own.assets, trade.own.assets, "An information-only request must not erase a saved asset offer.");
+    trade = (await post(b, "/join", { requestId: randomUUID(), characterId: b.character.id, code: tradeCode })).exchange;
+    await offer(b, trade.id, { requestId: randomUUID(), characterId: b.character.id, version: trade.version, readingIds: [readings[1].id], informationOnly: true }, 409);
+    await post(a, `/${trade.id}/cancel`, { requestId: randomUUID(), characterId: a.character.id, version: trade.version });
+    for (const [index, participant] of assigned.entries()) assert.deepEqual(await assets(participant), beforeAssets[index], "Account/session failures, stale requests and rejected asset mixing must leave every economic record unchanged.");
+    pass(`${theme} field reconnect HTTP: stable information-only creation/pairing/offers, exact replay, fresh account/character/policy/version checks, no automatic confirmation, unchanged assets, rejected asset mixing, invalidated session and closed invitation`);
+    return { exchangeId, joinInput, pendingRequest: { requestId: randomUUID(), characterId: b.character.id, informationOnly: true } };
+  }
+
   async function adventureJourney(owner, player) {
     const catalog = await request(owner, "/api/adventure-templates");
     assert.deepEqual(catalog.templates.map((template) => template.id).sort(), ["cyberpunk", "fantasy", "wasteland"], "All three complete starter adventures must be available.");
@@ -1186,6 +1309,7 @@ if (publicOnly) {
       event = completedInstruments.event;
       const completedOperations = await stagehandJourney(owner, player, event, assigned, operationsStaff, definition, version, theme);
       event = completedOperations.event;
+      const completedField = await fieldJourney(owner, player, event, assigned, definition, theme);
       const original = await request(owner, playPath(assigned[0].character));
       const originalInventory = (await request(owner, `/api/events/${event.id}/characters/${assigned[0].character.id}/inventory`)).inventory;
       const originalEconomy = completedEconomy ? await request(owner, `/api/events/${event.id}/bazaar?characterId=${assigned[0].character.id}`) : null;
@@ -1430,6 +1554,9 @@ if (publicOnly) {
       await request(player, `/api/events/${event.id}/sigil/runs/${completedInstruments.peerRunId}?characterId=${assigned[1].character.id}`, { status: 404 });
       await request(player, `/api/events/${event.id}/static?characterId=${assigned[1].character.id}`, { status: 404 });
       await request(player, `/api/events/${event.id}/stagehand?characterId=${assigned[1].character.id}`, { status: 404 });
+      await request(player, `/api/events/${event.id}/exchanges`, { method: "POST", body: completedField.pendingRequest, status: 404 });
+      await request(player, `/api/events/${event.id}/exchanges/join`, { method: "POST", body: completedField.joinInput, status: 404 });
+      pass(`${theme} field reconnect: current membership removal rejects both unsent information-only work and a previously committed request replay`);
       if (completedStory) {
         await request(player, `/api/events/${event.id}/story/play?characterId=${assigned[1].character.id}`, { status: 404 });
         await request(player, `/api/events/${event.id}/trace?characterId=${assigned[1].character.id}`, { status: 404 });

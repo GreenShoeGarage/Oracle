@@ -203,8 +203,14 @@ export function createExchangeHandler({ pool, config, helpers }) {
     }
     if (!action || (action === "offer" ? method !== "PUT" : method !== "POST") || (target === "join" && match[3])) fail(405, "Method not allowed.");
     const input = validateExchangeRequest(await body(req), action), targetId = target && target !== "join" ? identifier(target).toLowerCase() : null;
+    if (input.informationOnly && req.headers["x-oracle-expected-account"] === undefined) fail(409, "Reconnect and review this saved request using its original account.");
     const hash = createHash("sha256").update(JSON.stringify({ action, targetId, input })).digest("hex");
-    if (action === "join" && !(await limit(pool, `exchange-join:${eventId}:${user.id}`, 30))) fail(429, "Too many exchange-code attempts. Wait 15 minutes and try again.");
+    if (action === "join") {
+      // Durable retries are not new code guesses. The transaction below still
+      // checks the hash and current ownership before returning any result.
+      const known = (await pool.query("SELECT request_id FROM exchange_requests WHERE event_id=$1 AND actor_user_id=$2 AND request_id=$3", [eventId, user.id, input.requestId])).rows.length > 0;
+      if (!known && !(await limit(pool, `exchange-join:${eventId}:${user.id}`, 30))) fail(429, "Too many exchange-code attempts. Wait 15 minutes and try again.");
+    }
     let firstCreation = false;
     const result = await transaction(pool, async (db) => {
       let event = await membership(db, eventId, user.id, true);
@@ -223,6 +229,10 @@ export function createExchangeHandler({ pool, config, helpers }) {
         notFound();
       }
       const context = await projectionContext(db, event);
+      if (input.informationOnly && row) {
+        const savedAssets = (await db.query("SELECT snapshot FROM exchange_trade_offers WHERE event_id=$1 AND exchange_id=$2", [eventId, row.id])).rows;
+        if (savedAssets.some(entry => entry.snapshot.items?.length || entry.snapshot.resources?.length)) fail(409, "This exchange now includes items or resources. Review it online; a saved information request cannot change a trade.");
+      }
       if (previous) {
         if (previous.payload_hash !== hash) fail(409, "This request identifier was already used for different information.");
         if (pending(row)) {

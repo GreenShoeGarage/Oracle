@@ -10,6 +10,10 @@
     />
     <title>ORACLE · LARP Field Kit</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ORACLE" />
     <link rel="stylesheet" href="/style.css" />
     <link rel="stylesheet" href="/themes.css" />
     <link rel="stylesheet" href="/characters.css" />
@@ -25,10 +29,12 @@
     <link rel="stylesheet" href="/static.css" />
     <link rel="stylesheet" href="/stagehand.css" />
     <link rel="stylesheet" href="/props.css" />
+    <link rel="stylesheet" href="/field.css" />
     <script src="/app.js" type="module"></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
+    <div id="connection-status" class="connection-status" role="status" aria-live="polite" hidden></div>
     <div id="app">
       <main class="boot" id="main">
         <div class="wordmark">ORACLE</div>

@@ -15,6 +15,7 @@ export function createExchangeUI(ctx) {
   let selectedItems = new Map(), selectedResources = new Map();
   let selectedReadings = new Set(), draftVersion = null, offerDirty = false, offerConflict = false, scannerDirty = false;
   let pendingRequest = null, feedback = null, serverOffset = 0, scannerController = null, scannerStop = null, scanBusy = false;
+  let fieldQueueBusy = false, queueJoinMode = false, fieldContextAt = null, fieldContextReady = Promise.resolve(), fieldReadScopes = new WeakMap();
   const connected = () => navigator.onLine !== false;
   const eventId = () => dashboard?.event.id || state.event?.id;
   const base = (id = eventId()) => `/api/events/${id}/exchanges`;
@@ -23,13 +24,16 @@ export function createExchangeUI(ctx) {
   const isExpired = () => detail && activeStatuses.has(detail.status) && Date.parse(detail.expiresAt) <= now();
   const canWrite = () => connected() && !pendingRequest && detail && activeStatuses.has(detail.status) && !detail.readOnly && !isExpired();
   const canConfirm = () => canWrite() && detail.status === 'negotiating' && detail.partner && !detail.blockedReason && !detail.own.confirmed && !offerDirty && !offerConflict;
+  const canQueueField = () => Boolean(ctx.queueFieldRequest && dashboard?.character && selectedCharacterId && !pendingRequest && !fieldQueueBusy);
+  const hasSavedAssets = () => [detail?.own.assets, detail?.partner?.assets].some(assets => assets?.items?.length || assets?.resources?.length);
+  const canQueueOffer = () => Boolean(canQueueField() && detail && ['waiting', 'negotiating'].includes(detail.status) && !offerConflict && !isExpired() && !selectedItems.size && !selectedResources.size && !hasSavedAssets() && selectedReadings.size <= 10);
   const date = (value) => value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
   const status = (value) => `<span class="badge exchange-status ${esc(value)}">${esc(statusNames[value] || value)}</span>`;
   const formatCode = (value) => value.match(/.{1,4}/g)?.join('-') || value;
   function stopPolling() { if (pollTimer) clearTimeout(pollTimer); if (clockTimer) clearInterval(clockTimer); pollTimer = null; clockTimer = null; }
   function reset() {
     epoch++; modalEpoch++; stopPolling(); stopCamera(); accountId = null; dashboard = null; detail = null; selectedCharacterId = null;
-    selectedReadings.clear(); selectedItems.clear(); selectedResources.clear(); draftVersion = null; offerDirty = false; offerConflict = false; scannerDirty = false; pendingRequest = null; feedback = null; serverOffset = 0; scanBusy = false; pollBusy = false;
+    selectedReadings.clear(); selectedItems.clear(); selectedResources.clear(); draftVersion = null; offerDirty = false; offerConflict = false; scannerDirty = false; pendingRequest = null; feedback = null; serverOffset = 0; scanBusy = false; pollBusy = false; fieldQueueBusy = false; queueJoinMode = false; fieldContextAt = null; fieldContextReady = Promise.resolve(); fieldReadScopes = new WeakMap();
   }
   function ensureAccount() {
     const current = state.session?.user?.id || null;
@@ -37,10 +41,18 @@ export function createExchangeUI(ctx) {
     return current;
   }
   function currentContext(generation, who, id) { return generation === epoch && who && who === state.session?.user?.id && state.event?.id === id; }
+  function rememberFieldContext(result) {
+    if (!ctx.rememberFieldContext || !result?.event || !Array.isArray(result.characters)) return;
+    fieldContextAt = new Date().toISOString();
+    fieldContextReady = Promise.resolve(ctx.rememberFieldContext(result.event, result.characters, fieldReadScopes.get(result))).catch(() => {});
+    fieldReadScopes.delete(result);
+  }
   async function request(path, method = 'GET', data) {
     const who = ensureAccount();
-    const result = await api(path, method, data);
+    const readScope = method === 'GET' && /\/exchanges(?:\?[^#]*)?$/.test(path) && ctx.captureFieldScope ? await ctx.captureFieldScope() : null;
+    const result = await api(path, method, data, { expectedAccount: who });
     if (!who || who !== state.session?.user?.id) { const error = new Error('Your account changed. Open this event again.'); error.status = 409; throw error; }
+    if (readScope && result && typeof result === 'object') fieldReadScopes.set(result, readScope);
     return result;
   }
   function selectedAssets() { return { items: [...selectedItems.values()], resources: [...selectedResources.values()] }; }
@@ -68,7 +80,7 @@ export function createExchangeUI(ctx) {
     const query = characterId ? `?${new URLSearchParams({ characterId })}` : '';
     const result = await request(`${base(id)}${query}`);
     if (!currentContext(generation, who, id)) return;
-    dashboard = result; selectedCharacterId = result.character?.id || null; detail = null;
+    dashboard = result; rememberFieldContext(result); selectedCharacterId = result.character?.id || null; detail = null;
     selectedReadings.clear(); selectedItems.clear(); selectedResources.clear(); offerDirty = false; offerConflict = false; draftVersion = null;
     if (options.exchangeId && selectedCharacterId) {
       const exchange = await request(`${base(id)}/${options.exchangeId}?${new URLSearchParams({ characterId: selectedCharacterId })}`);
@@ -83,7 +95,7 @@ export function createExchangeUI(ctx) {
     stopPolling();
     const result = await request(`${base(id)}${characterId ? `?${new URLSearchParams({ characterId })}` : ''}`);
     if (!currentContext(generation, who, id)) return;
-    dashboard = result; selectedCharacterId = result.character?.id || null;
+    dashboard = result; rememberFieldContext(result); selectedCharacterId = result.character?.id || null;
     if (exchangeId && selectedCharacterId) {
       const exchange = await request(`${base(id)}/${exchangeId}?${new URLSearchParams({ characterId: selectedCharacterId })}`);
       if (!currentContext(generation, who, id)) return;
@@ -107,7 +119,7 @@ export function createExchangeUI(ctx) {
         if (changed) {
           const overview = await request(`${base(id)}?${new URLSearchParams({ characterId })}`);
           if (!currentContext(generation, who, id) || detail?.id !== exchangeId) return;
-          dashboard = overview;
+          dashboard = overview; rememberFieldContext(overview);
         }
         applyDetail(result, true); render({ preserveInteraction: true });
       } catch (error) {
@@ -150,10 +162,37 @@ export function createExchangeUI(ctx) {
   }
   function overview() {
     const active = dashboard.sessions.filter((session) => activeStatuses.has(session.status)), recent = dashboard.sessions.filter((session) => !activeStatuses.has(session.status));
-    return `${characterPicker()}${dashboard.character ? `<div class="exchange-start-actions"><button class="primary" data-action="exchange-create" ${dashboard.readOnly || pendingRequest ? 'disabled' : ''}><strong>Show my QR</strong><span>Create a temporary exchange invitation</span></button><button data-action="exchange-scan" ${dashboard.readOnly || pendingRequest ? 'disabled' : ''}><strong>Scan player</strong><span>Use their exchange QR or 12-character code</span></button></div>${dashboard.readOnly ? `<p class="exchange-banner">${esc(dashboard.message || 'Exchanges can begin while this event is live or in rehearsal, using an approved character.')}</p>` : ''}<section class="exchange-section"><div class="panel-head"><h2>Pending exchanges</h2><span class="hint">${active.length}</span></div>${active.length ? `<div class="exchange-session-list">${active.map(sessionCard).join('')}</div>` : '<p class="hint">Your invitations and exchanges awaiting confirmation will appear here.</p>'}</section><details class="panel exchange-section"><summary>Recent exchanges · ${recent.length}</summary>${recent.length ? `<div class="exchange-session-list mt">${recent.map(sessionCard).join('')}</div>` : '<p class="hint">No completed or closed exchanges yet.</p>'}<p class="hint mt">The most recent exchanges are shown here.</p></details>${contacts()}` : ''}`;
+    return `${characterPicker()}${dashboard.character ? `<div class="exchange-start-actions"><button class="primary" data-action="exchange-create" ${dashboard.readOnly || pendingRequest ? 'disabled' : ''}><strong>Show my QR</strong><span>Create a temporary exchange invitation</span></button><button data-action="exchange-scan" ${dashboard.readOnly || pendingRequest ? 'disabled' : ''}><strong>Scan player</strong><span>Use their exchange QR or 12-character code</span></button></div>${dashboard.readOnly ? `<p class="exchange-banner">${esc(dashboard.message || 'Exchanges can begin while this event is live or in rehearsal, using an approved character.')}</p>` : ''}<section class="exchange-section"><div class="panel-head"><h2>Pending exchanges</h2><span class="hint">${active.length}</span></div>${active.length ? `<div class="exchange-session-list">${active.map(sessionCard).join('')}</div>` : '<p class="hint">Your invitations and exchanges awaiting confirmation will appear here.</p>'}</section><details class="panel exchange-section"><summary>Recent exchanges · ${recent.length}</summary>${recent.length ? `<div class="exchange-session-list mt">${recent.map(sessionCard).join('')}</div>` : '<p class="hint">No completed or closed exchanges yet.</p>'}<p class="hint mt">The most recent exchanges are shown here.</p></details>${contacts()}${fieldActions()}` : ''}`;
   }
   function contacts() {
     return `<details class="panel exchange-section"><summary>Contacts · ${dashboard.contacts.length}</summary><p class="hint">Characters you met through an exchange both players confirmed.</p>${dashboard.contacts.length ? `<div class="exchange-contacts mt">${dashboard.contacts.map((contact) => `<details class="exchange-contact"><summary>${esc(nameOf(contact.character))}</summary>${publicIdentity(contact.character)}<p class="hint mt">Met ${esc(date(contact.metAt))}</p></details>`).join('')}</div>` : '<p class="hint mt">Complete an introduction or exchange to add your first contact.</p>'}</details>`;
+  }
+  function fieldActions(offlineView = false) {
+    if (!ctx.queueFieldRequest || !dashboard?.character) return '';
+    return `<section class="exchange-local-actions"><h3>Save for reconnecting</h3><p class="hint">${offlineView ? `Last checked ${esc(date(fieldContextAt))}: ${esc(dashboard.character.name)}. ` : ''}Save an information-only request on this device, then review and send it explicitly from the Field desk. Nothing is transmitted now; both players still confirm the exchange online.</p><div class="actions"><button type="button" data-action="exchange-queue-create" ${!canQueueField() ? 'disabled' : ''}>Save invitation request</button><button type="button" data-action="exchange-queue-join" ${!canQueueField() ? 'disabled' : ''}>Save a join code</button>${detail ? `<button type="button" data-action="exchange-queue-offer" ${!canQueueOffer() ? 'disabled' : ''}>Save reading-only offer</button>` : ''}${ctx.openField ? '<button type="button" class="quiet" data-action="exchange-field">Open Field desk</button>' : ''}</div>${detail ? `<p class="hint">${canQueueOffer() ? `${selectedReadings.size} selected reading IDs and offer revision ${draftVersion} will be saved; reading text stays out of the request store.` : 'A queued offer requires an unexpired, reviewed exchange with no selected or saved assets on either side. Review trading terms online.'}</p>` : ''}</section>`;
+  }
+  async function queueField(kind, payload, characterId = selectedCharacterId) {
+    if (!canQueueField()) throw new Error('Resolve the pending action and choose a checked character before saving locally.');
+    const who = accountId, id = eventId(), generation = epoch;
+    fieldQueueBusy = true;
+    try {
+      await fieldContextReady;
+      if (!currentContext(generation, who, id)) throw new Error('Your account or event changed. Open the checked character again.');
+      const row = await ctx.queueFieldRequest({ eventId: id, characterId, kind, payload, label: ({ create: 'Information-exchange invitation', join: 'Join an information exchange', offer: 'Reading-only exchange offer' })[kind] });
+      if (!currentContext(generation, who, id)) return row;
+      if (kind === 'offer') { offerDirty = false; selectedReadings = new Set(detail.own.offered.map(reading => reading.id)); restoreAssets(detail.own.assets); draftVersion = detail.version; }
+      feedback = 'Saved on this device, not sent. Open the Field desk to review and send the original request after reconnecting.';
+      render({ preserveInteraction: true }); return row;
+    } finally { fieldQueueBusy = false; if (currentContext(generation, who, id) && state.view === 'exchanges') render({ preserveInteraction: true }); }
+  }
+  async function saveJoinRequest(form) {
+    if (!form || scanBusy) throw new Error('Wait for the current code lookup to finish.');
+    const data = new FormData(form), parsed = parseExchangeInput(String(data.get('code') || ''), location.origin, eventId());
+    if (parsed.eventId !== eventId()) throw new Error('Choose the event named by this exchange link before saving it.');
+    const characterId = String(data.get('characterId') || '');
+    if (!dashboard.characters.some(row => row.id === characterId)) throw new Error('Choose one of your last checked approved characters.');
+    stopCamera(); await queueField('join', { characterId, code: parsed.code }, characterId);
+    scannerDirty = false; closeModal(true);
   }
   function qrInvitation() {
     if (!detail.code || detail.status !== 'waiting') return '';
@@ -178,7 +217,7 @@ export function createExchangeUI(ctx) {
   }
   function ownOffer() {
     const readings = availableReadings(), editable = canWrite();
-    return `<section class="panel exchange-offer"><p class="eyebrow">Your public identity</p>${publicIdentity(detail.own.character, true)}<form id="exchange-offer-form">${err}<details class="exchange-offer-picker" open><summary>Choose readings to offer</summary><p class="hint">Share up to 10 discovered readings. Their full text and any audio will be copied only after both players confirm. Leave everything empty for an introduction.</p><p id="exchange-selection-count" class="hint">${selectedReadings.size} of 10 selected</p>${readings.length ? `<div class="exchange-reading-options">${readings.map((reading) => `<label class="exchange-reading-option"><input type="checkbox" name="readingIds" value="${esc(reading.id)}" data-shareable="${reading.shareable ? 'true' : 'false'}" ${selectedReadings.has(reading.id) ? 'checked' : ''} ${!editable || (!reading.shareable && !selectedReadings.has(reading.id)) || (selectedReadings.size >= 10 && !selectedReadings.has(reading.id)) ? 'disabled' : ''}><span><strong>${esc(reading.title)}</strong><span class="hint">${esc(typeNames[reading.type] || 'Reading')}${!reading.shareable ? ' · Not available to share' : ''}</span></span></label>`).join('')}</div>` : '<p class="hint">You have no readings to offer yet. You can still introduce your character or offer assets.</p>'}</details>${assetOptions(editable)}<p id="exchange-offer-save-status" class="save-status" role="status">${offerDirty ? 'Unsaved offer changes' : 'Offer saved'}</p>${offerConflict ? '<div class="exchange-banner"><p>This exchange changed while you were editing. Your selection has been preserved. Review both sides before applying it to the updated offer.</p><button type="button" class="mt" data-action="exchange-review-latest">Keep my selection for this revision</button></div>' : ''}<button type="submit" class="primary" ${!editable || !offerDirty || offerConflict ? 'disabled' : ''}>Save my offer</button></form><p class="hint mt">Changing either saved offer clears both confirmations.</p></section>`;
+    return `<section class="panel exchange-offer"><p class="eyebrow">Your public identity</p>${publicIdentity(detail.own.character, true)}<form id="exchange-offer-form">${err}<details class="exchange-offer-picker" open><summary>Choose readings to offer</summary><p class="hint">Share up to 10 discovered readings. Their full text and any audio will be copied only after both players confirm. Leave everything empty for an introduction.</p><p id="exchange-selection-count" class="hint">${selectedReadings.size} of 10 selected</p>${readings.length ? `<div class="exchange-reading-options">${readings.map((reading) => `<label class="exchange-reading-option"><input type="checkbox" name="readingIds" value="${esc(reading.id)}" data-shareable="${reading.shareable ? 'true' : 'false'}" ${selectedReadings.has(reading.id) ? 'checked' : ''} ${!editable || (!reading.shareable && !selectedReadings.has(reading.id)) || (selectedReadings.size >= 10 && !selectedReadings.has(reading.id)) ? 'disabled' : ''}><span><strong>${esc(reading.title)}</strong><span class="hint">${esc(typeNames[reading.type] || 'Reading')}${!reading.shareable ? ' · Not available to share' : ''}</span></span></label>`).join('')}</div>` : '<p class="hint">You have no readings to offer yet. You can still introduce your character or offer assets.</p>'}</details>${assetOptions(editable)}<p id="exchange-offer-save-status" class="save-status" role="status">${offerDirty ? 'Unsaved offer changes' : 'Offer saved'}</p>${offerConflict ? '<div class="exchange-banner"><p>This exchange changed while you were editing. Your selection has been preserved. Review both sides before applying it to the updated offer.</p><button type="button" class="mt" data-action="exchange-review-latest">Keep my selection for this revision</button></div>' : ''}<button type="submit" class="primary" ${!editable || !offerDirty || offerConflict ? 'disabled' : ''}>Save my offer</button>${ctx.queueFieldRequest ? `<button type="button" class="quiet mt" data-action="exchange-queue-offer" ${!canQueueOffer() ? 'disabled' : ''}>Save reading-only offer for reconnecting</button><p class="hint mt">Only selected reading IDs and the reviewed revision are saved locally. No asset offer or confirmation can be queued.</p>` : ''}</form><p class="hint mt">Changing either saved offer clears both confirmations.</p></section>`;
   }
   function offerTitles(readings, emptyText) { return readings.length ? `<ul class="exchange-title-list">${readings.map((reading) => `<li>${esc(reading.title)}</li>`).join('')}</ul>` : `<p class="hint">${emptyText}</p>`; }
   function partnerOffer() {
@@ -221,7 +260,7 @@ export function createExchangeUI(ctx) {
     if (state.view !== 'exchanges') { stopPolling(); return; }
     const interaction = preserveInteraction ? captureInteraction() : null;
     if (!dashboard || dashboard.event.id !== state.event?.id) { shell('<p role="status">Open an event to see its exchanges.</p>'); return; }
-    const content = !connected() ? '<section class="empty"><h2>Reconnect to exchange information.</h2><p>Invitations, offers, and confirmations require a connection. Your previously saved adventure readings remain available.</p><button data-action="offline-open">Open saved readings</button></section>' : detail ? session() : overview();
+    const content = !connected() ? `<section class="empty"><h2>Live exchange review is offline.</h2><p>Saved invitation, join, and reading-only offer requests can wait for explicit review after reconnecting. Confirmations and asset trades require a live connection.</p><button data-action="offline-open">Open saved readings</button></section>${fieldActions(true)}` : detail ? session() : overview();
     shell(`<section class="exchanges-workspace"><div class="actions"><button class="quiet" data-action="${detail ? 'exchange-overview' : 'exchange-event'}">← ${detail ? 'All exchanges' : 'Event briefing'}</button></div><header class="page-head mt"><div><p class="eyebrow">${esc(dashboard.event.name)}</p><h1>Exchanges</h1><p class="muted">Meet another character, share readings and agree a trade.</p></div><button data-action="exchange-refresh" ${!connected() || pendingRequest?.sending ? 'disabled' : ''}>Refresh</button></header>${pendingBanner()}${feedback ? `<p class="exchange-feedback" role="status">${esc(feedback)}</p>` : ''}${content}</section>`);
     if (connected() && detail?.code && detail.status === 'waiting') {
       try { const canvas = renderBadgeQR(document.querySelector('#exchange-qr'), `${location.origin}/#exchange/${detail.event.id}/${detail.code}`, 256); canvas.setAttribute('aria-label', 'Temporary player exchange invitation QR code'); }
@@ -249,7 +288,7 @@ export function createExchangeUI(ctx) {
       try {
         const overview = await request(`${base(id)}?${new URLSearchParams({ characterId: requestRecord.characterId })}`);
         if (!currentContext(generation, who, id)) return;
-        dashboard = overview; selectedCharacterId = overview.character?.id || requestRecord.characterId;
+        dashboard = overview; rememberFieldContext(overview); selectedCharacterId = overview.character?.id || requestRecord.characterId;
       } catch {
         if (currentContext(generation, who, id)) feedback = 'Your exchange action was confirmed. Refresh to update the recent exchanges and contacts list.';
       }
@@ -263,7 +302,7 @@ export function createExchangeUI(ctx) {
           try {
             const [overview, exchange] = await Promise.all([request(`${base(id)}?${new URLSearchParams({ characterId: requestRecord.characterId })}`), request(`${base(id)}/${detail.id}?${new URLSearchParams({ characterId: requestRecord.characterId })}`)]);
             if (!currentContext(generation, who, id)) return;
-            dashboard = overview; applyDetail(exchange, true);
+            dashboard = overview; rememberFieldContext(overview); applyDetail(exchange, true);
           } catch { /* Keep the original error and let Refresh recover the current state. */ }
         }
       } else feedback = 'The connection did not confirm this action. Use Retry pending action to recover its result.';
@@ -279,21 +318,24 @@ export function createExchangeUI(ctx) {
     }
     await runMutation(record.path, record.body, { retry: true });
   }
-  function scanModal(code = '') {
+  function scanModal(code = '', saveForReconnect = false) {
     cleanupModal();
+    queueJoinMode = saveForReconnect;
     const characters = dashboard?.characters || [];
-    openModal('Join a player’s exchange', `<p class="hint">Use their temporary exchange QR or 12-character code. A character badge QR is a separate public identity card.</p>${err}<div class="exchange-scanner"><video id="exchange-scanner-video" muted playsinline hidden></video><p id="exchange-scanner-status" class="hint" role="status">${code ? 'Invitation found. Check your character, then choose Join exchange.' : 'The camera stays off until you choose Start camera.'}</p><div class="actions"><button data-action="exchange-camera">Start camera</button><button data-action="exchange-camera-stop" hidden>Stop camera</button></div><label>Read a QR image<input id="exchange-scan-file" type="file" accept="image/png,image/jpeg,image/webp"></label><form id="exchange-join-form">${err}<label>Join as<select name="characterId" ${!characters.length ? 'disabled' : ''}>${characters.map((character) => `<option value="${esc(character.id)}" ${character.id === selectedCharacterId ? 'selected' : ''}>${esc(character.name)}</option>`).join('')}</select></label><label>Exchange code or link<input name="code" value="${esc(code ? formatCode(code) : '')}" required maxlength="500" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX"></label><p class="hint">Joining opens the offer review. Nothing is shared until you both confirm.</p><button class="primary" type="submit" ${!characters.length || dashboard.readOnly || pendingRequest ? 'disabled' : ''}>Join exchange</button>${!characters.length ? '<p class="hint">An approved character assigned to you is needed for this event.</p>' : ''}</form></div>`);
+    openModal('Join a player’s exchange', `<p class="hint">Use their temporary exchange QR or 12-character code. A character badge QR is a separate public identity card.</p>${err}<div class="exchange-scanner"><video id="exchange-scanner-video" muted playsinline hidden></video><p id="exchange-scanner-status" class="hint" role="status">${code ? 'Invitation found. Check your character, then choose Join exchange.' : 'The camera stays off until you choose Start camera.'}</p><div class="actions"><button data-action="exchange-camera">Start camera</button><button data-action="exchange-camera-stop" hidden>Stop camera</button></div><label>Read a QR image<input id="exchange-scan-file" type="file" accept="image/png,image/jpeg,image/webp"></label><form id="exchange-join-form">${err}<label>Join as<select name="characterId" ${!characters.length ? 'disabled' : ''}>${characters.map((character) => `<option value="${esc(character.id)}" ${character.id === selectedCharacterId ? 'selected' : ''}>${esc(character.name)}</option>`).join('')}</select></label><label>Exchange code or link<input name="code" value="${esc(code ? formatCode(code) : '')}" required maxlength="500" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX"></label><p class="hint">Joining opens the offer review. Nothing is shared until you both confirm.</p><button class="primary" type="submit" ${!characters.length || pendingRequest || fieldQueueBusy || (!queueJoinMode && (!connected() || dashboard.readOnly)) ? 'disabled' : ''}>${queueJoinMode ? 'Save join request for reconnecting' : 'Join exchange'}</button>${ctx.queueFieldRequest && !queueJoinMode ? `<button type="button" class="quiet mt" data-action="exchange-save-join" ${!canQueueField() ? 'disabled' : ''}>Save join request for reconnecting</button>` : ''}${queueJoinMode ? '<p class="hint mt">This stores the code locally. It does not join or confirm the exchange. Codes can expire before reconnecting.</p>' : ''}${!characters.length ? '<p class="hint">An approved character assigned to you is needed for this event.</p>' : ''}</form></div>`);
     document.querySelector('#modal').classList.add('wide-modal'); scannerDirty = Boolean(code);
   }
   async function prepareInvitation(value, expectedEpoch) {
     const parsed = parseExchangeInput(value, location.origin, state.event?.id);
     if (!parsed.eventId) throw new Error('Open an event before entering an exchange code.');
     if (expectedEpoch !== undefined && expectedEpoch !== modalEpoch) return;
+    const saveForReconnect = queueJoinMode;
+    if (saveForReconnect && parsed.eventId !== eventId()) throw new Error('Choose the exchange link’s event while connected before saving its join request.');
     if (state.event?.id !== parsed.eventId || dashboard?.event.id !== parsed.eventId) {
       await loadEvent(parsed.eventId); if (expectedEpoch !== undefined && expectedEpoch !== modalEpoch) return;
       await open(); if (expectedEpoch !== undefined && expectedEpoch !== modalEpoch) return;
     }
-    scanModal(parsed.code);
+    scanModal(parsed.code, saveForReconnect);
   }
   function scannerError(error) { const label = document.querySelector('#exchange-scanner-status'); if (label) label.textContent = error.message || String(error); else toast(error.message || 'This exchange code could not be read.'); }
   async function camera() {
@@ -314,8 +356,9 @@ export function createExchangeUI(ctx) {
     const start = document.querySelector('[data-action="exchange-camera"]'), stop = document.querySelector('[data-action="exchange-camera-stop"]');
     if (start) start.hidden = false; if (stop) stop.hidden = true;
   }
-  function cleanupModal() { modalEpoch++; stopCamera(); scannerDirty = false; scanBusy = false; if (state.session?.user?.id !== accountId) ensureAccount(); }
+  function cleanupModal() { modalEpoch++; stopCamera(); scannerDirty = false; scanBusy = false; queueJoinMode = false; if (state.session?.user?.id !== accountId) ensureAccount(); }
   function confirmDiscard(scope) {
+    if (fieldQueueBusy) { toast('Wait for the information request to finish saving locally.'); return false; }
     if (scope === 'modal') { if (scannerDirty && !window.confirm('Close this exchange invitation without joining?')) return false; return true; }
     if (offerDirty && !window.confirm('Discard your unsaved offer selection?')) return false;
     if (pendingRequest && !window.confirm('An action still needs a confirmed response. Keep this page open so you can return and retry it. Leave this exchange view?')) return false;
@@ -348,6 +391,11 @@ export function createExchangeUI(ctx) {
       }
       case 'exchange-journal': if (confirmDiscard()) { stopPolling(); if (typeof ctx.openJournal !== 'function') throw new Error('Open the adventure to read this character’s journal.'); await ctx.openJournal(selectedCharacterId); } break;
       case 'exchange-create': if (!dashboard?.character || dashboard.readOnly) throw new Error('Choose an approved character during live play or rehearsal.'); await runMutation(base(), { characterId: selectedCharacterId }, { kind: 'create' }); break;
+      case 'exchange-queue-create': await queueField('create', { characterId: selectedCharacterId }); break;
+      case 'exchange-queue-join': if (!canQueueField()) throw new Error('Choose a checked character and resolve the pending action first.'); scanModal('', true); break;
+      case 'exchange-save-join': await saveJoinRequest(document.querySelector('#exchange-join-form')); break;
+      case 'exchange-queue-offer': if (!canQueueOffer()) throw new Error('A saved reading-only request requires reviewed, unexpired terms with no selected or saved assets on either side.'); await queueField('offer', { exchangeId: detail.id, version: draftVersion, readingIds: [...selectedReadings] }); break;
+      case 'exchange-field': if (ctx.openField && confirmDiscard()) { stopPolling(); await ctx.openField(); } break;
       case 'exchange-scan': if (!connected() || pendingRequest) throw new Error('Reconnect and resolve any pending action before joining an exchange.'); scanModal(); break;
       case 'exchange-camera': void camera().catch(scannerError); break;
       case 'exchange-camera-stop': modalEpoch++; stopCamera(); document.querySelector('#exchange-scanner-status').textContent = 'Camera stopped. Enter a code or choose a QR image.'; break;
@@ -374,6 +422,7 @@ export function createExchangeUI(ctx) {
       await runMutation(`${base()}/${detail.id}/offer`, { characterId: selectedCharacterId, version: draftVersion, readingIds: [...selectedReadings], ...validatedAssets() }, { kind: 'offer', method: 'PUT' });
     }
     if (form.id === 'exchange-join-form') {
+      if (queueJoinMode) { await saveJoinRequest(form); return true; }
       if (scanBusy) throw new Error('Wait for the current QR image to finish.');
       const parsed = parseExchangeInput(data.get('code'), location.origin, state.event?.id);
       if (parsed.eventId !== eventId()) { await prepareInvitation(data.get('code'), modalEpoch); return true; }
@@ -400,6 +449,7 @@ export function createExchangeUI(ctx) {
     document.querySelector('#exchange-offer-form button[type="submit"]').disabled = !canWrite() || !offerDirty || offerConflict;
     document.querySelector('[data-action="exchange-confirm"]').disabled = !canConfirm();
     document.querySelector('#exchange-confirm-help').textContent = offerDirty ? 'Save your offer changes before confirming.' : 'Confirmation applies to this saved offer. A change requires both players to confirm again.';
+    document.querySelectorAll('[data-action="exchange-queue-offer"]').forEach(button => { button.disabled = !canQueueOffer(); });
   });
   document.addEventListener('change', async (event) => {
     if (event.target.closest('#exchange-offer-form') && event.target.name === 'readingIds') {
@@ -412,6 +462,7 @@ export function createExchangeUI(ctx) {
       document.querySelector('#exchange-offer-form button[type="submit"]').disabled = !canWrite() || !offerDirty || offerConflict;
       document.querySelector('[data-action="exchange-confirm"]').disabled = !canConfirm();
       document.querySelector('#exchange-confirm-help').textContent = offerDirty ? 'Save your offer changes before confirming.' : 'Confirmation applies to this saved offer. A change requires both players to confirm again.';
+      document.querySelectorAll('[data-action="exchange-queue-offer"]').forEach(button => { button.disabled = !canQueueOffer(); });
       document.querySelectorAll('#exchange-offer-form [name="readingIds"]').forEach((item) => { item.disabled = !canWrite() || (!item.checked && (item.dataset.shareable !== 'true' || selectedReadings.size >= 10)); });
     }
     if (event.target.id !== 'exchange-scan-file') return;

@@ -98,25 +98,28 @@ async function validateImage(file) {
 }
 
 /** Decode an uploaded image locally. The image and QR content are never uploaded. */
-export async function scanImage(file) {
+export async function scanImage(file, { signal, timeoutMs = 12000 } = {}) {
+  if (signal?.aborted) throw Object.assign(new Error("Image scan was cancelled."), { name: "AbortError" });
   await validateImage(file);
-  const url = URL.createObjectURL(file);
+  if (signal?.aborted) throw Object.assign(new Error("Image scan was cancelled."), { name: "AbortError" });
+  const url = URL.createObjectURL(file), image = new Image(); let timer, abort;
   try {
-    const image = new Image();
     await new Promise((resolve, reject) => {
+      abort = () => reject(Object.assign(new Error("Image scan was cancelled."), { name: "AbortError" }));
+      signal?.addEventListener("abort", abort, { once: true });
+      timer = setTimeout(() => reject(new Error("The image took too long to open. Try a smaller photo or enter the printed code.")), Math.min(30000, Math.max(10, Number(timeoutMs) || 12000)));
       image.onload = resolve;
       image.onerror = () => reject(new Error("This image could not be opened. Choose a PNG, JPEG, or WebP photo."));
       image.src = url;
     });
-    if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth * image.naturalHeight > 32_000_000) {
-      throw new Error("Choose an image under 32 megapixels, cropped around the QR code.");
-    }
-    const canvas = document.createElement("canvas");
-    const result = decodeFrame(image, canvas, 1600);
-    if (!result) throw new Error("No QR code found. Try a sharper photo, crop around the code, or enter the badge code.");
+    if (signal?.aborted) throw Object.assign(new Error("Image scan was cancelled."), { name: "AbortError" });
+    if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth * image.naturalHeight > 32_000_000) throw new Error("Choose an image under 32 megapixels, cropped around the QR code.");
+    const result = decodeFrame(image, document.createElement("canvas"), 1600);
+    if (!result) throw new Error("No QR code found. Try a sharper photo, crop around the code, or enter the printed code.");
     return result;
   } finally {
-    URL.revokeObjectURL(url);
+    clearTimeout(timer); signal?.removeEventListener("abort", abort); image.onload = null; image.onerror = null;
+    image.removeAttribute?.("src"); URL.revokeObjectURL(url);
   }
 }
 
@@ -127,51 +130,58 @@ function cameraError(error) {
   return new Error("The camera could not start. Upload a photo or enter the badge code.");
 }
 
-/** Invoke from a user gesture. AbortSignal also closes cameras granted after a modal closes. */
-export async function startScanner(video, onResult, onError, { signal } = {}) {
-  let active = true, stream = null, frame = 0, lastRead = -Infinity;
+/** Invoke only from a user gesture. Late camera grants and stalled prompts are bounded. */
+export async function startScanner(video, onResult, onError, { signal, permissionTimeoutMs = 12000, scanTimeoutMs = 45000 } = {}) {
+  let active = true, stream = null, frame = 0, lastRead = -Infinity, permissionTimer = null, scanTimer = null;
+  let cancelled, tracks = [];
+  const cancelledPromise = new Promise(resolve => { cancelled = resolve; });
   const stop = () => {
-    active = false;
-    if (frame) cancelAnimationFrame(frame);
-    frame = 0;
-    stream?.getTracks().forEach((track) => track.stop());
-    stream = null;
-    video.pause();
+    active = false; cancelled(null);
+    clearTimeout(permissionTimer); clearTimeout(scanTimer);
+    if (frame) cancelAnimationFrame(frame); frame = 0;
+    for (const track of tracks) track.removeEventListener?.("ended", cameraEnded);
+    tracks = [];
+    stream?.getTracks().forEach(track => { try { track.stop(); } catch { /* Already-ended tracks need no further work. */ } }); stream = null;
+    try { video.pause(); } catch { /* A detached video may already have stopped. */ }
     video.srcObject = null;
     document.removeEventListener("visibilitychange", onVisibility);
+    if (typeof window !== "undefined") window.removeEventListener("pagehide", stop);
     signal?.removeEventListener("abort", stop);
   };
+  const report = error => { const shouldReport = active; stop(); if (shouldReport) onError(error); };
+  const cameraEnded = () => report(new Error("The camera stopped. Restart it, choose a QR photo, or enter the printed code."));
   const onVisibility = () => { if (document.hidden) stop(); };
-  if (signal?.aborted) { stop(); return stop; }
+  if (signal?.aborted || document.hidden || video.isConnected === false) { stop(); return stop; }
   signal?.addEventListener("abort", stop, { once: true });
   document.addEventListener("visibilitychange", onVisibility);
+  if (typeof window !== "undefined") window.addEventListener("pagehide", stop);
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("Camera unavailable");
-    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } });
-    if (!active) { stop(); return stop; }
-    video.muted = true;
-    video.playsInline = true;
-    video.setAttribute("playsinline", "");
-    video.srcObject = stream;
-    await video.play();
-    if (!active) { stop(); return stop; }
+    const opening = Promise.resolve(navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } })).then(granted => {
+      if (!active) { granted.getTracks().forEach(track => { try { track.stop(); } catch {} }); return null; }
+      return granted;
+    });
+    const deadline = new Promise((_resolve, reject) => { permissionTimer = setTimeout(() => reject(Object.assign(new Error("Camera access took too long. Try again, choose a QR photo, or enter the printed code."), { name: "TimeoutError" })), Math.min(30000, Math.max(10, Number(permissionTimeoutMs) || 12000))); });
+    stream = await Promise.race([opening, deadline, cancelledPromise]); clearTimeout(permissionTimer);
+    if (!active || !stream) { stop(); return stop; }
+    tracks = stream.getTracks(); for (const track of tracks) track.addEventListener?.("ended", cameraEnded, { once: true });
+    video.muted = true; video.playsInline = true; video.setAttribute("playsinline", ""); video.srcObject = stream;
+    await Promise.race([video.play(), cancelledPromise, new Promise((_resolve, reject) => { permissionTimer = setTimeout(() => reject(Object.assign(new Error("The camera could not start in time. Choose a QR photo or enter the printed code."), { name: "TimeoutError" })), Math.min(30000, Math.max(10, Number(permissionTimeoutMs) || 12000))); })]);
+    clearTimeout(permissionTimer);
+    if (!active || document.hidden || video.isConnected === false) { stop(); return stop; }
+    scanTimer = setTimeout(() => report(new Error("No QR code found yet. The camera has stopped. Try a sharper QR photo, restart the camera, or enter the printed code.")), Math.min(120000, Math.max(10, Number(scanTimeoutMs) || 45000)));
     const canvas = document.createElement("canvas");
-    const read = (time) => {
+    const read = time => {
       if (!active) return;
+      if (document.hidden || video.isConnected === false) { stop(); return; }
       if (video.readyState >= 2 && time - lastRead >= 200) {
-        lastRead = time;
-        let result;
-        try { result = decodeFrame(video, canvas, 960); }
-        catch (error) { stop(); onError(error); return; }
+        lastRead = time; let result;
+        try { result = decodeFrame(video, canvas, 960); } catch (error) { report(error); return; }
         if (result) { stop(); onResult(result); return; }
       }
       frame = requestAnimationFrame(read);
     };
     frame = requestAnimationFrame(read);
-  } catch (error) {
-    const shouldReport = active;
-    stop();
-    if (shouldReport) onError(cameraError(error));
-  }
+  } catch (error) { report(error?.name === "TimeoutError" ? error : cameraError(error)); }
   return stop;
 }

@@ -1,10 +1,54 @@
-# ORACLE v0.9.0 — Batch 9 release status
+# ORACLE v0.10.0 — Batch 10 candidate status
+
+Recorded September 6, 2026.
+
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Application `0.10.0`; database schema `10`; briefing-pack/adventure formats `1`. Batch 10 is implemented and awaits exact-commit GitHub CI, deployed staging, and production verification. The last verified live release remains Batch 9, commit `4133a6b51a9a4f2471723f88bd6d6f695a798b2a`, recorded below. No Batch 10 deployed or physical-device acceptance is claimed yet.
+
+## Batch 10 implemented
+
+- Field desk with explicit local Save for player-authored field notes, minimal last-checked own approved-character/event context, account/event generations, cross-tab invalidation, and visible storage failures. Other authoring forms remain in page memory.
+- A bounded local queue for invitation creation, joining, and reading-only offers. Every payload retains its original UUID and account scope; no assets, confirmations, protected reveals, scene actions, timers, or administrative writes are queued.
+- Explicit review before each send/retry, fresh session/ownership/policy checks, expected-account server binding, separate pending/uncertain/review/confirmed-request states, and once-only server replay. Reconnect never sends or confirms automatically.
+- Safe discard before first transmission; attempted requests can stop local retries without claiming server cancellation. Local request expiry requires review; server invitations may expire sooner.
+- Same-origin install manifest/icons, complete versioned public cache, bounded connection handling, and explicit update application with an unsaved-work warning and protection for other active tabs.
+- Camera/photo/manual-code recovery and current-authorized player/organizer paper fallback aids with historical timestamps and minimal default content.
+- No SQL migration or pack-format change. All ten migrations and populated schema-10 recovery expectations remain intact. The browser journal archive advances to IndexedDB version 2 using the same stores and retained readings, blocking legacy version-1 writers. Compatible recovery also requires this local storage boundary and the information-only/account-binding API and stable replay contract.
+
+## Batch 10 candidate verification
+
+| Check | Recorded result |
+| --- | --- |
+| Complete local staging HTTP rehearsal | Passed 1,075 reads / 1,155 writes using the actual script and disposable HTTP/PGlite app; all twelve instruments in all three themes, guarded create/join/offer replay, session invalidation/relogin, stale terms/current policy, rejected assets, unchanged inventory/balances, one-time receipts, revoked membership, copied play/reset, and cleanup |
+| Focused information-only exchange HTTP | Seven passed; existing exchange suite fourteen passed with one deliberate TCP-only skip |
+| Schema/recovery audit | No migration required; migrations 001–010 unchanged; retain full enabled operator and all populated schema-10 fixture records, including 28 economy/instrument/operations tables |
+| Full local `npm run verify` | Passed: 290 tests, 278 passed, zero failures, 12 deliberate TCP-only skips; complete footer and exit 0 recorded, duration 280,284 ms; syntax/version/static asset checks passed |
+| Field storage and sync | Ten store checks and five sync checks passed |
+| Independent HTTP/shared IndexedDB integration | Ten checks passed with real HTTP/PGlite and shared IndexedDB fixtures, including isolated account sessions, replay, lease contention, expiry, conflicting terms/policy, and revocation |
+| Field/exchange browser modules | Eight Field desk UI checks and four exchange UI checks passed |
+| Full application DOM/API walkthrough | Nine groups passed with zero uncaught errors using actual root modules and the real local API |
+| Connection transport | Three checks passed |
+| Public cache, QR, and install modules | Twenty-one offline/cache checks, fourteen QR checks, and four install checks passed (39 total), including the legacy-archive upgrade/preservation fixture |
+| Exact-commit PostgreSQL CI and recovery | Pending; all twelve TCP gates, populated real dump/restore, repeated migration, startup, and Docker secure-cookie/graceful-stop checks remain required |
+| Railway staging and complete remote workflow | Pending |
+| Railway production and exact-commit public checks | Pending; exact readiness plus 68 public GET paths required; no production gameplay writes authorized for verification |
+
+The local HTTP run checks the original server invitation deadline and invalidated sessions without an artificial expiry sleep. The passing controlled storage/integration fixtures cover local expiry and ambiguous request outcomes. PGlite, DOM, and shared IndexedDB simulations are automated evidence, not real concurrent PostgreSQL lock waits, isolated installed browser profiles, physical devices, or a human event.
+
+## Current limits and recovery position
+
+- Actual two-device offline/reconnect acceptance, representative iPhone/Android installation and cameras, real service-worker inspection, human field pilot, and measured load remain outstanding for Batch 11. The available browser tool lacks isolated-context and offline-network controls; automated HTTP/DOM/storage checks do not close that gap.
+- Scheduled live backups remain unconfigured: Railway HOBBY reports `maxBackupsCount: 0`, and no external runner is configured. Disposable recovery tests do not back up live event data.
+- Field desk saves only explicit field notes and the three allowed information-only request kinds. It does not synchronize all authoring forms, trade assets, or live instrument actions. Confirmation and all game effects require the authoritative server.
+- Local data is historical and device-specific. Disconnected clients cannot learn a remote revocation until reconnecting; known logout/account/event invalidation clears scope, and blocked storage must not be presented as a successful save.
+- Schema 10 remains required. v0.9 uses the same schema but lacks v0.10's queued information-only/account-bound API. Use a tested compatible roll-forward fix that preserves request replay as well as records; schema equality alone does not justify rollback.
+
+## Previous verified release — Batch 9
 
 Recorded September 6, 2026.
 
 Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Release commit `4133a6b51a9a4f2471723f88bd6d6f695a798b2a`; application `0.9.0`; database schema `10`; briefing-pack format `1`; adventure format `1`. STAGEHAND completes all twelve gameplay instruments. Both exact-commit GitHub/PostgreSQL CI runs, Railway staging, the complete remote all-twelve/all-three-theme workflow, and Railway production passed. All 56 exact-commit production public GET checks passed. Batch 9 is fully deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com).
 
-## Batch 9 implemented
+### Batch 9 implemented
 
 - Versioned encounter configuration linked explicitly to WAYFINDER, private staff notes, public scene messages, scoped staff assignments, performer/prop/check-in acknowledgments, and explicit scene states.
 - Whole-party waiting queues, self-queue with explicit acceptance, separate terms revisions, accepted membership snapshots, and atomic dispatch subject to current eligibility/readiness/capacity.
@@ -15,7 +59,7 @@ Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Rel
 - Planning/unlinked starter encounters in all three themes. Copies have fresh encounters and clear staff/runtime; actual rehearsal reset clears parties, acknowledgments, deadlines, activity, replay, and linked operational news while preserving source records.
 - Additive migration 010 introduces five tables while preserving all nine old migration records, every populated schema-9 instrument table and earlier data, and the complete enabled operator row.
 
-## Batch 9 verification
+### Batch 9 verification
 
 | Check | Recorded result |
 | --- | --- |
@@ -37,7 +81,7 @@ Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Rel
 
 Local HTTP counts describe isolated disposable testing, not deployed acceptance. PGlite exercises PostgreSQL semantics through one connection and does not prove real concurrent lock waits. The four new TCP gates cover competing last-seat dispatch, redirect/consent revision, restrictive scene state versus dispatch, and account revocation/reassignment. The existing eight TCP gates remain required. Both exact-commit CI runs compared all five new operations tables in a real dump/restore, including the captured consent, overdue dispatched party, separate returned party and fallback receipt, readiness actors, and approved-news link.
 
-## Batch 9 deployment record
+### Batch 9 deployment record
 
 | Target | Deployment ID | Result |
 | --- | --- | --- |
@@ -48,7 +92,7 @@ Staging logs confirmed migration 10 at 04:24:11 UTC and v0.9.0 `server_ready` in
 
 Production logs confirmed migration 10 and the matching existing operator (`matched: true`) at 04:31:37 UTC on September 6. At 04:31:42 UTC, startup reported v0.9.0 in production and `superuser_status` with `accountExists: true`, `enabled: true`. Railway deployment `7ec0e7d5-0ea6-46e7-8d12-8ece92552fc2` succeeded at 04:31:45 UTC. The [production smoke job 101428568828](https://github.com/GreenShoeGarage/Oracle/actions/runs/34011709258/job/101428568828) verified exact release SHA/version/schema at 04:31:46 UTC and passed all 56 public GET checks through 04:32:23 UTC. Production verification created no account or event. The existing enabled operator retained identity/password through idempotent provisioning and additive migration preservation. Both runtime branches retain `4133a6b51a9a4f2471723f88bd6d6f695a798b2a`; final documentation updates are main-only.
 
-## Current limits and recovery position
+### Batch 9 limits and recovery position
 
 - Scheduled live backups remain unconfigured: Railway HOBBY reports `maxBackupsCount: 0` and no external runner is configured. Disposable restore rehearsals do not back up live event data.
 - After migration 010, v0.8.0/schema-9 and earlier binaries are incompatible. Preserve upgraded data and use a tested schema-10-compatible roll-forward fix.

@@ -748,3 +748,19 @@ dialog::backdrop {
     transition: none !important;
   }
 }
+.connection-status:not([hidden]) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .75rem;
+  padding: .75rem 1rem;
+  border-bottom: 2px solid currentColor;
+  background: #f2e6b8;
+  color: #24291e;
+  font-size: .9rem;
+}
+.connection-status .actions { flex-wrap: wrap; }
+.connection-status button { color: #24291e; border-color: #777752; min-height: 44px; }
+[data-install-controls] { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .6rem; }
+@media print { .connection-status, [data-install-controls] { display: none !important; } }

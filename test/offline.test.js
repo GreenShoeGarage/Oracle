@@ -33,7 +33,7 @@ async function reading(offline, extras = {}) {
   };
 }
 async function storedRows(factory) {
-  const db = await new Promise((resolve, reject) => { const request = factory.open("oracle-saved-readings", 1); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+  const db = await new Promise((resolve, reject) => { const request = factory.open("oracle-saved-readings", 2); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
   return new Promise((resolve, reject) => {
     const tx = db.transaction(["meta", "readings"]), rows = {};
     for (const store of ["meta", "readings"]) { const read = tx.objectStore(store).getAll(); read.onsuccess = () => { rows[store] = read.result; }; }
@@ -54,7 +54,7 @@ test("IndexedDB persists only the already-revealed journal projection and label 
   assert.equal(await offline.cacheJournal(input), true);
   const all = await storedRows(factory);
   for (const secret of ["SECRET_MEMBERSHIP", "SECRET_OBJECTIVE", "SECRET_ANSWER", "SECRET_NOTES", "SECRET_FUTURE", "SECRET_COOKIE", "SECRET_INVENTORY", "SECRET_FLAG", "relic:first"]) assert.ok(!JSON.stringify(all).includes(secret), secret);
-  assert.deepEqual(Object.keys(all.readings[0]).sort(), ["accountId", "adventure", "character", "event", "journal", "key", "lastChecked"]);
+  assert.deepEqual(Object.keys(all.readings[0]).sort(), ["accountId", "adventure", "character", "event", "journal", "key", "lastChecked", "sequence"]);
   assert.equal(all.readings[0].journal[0].text, "The revealed inscription.");
   const reloaded = await importFresh();
   const archive = await reloaded.loadArchive();
@@ -62,6 +62,26 @@ test("IndexedDB persists only the already-revealed journal projection and label 
   assert.equal(archive.records[0].character.name, "Morrow");
   assert.ok(Number.isFinite(Date.parse(archive.lastChecked)));
   assert.equal(await reloaded.captureReadScope(), null, "Persisted scope does not claim a live authenticated session.");
+});
+
+test("archive upgrade preserves saved readings while refusing older unsequenced writers", async (t) => {
+  const { offline, factory } = await fixture(t);
+  await offline.cacheJournal(await reading(offline));
+  const rows = await storedRows(factory), legacy = new IDBFactory();
+  const oldDB = await new Promise((resolve, reject) => {
+    const request = legacy.open("oracle-saved-readings", 1);
+    request.onupgradeneeded = () => { request.result.createObjectStore("meta", { keyPath: "key" }); request.result.createObjectStore("readings", { keyPath: "key" }); };
+    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+  });
+  await new Promise((resolve, reject) => {
+    const tx = oldDB.transaction(["meta", "readings"], "readwrite");
+    for (const store of ["meta", "readings"]) for (const row of rows[store]) { const copy = { ...row }; delete copy.sequence; tx.objectStore(store).put(copy); }
+    tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+  });
+  oldDB.close(); Object.defineProperty(globalThis, "indexedDB", { value: legacy, configurable: true });
+  const upgraded = await importFresh(), archive = await upgraded.loadArchive();
+  assert.equal(archive.records[0].journal[0].text, "The revealed inscription.");
+  await assert.rejects(new Promise((resolve, reject) => { const request = legacy.open("oracle-saved-readings", 1); request.onsuccess = () => { request.result.close(); resolve(); }; request.onerror = () => reject(request.error); }), { name: "VersionError" });
 });
 
 test("maximum valid combined relic titles and scene readings survive offline storage intact", async (t) => {
@@ -262,77 +282,130 @@ test("unavailable IndexedDB leaves online use possible and renders an honest emp
   assert.match(offline.renderArchive({ esc }), /No saved readings yet/);
 });
 
-async function worker() {
-  const source = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
-  const origin = "https://oracle.example.test", listeners = new Map(), values = new Map(), requests = [];
-  let network = async (request) => new Response(`public ${new URL(request.url).pathname}`, { headers: { "content-type": new URL(request.url).pathname === "/" ? "text/html" : new URL(request.url).pathname.endsWith(".css") ? "text/css" : new URL(request.url).pathname.endsWith(".svg") ? "image/svg+xml" : "text/javascript" } });
-  let cacheFailure = false, putFailure = false, claimed = 0;
-  const cache = { put: async (key, response) => { if (putFailure) throw new Error("Quota exceeded"); values.set(String(key), response.clone()); }, match: async (key) => values.get(String(key))?.clone() };
-  const cacheNames = new Set(["oracle-static-old", "unrelated-app"]);
-  const context = vm.createContext({
-    URL, Request, Response, Set, Promise,
-    self: { location: { origin }, clients: { claim: async () => { claimed++; } }, addEventListener: (name, handler) => listeners.set(name, handler) },
-    caches: { open: async (name) => { if (cacheFailure) throw new Error("Storage unavailable"); cacheNames.add(name); return cache; }, keys: async () => [...cacheNames], delete: async (name) => cacheNames.delete(name) },
-    fetch: async (request) => { requests.push(request); return network(request); },
+
+test("later authorized journal snapshots win even when older responses arrive last", async t => {
+  const { offline } = await fixture(t);
+  const first = await reading(offline), second = await reading(offline);
+  first.journal[0].text = 'Earlier snapshot'; second.journal[0].text = 'Current snapshot';
+  assert.equal(await offline.cacheJournal(second), true);
+  assert.equal(await offline.cacheJournal(first), false);
+  assert.equal((await offline.loadArchive()).records[0].journal[0].text, 'Current snapshot');
+  const scope = await offline.captureReadScope();
+  await offline.setAccount(accountA);
+  const same = await offline.captureReadScope();
+  assert.equal(same.generation, scope.generation, 'Same-account verification preserves the archive generation.');
+  assert.ok(same.sequence > scope.sequence);
+  assert.equal((await offline.loadArchive()).records.length, 1);
+});
+
+test("external archive metadata invalidates visible listeners and pending scopes synchronously", async t => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window'), listeners = new Map();
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { addEventListener: (name, callback) => listeners.set(name, callback) } });
+  t.after(() => previousWindow ? Object.defineProperty(globalThis, 'window', previousWindow) : delete globalThis.window);
+  const { offline } = await fixture(t), events = [], unsubscribe = offline.subscribeArchive(event => events.push(event));
+  const input = await reading(offline); await offline.cacheJournal(input);
+  const pendingRead = offline.loadArchive();
+  listeners.get('storage')({ key: 'oracle-readings-signal', newValue: JSON.stringify({ type: 'clear', nonce: crypto.randomUUID(), source: 'another-browser-tab' }) });
+  assert.deepEqual(events.at(-1), { type: 'clear', external: true });
+  assert.equal(await offline.cacheJournal(input), false);
+  assert.equal(await offline.captureReadScope(), null);
+  assert.deepEqual((await pendingRead).records, []);
+  assert.deepEqual((await offline.loadArchive()).records, []);
+  unsubscribe();
+});
+
+async function worker({ version = '0.10.0', stores = new Map(), clients = [] } = {}) {
+  let source = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
+  source = source.replace("const VERSION = '0.10.0';", `const VERSION = '${version}';`);
+  const origin = 'https://oracle.example.test', listeners = new Map(), requests = [];
+  let network = async request => {
+    const path = new URL(request.url).pathname;
+    return new Response(`${version} public ${path}`, { headers: { 'x-oracle-shell-version': version, 'content-type': path === '/' ? 'text/html' : path.endsWith('.css') ? 'text/css' : path.endsWith('.png') ? 'image/png' : path.endsWith('.webmanifest') ? 'application/manifest+json' : path.endsWith('.svg') ? 'image/svg+xml' : 'text/javascript' } });
+  };
+  let cacheFailure = false, putFailure = false, claimed = 0, skipped = 0, liveClients = clients;
+  const keyOf = key => typeof key === 'string' ? key : key.url;
+  const cachesMock = {
+    open: async name => { if (cacheFailure) throw new Error('Storage unavailable'); if (!stores.has(name)) stores.set(name, new Map()); const values = stores.get(name); return {
+      put: async (key, response) => { if (putFailure) throw new Error('Quota exceeded'); values.set(keyOf(key), response.clone()); },
+      match: async key => values.get(keyOf(key))?.clone(), delete: async key => values.delete(keyOf(key)), keys: async () => [...values.keys()].map(key => new Request(key)),
+    }; }, keys: async () => [...stores.keys()], delete: async name => stores.delete(name),
+  };
+  const context = vm.createContext({ URL, Request, Response, Set, Map, Promise, AbortController, Uint8Array, Date, encodeURIComponent,
+    setTimeout: (fn, ms) => setTimeout(fn, ms === 4000 ? 20 : ms), clearTimeout,
+    self: { location: { origin }, clients: { claim: async () => { claimed++; }, matchAll: async () => liveClients }, skipWaiting: async () => { skipped++; }, addEventListener: (name, handler) => listeners.set(name, handler) },
+    caches: cachesMock, fetch: async request => { requests.push(request); return network(request); },
   });
-  vm.runInContext(source + "\nthis.testWorker = {cacheableRequest, STATIC_ASSETS, CACHE_NAME};", context);
-  return {
-    origin, requests, values, cacheNames,
-    assets: Array.from(context.testWorker.STATIC_ASSETS), cacheName: context.testWorker.CACHE_NAME,
+  vm.runInContext(source + '\nthis.testWorker = {cacheableRequest, STATIC_ASSETS, CACHE_NAME};', context);
+  return { origin, requests, stores, assets: Array.from(context.testWorker.STATIC_ASSETS), cacheName: context.testWorker.CACHE_NAME,
     accepts: (path, options) => context.testWorker.cacheableRequest(new Request(new URL(path, origin), options)),
-    network: (fn) => { network = fn; }, storageUnavailable: () => { cacheFailure = true; }, quotaFull: () => { putFailure = true; },
-    claimed: () => claimed,
-    run: async (name, path = "/app.js", options) => {
-      let response, wait;
-      listeners.get(name)({ request: new Request(new URL(path, origin), options), respondWith: (promise) => { response = promise; }, waitUntil: (promise) => { wait = promise; } });
-      if (wait) await wait;
-      return response ? await response : undefined;
+    network: fn => { network = fn; }, storageUnavailable: () => { cacheFailure = true; }, quotaFull: () => { putFailure = true; }, clients: value => { liveClients = value; }, claimed: () => claimed, skipped: () => skipped,
+    run: async (name, path = '/app.js', options = {}) => {
+      let response, wait; const request = new Request(new URL(path, origin), options.request || {});
+      if (options.navigation) Object.defineProperty(request, 'mode', { value: 'navigate' });
+      listeners.get(name)({ request, clientId: options.clientId, resultingClientId: options.resultingClientId, respondWith: promise => { response = promise; }, waitUntil: promise => { wait = promise; } });
+      if (wait) await wait; return response ? await response : undefined;
     },
+    message: async (data, client = { id: 'current-tab', url: origin + '/' }) => { let wait, response; listeners.get('message')({ data, source: client, ports: [{ postMessage: value => { response = value; } }], waitUntil: promise => { wait = promise; } }); if (wait) await wait; return response; },
   };
 }
 
-test("actual service worker request allowlist excludes all APIs, mutations, queries and foreign origins", async () => {
+test('service worker intercepts only the explicit same-origin public shell allowlist', async () => {
   const sw = await worker();
   for (const path of sw.assets) assert.equal(sw.accepts(path), true, path);
-  for (const path of ["/api/session", "/api/auth/logout", "/api/events", "/api/badges/ABCD", "/api/events/id/adventure/play", "/api/events/id/adventure/manage", "/api/events/id/exchanges", "/api/events/id/exchanges/join", "/api/events/id/exchanges/session-id", "/api/events/id/story/manage", "/api/events/id/story/play?characterId=private", "/api/events/id/story/collect", "/api/events/id/story/entries/entry-id", "/api/events/id/trace", "/api/events/id/trace?characterId=private", "/api/events/id/trace/record-id", "/api/events/id/bazaar", "/api/events/id/bazaar/manage", "/api/events/id/bazaar/purchase", "/api/events/id/oaths", "/api/events/id/oaths/agreement-id", "/api/events/id/oaths/agreement-id/settle", "/api/events/id/sigil", "/api/events/id/sigil/runs/run-id", "/api/events/id/sigil/runs/run-id/heartbeat", "/api/events/id/static", "/api/events/id/static/entries/id?code=PRIVATE", "/api/events/id/static/collect", "/health/ready", "/unknown", "/app.js?token=private", "/?badge=private", "https://evil.test/app.js", "/sw.js"]) {
-    assert.equal(sw.accepts(path), false, path);
-    assert.equal(await sw.run("fetch", path), undefined, "Excluded requests are not intercepted at all.");
-  }
-  for (const method of ["POST", "PUT", "PATCH", "DELETE", "HEAD"]) assert.equal(sw.accepts("/app.js", { method }), false);
-  assert.equal(sw.accepts("/app.js", { headers: { authorization: "Bearer private" } }), false);
-  assert.equal(sw.accepts("/app.js", { headers: { range: "bytes=0-20" } }), false);
+  for (const path of ['/api/session', '/api/auth/logout', '/api/events/id/exchanges', '/api/events/id/stagehand/manage', '/api/events/id/adventure/play', '/api/events/id/sigil/runs/id/heartbeat', '/api/events/id/static', '/health/ready', '/unknown', '/app.js?token=private', '/?badge=private', 'https://evil.test/app.js', '/sw.js', '/__oracle_shell_client__/anything']) { assert.equal(sw.accepts(path), false, path); assert.equal(await sw.run('fetch', path), undefined); }
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']) assert.equal(sw.accepts('/app.js', { method }), false);
+  assert.equal(sw.accepts('/app.js', { headers: { authorization: 'Bearer private' } }), false);
+  assert.equal(sw.accepts('/app.js', { headers: { range: 'bytes=0-20' } }), false);
   assert.equal(sw.requests.length, 0);
 });
 
-test("service worker prefetches only public assets without cookies and prunes only its own old caches", async () => {
-  const sw = await worker();
-  await sw.run("install");
-  assert.equal(sw.requests.length, sw.assets.length);
-  assert.ok(sw.requests.every((request) => request.credentials === "omit" && request.cache === "reload"));
-  assert.deepEqual(sw.requests.map((request) => new URL(request.url).pathname).sort(), [...sw.assets].sort());
-  await sw.run("activate");
-  assert.ok(!sw.cacheNames.has("oracle-static-old"));
-  assert.ok(sw.cacheNames.has("unrelated-app"));
-  assert.ok(sw.cacheNames.has(sw.cacheName));
-  assert.equal(sw.claimed(), 1);
+test('service worker installs a complete public build without cookies, rejects mixed versions, and preserves unrelated caches', async () => {
+  const stores = new Map([['oracle-static-old', new Map()], ['unrelated-app', new Map()]]), sw = await worker({ stores });
+  await sw.run('install'); assert.equal(sw.requests.length, sw.assets.length);
+  assert.ok(sw.requests.every(request => request.credentials === 'omit' && request.cache === 'reload' && request.redirect === 'error'));
+  assert.equal(stores.get(sw.cacheName).size, sw.assets.length + 1, 'Completeness marker follows every required asset.');
+  await sw.run('activate'); assert.equal(stores.has('oracle-static-old'), false); assert.equal(stores.has('unrelated-app'), true); assert.equal(sw.claimed(), 1); assert.equal(sw.skipped(), 0, 'Installation never forces an update.');
+  const mixed = await worker(); mixed.network(async () => new Response('newer source', { headers: { 'content-type': 'text/javascript', 'x-oracle-shell-version': '0.11.0' } }));
+  await assert.rejects(mixed.run('install'), /match|mixed|incomplete/); assert.equal(mixed.stores.has(mixed.cacheName), false, 'Failed builds never become a partially usable cache.');
 });
 
-test("service worker serves current online assets, falls back offline, and never caches errors or API-shaped responses", async () => {
-  const sw = await worker();
-  assert.equal(await (await sw.run("fetch")).text(), "public /app.js");
-  sw.network(async () => { throw new Error("Network unavailable"); });
-  assert.equal(await (await sw.run("fetch")).text(), "public /app.js");
-  sw.network(async () => new Response("SECRET_API_JSON", { headers: { "content-type": "application/json" } }));
-  assert.equal(await (await sw.run("fetch")).text(), "SECRET_API_JSON");
-  sw.network(async () => new Response("Unavailable", { status: 503, headers: { "content-type": "text/javascript" } }));
-  assert.equal((await sw.run("fetch")).status, 503);
-  sw.network(async () => { throw new Error("Offline again"); });
-  assert.equal(await (await sw.run("fetch")).text(), "public /app.js", "Rejected response bodies never replace public cached assets.");
+test('active immutable shell ignores newer deployments, 503s, weak networks and API-shaped responses', async () => {
+  const sw = await worker(); await sw.run('install'); const initialCount = sw.requests.length;
+  for (const network of [async () => new Response('new', { headers: { 'content-type': 'text/javascript', 'x-oracle-shell-version': '0.11.0' } }), async () => new Response('down', { status: 503 }), async () => { throw new Error('Offline'); }, async () => new Response('PRIVATE_JSON', { headers: { 'content-type': 'application/json' } }), () => new Promise(() => {})]) {
+    sw.network(network); assert.equal(await (await sw.run('fetch')).text(), '0.10.0 public /app.js');
+  }
+  assert.equal(sw.requests.length, initialCount, 'Cached build assets never request or overwrite with a newer version.');
 });
 
-test("storage and quota failures do not replace valid online assets with stale failures", async () => {
-  const unavailable = await worker(); unavailable.storageUnavailable();
-  assert.equal(await (await unavailable.run("fetch")).text(), "public /app.js");
-  const full = await worker(); full.quotaFull();
-  assert.equal(await (await full.run("fetch")).text(), "public /app.js");
+test('explicit update preserves old active client builds across worker restarts and blocks unknown legacy tabs', async () => {
+  const oldTab = { id: 'old-tab', url: 'https://oracle.example.test/' }, newTab = { id: 'new-tab', url: 'https://oracle.example.test/' }, legacy = { id: 'legacy-tab', url: 'https://oracle.example.test/' };
+  const old = await worker({ clients: [oldTab] }); await old.run('install'); assert.equal((await old.message({ type: 'ORACLE_CLIENT_VERSION', version: '0.10.0' }, oldTab)).ok, true);
+  const next = await worker({ version: '0.11.0', stores: old.stores, clients: [oldTab, newTab, legacy] }); await next.run('install');
+  const blocked = await next.message({ type: 'ORACLE_APPLY_UPDATE', clientVersion: '0.11.0' }, newTab); assert.equal(blocked.reason, 'other-tabs'); assert.equal(next.skipped(), 0);
+  next.clients([oldTab, newTab]); assert.equal((await next.message({ type: 'ORACLE_APPLY_UPDATE', clientVersion: '0.11.0' }, newTab)).ok, true); assert.equal(next.skipped(), 1); await next.run('activate');
+  assert.equal(await (await next.run('fetch', '/app.js', { clientId: oldTab.id })).text(), '0.10.0 public /app.js');
+  assert.equal(await (await next.run('fetch', '/app.js', { clientId: newTab.id })).text(), '0.11.0 public /app.js');
+  const restarted = await worker({ version: '0.11.0', stores: old.stores, clients: [oldTab, newTab] });
+  assert.equal(await (await restarted.run('fetch', '/app.js', { clientId: oldTab.id })).text(), '0.10.0 public /app.js');
+  await restarted.run('fetch', '/', { navigation: true, clientId: oldTab.id, resultingClientId: 'reloaded-tab' });
+  assert.equal(await (await restarted.run('fetch', '/app.js', { clientId: 'reloaded-tab' })).text(), '0.11.0 public /app.js');
+});
+
+test('missing storage uses only a matching bounded network asset and never caches failures', async () => {
+  const sw = await worker(); sw.storageUnavailable(); assert.equal(await (await sw.run('fetch')).text(), '0.10.0 public /app.js');
+  sw.network(async () => new Response('wrong version', { headers: { 'content-type': 'text/javascript', 'x-oracle-shell-version': '0.11.0' } })); assert.equal((await sw.run('fetch')).status, 503);
+  sw.network(() => new Promise(() => {})); assert.equal((await sw.run('fetch')).status, 503); assert.equal(sw.requests.at(-1).signal.aborted, true);
+  sw.network(async () => new Response(new ReadableStream({ start() {} }), { headers: { 'content-type': 'text/javascript', 'x-oracle-shell-version': '0.10.0' } })); assert.equal((await sw.run('fetch')).status, 503, 'Body stalls are bounded as well as connection stalls.');
+  const full = await worker(); full.quotaFull(); await assert.rejects(full.run('install'), /Quota/); assert.equal(full.stores.has(full.cacheName), false);
+});
+
+test('install manifest uses the same origin with proper raster icons and a maskable safe area', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8'));
+  assert.equal(manifest.id, '/'); assert.equal(manifest.start_url, '/'); assert.equal(manifest.scope, '/'); assert.equal(manifest.display, 'standalone'); assert.match(manifest.name, /ORACLE.*LARP Field Kit/);
+  for (const icon of manifest.icons.filter(row => row.type === 'image/png')) {
+    assert.match(icon.src, /^\/[a-z0-9-]+\.png$/); const bytes = await readFile(new URL(`../public${icon.src}`, import.meta.url)); assert.equal(bytes.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+    const [width, height] = icon.sizes.split('x').map(Number); assert.equal(bytes.readUInt32BE(16), width); assert.equal(bytes.readUInt32BE(20), height);
+  }
+  assert.ok(manifest.icons.some(row => row.sizes === '192x192')); assert.ok(manifest.icons.some(row => row.sizes === '512x512' && row.purpose === 'maskable'));
+  const svg = await readFile(new URL('../public/app-icon.svg', import.meta.url), 'utf8'); assert.ok(!/script|foreignObject|href=|onload=/i.test(svg));
 });
