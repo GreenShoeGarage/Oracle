@@ -1,0 +1,46 @@
+.oath-workspace, .oath-workspace .panel, .oath-workspace form, .oath-workspace fieldset, .oath-workspace label { min-width: 0; }
+.oath-workspace h1, .oath-workspace h2, .oath-workspace h3, .oath-workspace strong, .oath-workspace summary { overflow-wrap: anywhere; }
+.oath-layout { display: grid; grid-template-columns: minmax(15rem, .7fr) minmax(0, 1.4fr); align-items: start; gap: 1rem; }
+.oath-character-picker { display: flex; align-items: end; gap: .7rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.oath-character-picker label { flex: 1 1 14rem; max-width: 28rem; }
+.oath-agreement-list { display: grid; gap: .6rem; margin-top: 1rem; max-height: 40rem; overflow-y: auto; }
+.oath-card { display: flex; flex-direction: column; align-items: flex-start; gap: .4rem; width: 100%; text-align: left; white-space: normal; min-width: 0; }
+.oath-card.selected { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
+.oath-notice, .oath-feedback { padding: .85rem 1rem; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: .35rem; margin: 1rem 0; overflow-wrap: anywhere; }
+.oath-feedback.error { border-left-color: var(--danger, #df7272); }
+.oath-notice p + p, .oath-empty p + p { margin-top: .65rem; }
+.oath-copy { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: .6rem; }
+.oath-terms, .oath-signatures, .oath-receipt, .oath-history, .oath-corrections, .oath-decision { margin-top: 1.2rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.oath-terms h3, .oath-signatures h3, .oath-receipt h3, .oath-decision h3 { font-size: 1rem; }
+.oath-transfers { margin: .75rem 0 0; padding-left: 1.3rem; }
+.oath-transfers li { overflow-wrap: anywhere; }
+.oath-transfers li + li { margin-top: .6rem; }
+.oath-transfers ul { margin-top: .35rem; }
+.oath-signatures > ul { list-style: none; padding: 0; margin: .6rem 0 0; display: grid; gap: .8rem; }
+.oath-signatures li > .hint, .oath-history li > .hint { display: block; margin-top: .25rem; }
+.oath-history > summary { cursor: pointer; font-weight: 600; }
+.oath-history > ol { padding-left: 1.2rem; margin-top: .9rem; }
+.oath-history li + li { margin-top: 1rem; }
+.oath-history-snapshot { margin-top: .6rem; padding: .6rem; border: 1px solid var(--line); border-radius: .35rem; }
+.oath-history-snapshot > summary { cursor: pointer; }
+.oath-history-snapshot h4 { margin-top: .7rem; overflow-wrap: anywhere; }
+.oath-decision-actions { margin-top: 1.2rem; }
+.oath-fields, .oath-decision > fieldset { display: grid; gap: 1rem; border: 0; margin: 1rem 0 0; padding: 0; }
+.oath-fields input:not([type="checkbox"]), .oath-fields select, .oath-fields textarea, .oath-decision textarea, .oath-decision select { width: 100%; }
+.oath-fields textarea, .oath-decision textarea { resize: vertical; }
+.oath-choice-group { border: 1px solid var(--line); padding: .8rem; border-radius: .45rem; margin: 0; }
+.oath-choice-group > legend { padding: 0 .3rem; font-size: .9rem; }
+.oath-checklist { display: grid; gap: .5rem; max-height: 14rem; overflow-y: auto; margin: .6rem 0; }
+.oath-check { display: flex; align-items: flex-start; gap: .7rem; white-space: normal; min-height: 2.5rem; padding: .4rem 0; }
+.oath-check input[type="checkbox"] { flex: 0 0 auto; width: auto; margin: .2rem 0 0; }
+.oath-check > span { min-width: 0; overflow-wrap: anywhere; }
+.oath-acknowledgement { border-top: 1px solid var(--line); padding-top: .85rem; margin-top: .25rem; }
+.oath-transfer-editor { border-top: 1px solid var(--line); padding-top: 1rem; }
+.oath-transfer-editor > .hint { margin-top: .5rem; }
+.oath-transfer-rows { display: grid; gap: .75rem; margin-top: .75rem; }
+.oath-transfer-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; border: 1px solid var(--line); border-radius: .4rem; padding: .75rem; }
+.oath-transfer-row > legend { font-size: .85rem; padding: 0 .3rem; }
+.oath-transfer-row > button { justify-self: start; }
+.oath-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (max-width: 900px) { .oath-layout { grid-template-columns: minmax(0, 1fr); } .oath-agreement-list { max-height: 19rem; } }
+@media (max-width: 600px) { .oath-transfer-row { grid-template-columns: minmax(0, 1fr); } .oath-reading > .panel-head, .oath-editor > .panel-head { align-items: flex-start; flex-direction: column; gap: .6rem; } .oath-decision-actions { align-items: stretch; flex-direction: column; } .oath-decision-actions button { white-space: normal; } }

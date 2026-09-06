@@ -1,7 +1,7 @@
 // Cache only this exact public application shell. API responses, credentials,
-// badge/prop/exchange lookups, current story/TRACE data, and gameplay actions
+// badge/prop/exchange lookups, current story/TRACE, balances, agreements, and gameplay actions
 // always go directly to the network.
-const CACHE_NAME = "oracle-static-v0.6.0";
+const CACHE_NAME = "oracle-static-v0.7.0";
 const STATIC_ASSETS = [
   "/", "/app.js", "/style.css", "/themes.css", "/favicon.svg", "/kit.js", "/builder.js",
   "/characters-ui.js", "/characters-model.js", "/characters.css", "/admin-ui.js", "/qr.js",
@@ -12,6 +12,8 @@ const STATIC_ASSETS = [
   "/sharing-ui.js", "/sharing.css",
   "/story-model.js", "/story-ui.js", "/story.css",
   "/trace-model.js", "/trace-ui.js", "/trace.css",
+  "/economy-model.js", "/economy-ui.js", "/economy.css",
+  "/oath-model.js", "/oath-ui.js", "/oath.css",
 ];
 const paths = new Set(STATIC_ASSETS);
 function cacheableRequest(request) {

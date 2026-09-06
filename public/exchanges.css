@@ -71,3 +71,12 @@
   .exchange-session { padding: .9rem; }
   .exchange-review > .panel-head { flex-direction: column; align-items: flex-start; }
 }
+.exchange-asset-picker { border-top: 1px solid var(--line); padding-top: 1rem; margin: 1rem 0; }
+.exchange-asset-picker summary { font-weight: 600; cursor: pointer; }
+.exchange-asset-picker > p { margin-top: .75rem; }
+.exchange-asset-options { display: grid; gap: .65rem; margin-top: .8rem; max-height: 27rem; overflow-y: auto; padding: .15rem; }
+.exchange-asset-option { display: grid; grid-template-columns: minmax(0, 1fr) 6.5rem; align-items: center; gap: .8rem; border: 1px solid var(--line); border-radius: .4rem; padding: .75rem; margin: 0; }
+.exchange-asset-option > span { display: grid; gap: .3rem; min-width: 0; overflow-wrap: anywhere; }
+.exchange-asset-option input { width: 100%; min-width: 0; font-variant-numeric: tabular-nums; }
+.exchange-transaction-reference { overflow-wrap: anywhere; }
+@media (max-width: 420px) { .exchange-asset-option { grid-template-columns: minmax(0, 1fr) 5rem; gap: .5rem; padding: .6rem; } }

@@ -1,12 +1,55 @@
-# ORACLE v0.6.0 — Batch 6 release status
+# ORACLE v0.7.0 — Batch 7 candidate status
+
+Recorded September 6, 2026.
+
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Candidate application `0.7.0`; database schema `8`; briefing-pack format `1`; adventure format `1`. The candidate has not yet received a release commit or deployment record.
+
+Batch 7 passed full local verification and its complete local HTTP staging rehearsal. Exact-candidate PostgreSQL CI, remote staging, and production remain pending. Current production remains the verified Batch 6 release, commit `9c14293bd6a13d5d5912070bdacda6b24308df43`, at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Its last verified startup preserved the existing enabled operator's identity/password; Batch 7 will verify that state again after promotion.
+
+## Batch 7 implemented
+
+- BAZAAR fictional whole-unit resource balances, organizer-defined shops, finite stock, versioned purchases, and immutable transaction receipts.
+- Bilateral QR item/resource barter alongside selected readings: revised offers clear both confirmations; all transfers and reading copies commit together, and exact retries produce one transaction.
+- OATHBOOK private proposals with exact terms revisions, explicit participant acceptance, independent witnesses, expiration, fixed resource settlements, disputes, organizer rulings, and linked corrections.
+- Organizer balance corrections require reasons; character inventory forms also record a reason and before/after quantities in event activity. Existing API clients may omit inventory reasons and receive the documented default audit label.
+- Independent authored resource catalogs, new-starter shops with zero initial balances, and rehearsal copies that restore initial stock and inventory without copying balances, trades, or agreements.
+- Account-bound receipts, revision-audience-filtered agreement history with a 512-entry cap, current ownership checks, online confirmation, explicit uncertain-request retry, and no current economy/agreement cache or offline mutation queue.
+
+Nine gameplay instruments are implemented; three remain planned. Batch 8 adds cooperative challenges and immersive props next. Existing briefing/adventure formats stay 1; briefing packs do not export economy, agreement, character, adventure, exchange, or story histories.
+
+## Candidate verification
+
+| Check | Recorded result |
+| --- | --- |
+| Local HTTP staging rehearsal | Passed 305 reads and 342 writes, including all previous event/character/three-theme adventure/exchange/story workflows, new purchases, mixed barter, independent witnessing, settlement, adjudication, linked correction, and actual rehearsal reset |
+| Legacy/foundation migration checks | 37-test set covered by the initial run plus a corrected planned-instrument fixture rerun: 36 passing tests and one existing TCP-only skip; populated schema-7 records and the complete enabled operator row preserved |
+| Recovery fixture | All 13 new tables populated with valid constraints; repeated schema-8 migration passed locally; actual PostgreSQL dump/restore remains a candidate CI gate |
+| Root integration checks | 22 passed |
+| Kit/offline checks | 27 passed |
+| Full app DOM/API walkthrough | Eight checks passed with zero uncaught errors, using actual modules/HTTP/PGlite and JSDOM, including lost purchase/trade/settlement responses and reassignment privacy |
+| Focused OATHBOOK UI checks | Ten scenarios passed |
+| New and extended HTTP suites | Economy 7 passed; OATHBOOK 13 passed; exchange 14 passed plus one TCP-only skip; story 13 passed including trade-receipt journal privacy |
+| Full local `npm run verify` | 183 tests: 179 passed, zero failures, four deliberate TCP-only skips; syntax, version, and static assets passed |
+| Exact-candidate PostgreSQL CI, Docker, remote staging, and production | Pending; no Batch 7 deployment success is claimed |
+
+The local journey demonstrates corrected shop pricing, finite stock, purchase replay and failed-funds isolation; mixed item/resource barter with revised consent, last-leg rejection without partial writes, and identical retry receipts; revised exact agreement terms, a separate-account witness, participant-only settlement, dispute/adjudication without double payment, and a linked correction. It also populates a rehearsal with actual purchases and an agreement, restores its initial inventory/stock, clears only rehearsal balances/history, and checks the original event remains intact. Local request counts are not remote-deployment claims.
+
+## Current limits and recovery position
+
+- Scheduled live backups remain unconfigured: Railway HOBBY reports `maxBackupsCount: 0` and no external runner is configured. Disposable restore rehearsals do not back up live event data.
+- After migration 008, v0.6.0/schema-7 and earlier binaries are incompatible. Preserve the upgraded data and use a tested schema-8-compatible roll-forward fix.
+- Current balances, shops, pending offers, detailed transaction objects, and agreement terms/signatures are online-only. Authorized completed trade journal receipt text can enter the existing 1,000-entry/3 MB archive; it is historical evidence and confers no current spending rights. Reassignment filters prior captured receipt access. No economy/agreement mutation queue is introduced.
+- Physical phones/cameras, authenticated real-browser/mobile workflows, real service-worker inspection, load measurements, and a human field pilot remain unverified. HTTP, DOM, and storage automation do not replace those gates.
+
+## Previous verified release — Batch 6
 
 Recorded September 6, 2026.
 
 Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Application `0.6.0`; database schema `7`; briefing-pack format `1`; adventure format `1`. Release commit: `9c14293bd6a13d5d5912070bdacda6b24308df43`. Railway staging and production both passed on this exact commit.
 
-Batch 6 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Local verification, real PostgreSQL CI, the complete remote staging workflow, Railway production, and exact-commit public smoke passed. Production migration/startup confirmed the existing reserved operator account is enabled, preserving its identity and password.
+Batch 6 was deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Local verification, real PostgreSQL CI, the complete remote staging workflow, Railway production, and exact-commit public smoke passed. Production migration/startup confirmed the existing reserved operator account is enabled, preserving its identity and password.
 
-## Batch 6 implemented
+### Batch 6 implemented
 
 - TRACE records evidence, people, places, and theories with private defaults, selected journal citations, explicit sharing, visible connections, search/filtering, and archive.
 - WHISPER supplies authored alternate accounts with current audience/condition checks and explicit collection. Hidden staff truth/topic and inaccessible variants stay off player paths; collected rumors remain labeled unverified.
@@ -19,7 +62,7 @@ Batch 6 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegara
 
 Seven gameplay instruments are available; five remain planned. Batch 7 is next. Format-1 briefing packs remain setup/material only and do not export story, investigation, exchange, character, or adventure state.
 
-## Batch 6 release verification
+### Batch 6 release verification
 
 | Check | Recorded result |
 | --- | --- |
@@ -40,7 +83,7 @@ Seven gameplay instruments are available; five remain planned. Batch 7 is next. 
 
 The local staging script exercises differing private rumor accounts; explicit collection/retry; hidden truths; manager exclusion from private theories; canonical citations after confirmed QR sharing; private links; public/private/group/faction audiences; group/faction removal and actual character reapproval; player proposal review; separate draft/live corrections; withdrawal; exchange confirmation invalidation; real discovery-gated collection; and source-preserving rehearsal remapping/reset. The full-app DOM walkthrough also checks persisted notes, selected evidence, safe bulletin poster content, uncertain-response retry, exact UUID reuse, and account/character privacy boundaries. The full suite completed before a final bounded TRACE audience-validation alignment; all eleven focused TRACE tests passed afterward. Both exact-candidate PostgreSQL CI runs then passed the complete suite. Their sole skip is the PGlite-specific snapshot test, replaced by actual dump/restore. Local request counts are not remote-deployment claims.
 
-## Batch 6 deployment record
+### Batch 6 deployment record
 
 | Target | Project ID | Deployment ID | Result |
 | --- | --- | --- | --- |
@@ -51,7 +94,7 @@ Staging logs confirmed migration 7 at 01:34:32 UTC and v0.6.0 `server_ready` in 
 
 Production logs confirmed migration 7 and an existing matching superuser at 01:38:11 UTC on September 6. At 01:38:16 UTC, startup reported v0.6.0 in production and `accountExists: true`, `enabled: true`. Idempotent provisioning preserved the existing UUID/password. The [production smoke job 101408855825](https://github.com/GreenShoeGarage/Oracle/actions/runs/34004393610/job/101408855825) verified the exact commit/version/schema at 01:38:18 UTC and passed all 37 public checks between 01:38:19 and 01:38:23 UTC. Runtime branches retain the checked release commit; subsequent documentation commits do not change the deployed application. No private operator address, account identifier, setup secret, or password appears in these documents.
 
-## Current limits and recovery position
+### Current limits and recovery position
 
 - Scheduled production backups remain unconfigured. Railway HOBBY reports `maxBackupsCount: 0`; no external runner is configured. Disposable restore rehearsals and briefing packs do not back up live data.
 - After migration 007, earlier v0.5.0/schema-6 and older binaries are incompatible. Preserve data and use a tested schema-7-compatible roll-forward fix.

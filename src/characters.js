@@ -60,8 +60,9 @@ export function createCharacterHandler({ pool, config, helpers }) {
     return changed;
   }
   function itemInput(input, withVersion = false) {
-    characterRecord(input, withVersion ? ["version", "name", "quantity", "notes"] : ["name", "quantity", "notes"], "Inventory item");
-    return { name: characterText(input.name, "Item name", 1, 100), quantity: characterInteger(input.quantity, "Item quantity", 0, 9999), notes: characterText(input.notes, "Item notes", 0, 500) };
+    const required = withVersion ? ["version", "name", "quantity", "notes"] : ["name", "quantity", "notes"];
+    characterRecord(input, [...required, "reason"], "Inventory item", required);
+    return { name: characterText(input.name, "Item name", 1, 100), quantity: characterInteger(input.quantity, "Item quantity", 0, 9999), notes: characterText(input.notes, "Item notes", 0, 500), reason: input.reason === undefined ? "Organizer inventory update" : characterText(input.reason, "Inventory correction reason", 1, 1000) };
   }
 
   return async function handleCharacters({ req, res, path, method, user }) {
@@ -173,7 +174,7 @@ export function createCharacterHandler({ pool, config, helpers }) {
           const item = itemInput(input);
           if ((await db.query("SELECT count(*)::int AS n FROM character_inventory WHERE character_id=$1", [row.id])).rows[0].n >= 100) fail(409, "A character can have at most 100 inventory entries.");
           const added = (await db.query("INSERT INTO character_inventory(id,event_id,character_id,name,quantity,notes) VALUES($1,$2,$3,$4,$5,$6) RETURNING *", [randomUUID(), eventId, row.id, item.name, item.quantity, item.notes])).rows[0];
-          await audit(db, eventId, user.id, "character.inventory_added", { characterId: row.id, itemId: added.id, quantity: added.quantity });
+          await audit(db, eventId, user.id, "character.inventory_added", { characterId: row.id, itemId: added.id, beforeQuantity: 0, quantity: added.quantity, reason: item.reason });
           return { item: inventoryProjection(added), inventory: await inventory(db, row.id) };
         }
         if (itemId && ["PATCH", "DELETE"].includes(method)) {
@@ -181,14 +182,15 @@ export function createCharacterHandler({ pool, config, helpers }) {
           if (!item) fail(404, "Inventory item not found.");
           expectVersion(input.version, item.version, "Inventory item");
           if (method === "DELETE") {
-            characterRecord(input, ["version"], "Inventory deletion");
+            characterRecord(input, ["version", "reason"], "Inventory deletion", ["version"]);
+            const reason = input.reason === undefined ? "Organizer inventory removal" : characterText(input.reason, "Inventory correction reason", 1, 1000);
             await db.query("DELETE FROM character_inventory WHERE id=$1", [item.id]);
-            await audit(db, eventId, user.id, "character.inventory_deleted", { characterId: row.id, itemId: item.id });
+            await audit(db, eventId, user.id, "character.inventory_deleted", { characterId: row.id, itemId: item.id, beforeQuantity: item.quantity, quantity: 0, reason });
             return { inventory: await inventory(db, row.id) };
           }
           const data = itemInput(input, true);
           const changed = (await db.query("UPDATE character_inventory SET name=$1,quantity=$2,notes=$3,version=version+1 WHERE id=$4 RETURNING *", [data.name, data.quantity, data.notes, item.id])).rows[0];
-          await audit(db, eventId, user.id, "character.inventory_updated", { characterId: row.id, itemId: item.id, quantity: changed.quantity });
+          await audit(db, eventId, user.id, "character.inventory_updated", { characterId: row.id, itemId: item.id, beforeQuantity: item.quantity, quantity: changed.quantity, reason: data.reason });
           return { item: inventoryProjection(changed), inventory: await inventory(db, row.id) };
         }
         fail(404, "Not found.");

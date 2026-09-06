@@ -1,0 +1,48 @@
+.bazaar-workspace, .bazaar-workspace .panel, .bazaar-workspace form, .bazaar-workspace fieldset, .bazaar-workspace label { min-width: 0; }
+.bazaar-workspace h1, .bazaar-workspace h2, .bazaar-workspace h3, .bazaar-workspace h4, .bazaar-workspace strong, .bazaar-workspace summary { overflow-wrap: anywhere; }
+.bazaar-workspace .error:empty { display: none; }
+.bazaar-section, .bazaar-editor { margin-top: 1.2rem; }
+.bazaar-assets, .bazaar-shops { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 1rem; margin-top: 1rem; }
+.bazaar-character-picker { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; margin: 1.2rem 0; }
+.bazaar-character-picker label { flex: 1 1 14rem; max-width: 27rem; }
+.bazaar-fields { display: grid; gap: .9rem; border: 0; margin: 1rem 0 0; padding: 0; }
+.bazaar-fields > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.bazaar-fields input:not([type="checkbox"]), .bazaar-fields textarea, .bazaar-fields select { width: 100%; }
+.bazaar-fields textarea { min-height: 5rem; resize: vertical; }
+.bazaar-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+.bazaar-fields .check-line input { flex: 0 0 auto; }
+.bazaar-banner, .bazaar-feedback { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: .4rem; padding: 1rem; margin: 1rem 0; overflow-wrap: anywhere; }
+.bazaar-feedback.error { border-left-color: var(--danger, #df7272); }
+.bazaar-banner p { margin-top: .5rem; }
+.bazaar-wallet { display: grid; gap: .8rem; margin-top: 1rem; }
+.bazaar-wallet > div { display: flex; gap: 1rem; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: .8rem; }
+.bazaar-wallet dt { color: var(--muted); }
+.bazaar-wallet dd { margin: 0; color: var(--accent); font: 600 1.6rem var(--heading-font); font-variant-numeric: tabular-nums; }
+.bazaar-inventory { list-style: none; padding: 0; margin-top: 1rem; }
+.bazaar-inventory li { display: flex; gap: 1rem; justify-content: space-between; padding: .7rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.bazaar-inventory strong { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.bazaar-stock { margin-top: 1rem; }
+.bazaar-stock-row { display: flex; gap: .8rem; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding: 1rem 0; }
+.bazaar-stock-row:last-child { padding-bottom: 0; }
+.bazaar-stock-row > div { min-width: 0; }
+.bazaar-stock-row button { flex-shrink: 0; }
+.bazaar-stock-row h4 { margin: 0 0 .25rem; font-size: 1rem; }
+.bazaar-price { margin-top: .4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bazaar-price .hint { display: block; font-weight: 400; margin-top: .2rem; }
+.bazaar-copy { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: .65rem; }
+.bazaar-total { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.bazaar-total strong { color: var(--accent); }
+.bazaar-resources { display: flex; flex-wrap: wrap; gap: .5rem; }
+.bazaar-balance-list { display: grid; gap: .65rem; margin-top: 1rem; max-height: 25rem; overflow-y: auto; }
+.bazaar-balance-row { display: flex; gap: .8rem; align-items: center; border-top: 1px solid var(--line); padding-top: .65rem; }
+.bazaar-balance-row > span { flex: 1; min-width: 0; display: grid; gap: .25rem; }
+.bazaar-receipt { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.bazaar-receipt summary { cursor: pointer; }
+.bazaar-receipt summary > span { margin-right: .8rem; }
+.bazaar-receipt[open] summary { margin-bottom: .8rem; }
+.bazaar-receipt-transfer + .bazaar-receipt-transfer { margin-top: .8rem; }
+.bazaar-receipt-items { padding-left: 1.2rem; margin: .6rem 0; }
+.bazaar-receipt-items li + li { margin-top: .3rem; }
+.bazaar-reference { overflow-wrap: anywhere; margin-top: .7rem; }
+@media (max-width: 780px) { .bazaar-assets, .bazaar-shops { grid-template-columns: minmax(0, 1fr); } .bazaar-workspace .panel-head { align-items: flex-start; flex-wrap: wrap; gap: .7rem; } }
+@media (max-width: 550px) { .bazaar-field-grid { grid-template-columns: minmax(0, 1fr); } .bazaar-stock-row { flex-wrap: wrap; } .bazaar-stock-row > div { flex: 1 1 100%; } .bazaar-balance-row { flex-wrap: wrap; } .bazaar-balance-row > span { flex-basis: 60%; } }

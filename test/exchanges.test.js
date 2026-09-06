@@ -215,3 +215,55 @@ test("admin disable while a final confirmation waits cannot deadlock or share wi
     assert.equal((await pool.query("SELECT count(*)::int AS n FROM exchange_copies WHERE event_id=$1", [f.event.id])).rows[0].n, 0);
   } finally { await blocker.query("ROLLBACK").catch(() => {}); blocker.release(); await pool.query("UPDATE users SET is_disabled=false,is_superuser=false WHERE id=ANY($1::uuid[])", [[users.one.id, users.two.id]]); }
 });
+
+async function tradeFixture() {
+  const f = await fixture();
+  await pool.query("UPDATE events SET setup=jsonb_set(setup,'{enabledInstruments}','[\"briefing\",\"relic\",\"dead-drop\",\"bazaar\"]') WHERE id=$1", [f.event.id]);
+  await pool.query("INSERT INTO economy_resources(event_id,id,name) VALUES($1,'crowns','Crowns')", [f.event.id]);
+  for (const who of ['one', 'two']) await pool.query("INSERT INTO economy_balances(event_id,character_id,resource_id,quantity) VALUES($1,$2,'crowns',20)", [f.event.id, f.characters[who].id]);
+  f.item = (await pool.query('SELECT id,name,quantity,version FROM character_inventory WHERE event_id=$1 AND character_id=$2', [f.event.id, f.characters.one.id])).rows[0];
+  return f;
+}
+async function assetOffer(f, exchange, who, assets, readings = []) {
+  return ok(await request(`${base(f)}/${exchange.id}/offer`, 'PUT', bodyFor(f, who, { version: exchange.version, readingIds: readings, items: assets.items || [], resources: assets.resources || [] }), users[who])).exchange;
+}
+
+test('QR trade terms bind item versions and both consents, transfer atomically, and preserve immutable receipts after source consumption', async () => {
+  const f = await tradeFixture();
+  let exchange = await join(f, await create(f));
+  const assets = { items: [{ itemId: f.item.id, quantity: 1, version: 1 }], resources: [{ resourceId: 'crowns', quantity: 3 }] };
+  exchange = await assetOffer(f, exchange, 'one', assets, [f.readings.one]);
+  exchange = await assetOffer(f, exchange, 'two', { resources: [{ resourceId: 'crowns', quantity: 7 }] });
+  assert.deepEqual(exchange.partner.assets.items, [{ itemId: f.item.id, name: f.item.name, quantity: 1, version: 1 }]); noPrivate(exchange);
+  exchange = await confirm(f, exchange, 'one'); const version = exchange.version;
+  exchange = await assetOffer(f, exchange, 'one', assets, [f.readings.one]); assert.equal(exchange.version, version); assert.equal(exchange.own.confirmed, true);
+  await pool.query('UPDATE character_inventory SET version=version+1 WHERE id=$1', [f.item.id]);
+  assert.equal((await request(`${base(f)}/${exchange.id}/confirm`, 'POST', bodyFor(f, 'two', { version }), users.two)).status, 409);
+  assert.equal((await pool.query('SELECT count(*)::int AS n FROM exchange_copies WHERE event_id=$1', [f.event.id])).rows[0].n, 0);
+  exchange = await assetOffer(f, exchange, 'one', { ...assets, items: [{ ...assets.items[0], version: 2 }] }, [f.readings.one]); assert.equal(exchange.version, version + 1); assert.equal(exchange.own.confirmed, false); assert.equal(exchange.partner.confirmed, false);
+  exchange = await confirm(f, exchange, 'one'); const finalInput = bodyFor(f, 'two', { version: exchange.version });
+  const completed = ok(await request(`${base(f)}/${exchange.id}/confirm`, 'POST', finalInput, users.two)); assert.equal(completed.exchange.status, 'completed'); assert.equal(completed.exchange.receipt.received[0].text, secretOne); assert.equal(completed.exchange.receipt.assets.received.items[0].quantity, 1);
+  assert.ok(completed.exchange.receipt.assets.transactionId); const replay = ok(await request(`${base(f)}/${exchange.id}/confirm`, 'POST', finalInput, users.two)); assert.equal(replay.outcome.replayed, true); assert.equal(replay.exchange.receipt.assets.transactionId, completed.exchange.receipt.assets.transactionId);
+  const sender = await view(f, exchange, 'one'); assert.equal(sender.own.assets.valid, true); assert.equal(sender.receipt.assets.sent.items[0].name, f.item.name); assert.equal(sender.blockedReason, null);
+  assert.equal((await pool.query('SELECT count(*)::int AS n FROM economy_transactions WHERE event_id=$1', [f.event.id])).rows[0].n, 1);
+  assert.equal((await pool.query('SELECT quantity FROM economy_balances WHERE event_id=$1 AND character_id=$2', [f.event.id, f.characters.one.id])).rows[0].quantity, 24);
+  assert.equal((await pool.query('SELECT quantity FROM economy_balances WHERE event_id=$1 AND character_id=$2', [f.event.id, f.characters.two.id])).rows[0].quantity, 16);
+  assert.equal((await pool.query('SELECT id FROM character_inventory WHERE id=$1', [f.item.id])).rows.length, 0);
+  const recipientItem = (await pool.query("SELECT * FROM character_inventory WHERE event_id=$1 AND character_id=$2 AND notes=''", [f.event.id, f.characters.two.id])).rows[0]; assert.equal(recipientItem.quantity, 1); assert.equal(recipientItem.notes, '');
+});
+
+test('last-leg inventory capacity failure rolls back every reading, balance, item, receipt and final assent', async () => {
+  const f = await tradeFixture();
+  await pool.query("UPDATE character_inventory SET name='Unique offered item' WHERE id=$1", [f.item.id]);
+  for (let i = 0; i < 99; i++) await pool.query('INSERT INTO character_inventory(id,event_id,character_id,name,quantity,notes) VALUES($1,$2,$3,$4,1,\'\')', [randomUUID(), f.event.id, f.characters.two.id, `Occupied slot ${i}`]);
+  let exchange = await join(f, await create(f)); exchange = await assetOffer(f, exchange, 'one', { items: [{ itemId: f.item.id, quantity: 1, version: 1 }], resources: [{ resourceId: 'crowns', quantity: 3 }] }, [f.readings.one]); exchange = await confirm(f, exchange, 'one');
+  const snapshot = async () => ({ inventory: (await pool.query('SELECT * FROM character_inventory WHERE event_id=$1 ORDER BY id', [f.event.id])).rows, balances: (await pool.query('SELECT * FROM economy_balances WHERE event_id=$1 ORDER BY character_id', [f.event.id])).rows, journal: (await pool.query('SELECT * FROM adventure_journal WHERE event_id=$1 ORDER BY id', [f.event.id])).rows });
+  const before = await snapshot();
+  assert.equal((await request(`${base(f)}/${exchange.id}/confirm`, 'POST', bodyFor(f, 'two', { version: exchange.version }), users.two)).status, 409);
+  assert.deepEqual(await snapshot(), before);
+  for (const table of ['economy_transactions', 'exchange_receipts', 'exchange_copies']) assert.equal((await pool.query(`SELECT count(*)::int AS n FROM ${table} WHERE event_id=$1`, [f.event.id])).rows[0].n, 0);
+  const current = await view(f, exchange, 'two'); assert.equal(current.status, 'negotiating'); assert.equal(current.own.confirmed, false); assert.equal(current.partner.confirmed, true);
+  await pool.query("UPDATE events SET setup=jsonb_set(setup,'{enabledInstruments}','[\"briefing\",\"relic\",\"dead-drop\"]') WHERE id=$1", [f.event.id]);
+  assert.equal((await request(`${base(f)}/${exchange.id}/confirm`, 'POST', bodyFor(f, 'two', { version: exchange.version }), users.two)).status, 409);
+  exchange = await assetOffer(f, exchange, 'one', {}, [f.readings.one]); exchange = await confirm(f, exchange, 'one'); exchange = await confirm(f, exchange, 'two'); assert.equal(exchange.status, 'completed'); assert.equal(exchange.receipt.assets.transactionId, null);
+});

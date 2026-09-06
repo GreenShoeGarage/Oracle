@@ -99,7 +99,11 @@ test("approval initializes independent inventory once and reapproval never refil
   let items = success(await request(`${chars(ev)}/${character.id}/inventory`, "GET", undefined, users.player)).inventory;
   assert.equal(items.length, 1); assert.equal(items[0].quantity, 2);
   assert.equal((await request(`${chars(ev)}/${character.id}/inventory/${items[0].id}`, "PATCH", { ...items[0], quantity: 0 }, users.player)).status, 403);
-  const changedItem = success(await request(`${chars(ev)}/${character.id}/inventory/${items[0].id}`, "PATCH", { version: items[0].version, name: items[0].name, quantity: 0, notes: items[0].notes })).item;
+  const changedItem = success(await request(`${chars(ev)}/${character.id}/inventory/${items[0].id}`, "PATCH", { version: items[0].version, name: items[0].name, quantity: 0, notes: items[0].notes, reason: "Correct a recorded use during the scene" })).item;
+  const correction = (await pool.query("SELECT details FROM audit_entries WHERE event_id=$1 AND action='character.inventory_updated'", [ev.id])).rows[0].details;
+  assert.equal(correction.reason, "Correct a recorded use during the scene");
+  assert.equal(correction.beforeQuantity, 2); assert.equal(correction.quantity, 0);
+  assert.ok(!JSON.stringify(correction).includes("PRIVATE inventory notes"));
   assert.equal((await request(`${chars(ev)}/${character.id}/inventory/${items[0].id}`, "PATCH", { version: items[0].version, name: items[0].name, quantity: 4, notes: "" })).status, 409);
   const changedProfile = { ...character.profile, biography: "A changed biography", startingEquipment: [{ name: "Lantern", quantity: 99, notes: "new authoring value" }] };
   character = success(await request(`${chars(ev)}/${character.id}`, "PATCH", { version: character.version, profile: changedProfile }, users.player)).character;

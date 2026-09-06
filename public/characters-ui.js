@@ -10,6 +10,9 @@ export function createCharacterUI(ctx) {
   let characters = [], factions = [], settings = defaultCharacterSettings(), loadedEventId = null;
   let selected = null, inventory = [], draft = null, step = 0, dirty = false, portraitBusy = false;
   let scannerStop = null, scannerController = null, modalEpoch = 0, shownBadge = null;
+  let inventoryBaseline = null;
+  const inventoryValues = () => { const form = document.querySelector("#character-inventory-form"); return form ? JSON.stringify(Array.from(new FormData(form).entries())) : null; };
+  const inventoryDirty = () => inventoryBaseline !== null && inventoryValues() !== null && inventoryValues() !== inventoryBaseline;
   const base = () => `/api/events/${state.event.id}`;
   const path = (id) => `${base()}/characters/${id}`;
   const rules = () => state.event?.setup?.rules || { attributes: [], expertise: [] };
@@ -94,7 +97,7 @@ export function createCharacterUI(ctx) {
     wideModal(full ? 'Character sheet' : 'Public character card', `<div class="character-sheet">${err}<div class="character-sheet-meta">${status(character.status)}<span class="save-status"><span class="save-dot"></span>Saved to event</span>${full ? `<span class="hint">${esc(memberName(character.userId))}</span>` : '<span class="hint">Public identity</span>'}</div>${profileSummary(character.profile, full)}${feedback}<div class="actions character-sheet-actions">${editable ? '<button class="primary" data-action="character-edit">Edit character</button>' : ''}${editable && ['draft', 'changes_requested'].includes(character.status) ? `<button data-action="character-submit">${settings.requireApproval ? 'Submit for approval' : 'Activate character'}</button>` : ''}${full && character.status === 'approved' ? '<button data-action="character-badge">Public badge & QR</button>' : ''}${full ? '<button data-action="character-copy">Copy to another event</button>' : ''}</div>${full ? inventorySection() : ''}${full && mutable() && character.status !== 'retired' ? `<details class="character-block character-manager-tools"><summary>${isManager() ? 'Organizer controls' : 'Character actions'}</summary><div class="actions mt">${isManager() && character.status === 'pending' ? '<button class="primary" data-action="character-review" data-decision="approve">Approve character</button><button data-action="character-review" data-decision="request_changes">Request changes</button>' : ''}${isManager() ? `<button data-action="character-assign">${character.userId ? 'Change assignment' : 'Assign to a player'}</button>` : ''}<button class="quiet danger" data-action="character-retire">Retire character</button>${character.status === 'approved' ? '<button class="quiet" data-action="character-rotate-badge">Replace badge code</button>' : ''}</div><p class="hint">Replacing a badge code immediately invalidates the previous QR code and link.</p></details>` : ''}</div>`);
   }
   function inventorySection() {
-    return `<section class="character-block"><div class="panel-head"><h3>Inventory</h3>${isManager() && mutable() && selected.status !== 'retired' ? '<button data-action="character-inventory-new">+ Add item</button>' : ''}</div>${inventory.length ? `<ul class="character-inventory">${inventory.map((item) => `<li><div><strong>${item.quantity} × ${esc(item.name)}</strong>${item.notes ? `<p class="hint">${esc(item.notes)}</p>` : ''}</div>${isManager() && mutable() && selected.status !== 'retired' ? `<button data-action="character-inventory-edit" data-id="${esc(item.id)}">Edit</button>` : ''}</li>`).join('')}</ul>` : `<p class="hint">${selected.inventoryInitialized ? 'No items in inventory.' : 'Starting equipment will appear here after the first approval.'}</p>`}<p class="hint">Inventory changes are managed by organizers. Items are private and are not shared by scanning a badge.</p></section>`;
+    return `<section class="character-block"><div class="panel-head"><h3>Inventory</h3>${isManager() && mutable() && selected.status !== 'retired' ? '<button data-action="character-inventory-new">+ Add item</button>' : ''}</div>${inventory.length ? `<ul class="character-inventory">${inventory.map((item) => `<li><div><strong>${item.quantity} × ${esc(item.name)}</strong>${item.notes ? `<p class="hint">${esc(item.notes)}</p>` : ''}</div>${isManager() && mutable() && selected.status !== 'retired' ? `<button data-action="character-inventory-edit" data-id="${esc(item.id)}">Edit</button>` : ''}</li>`).join('')}</ul>` : `<p class="hint">${selected.inventoryInitialized ? 'No items in inventory.' : 'Starting equipment will appear here after the first approval.'}</p>`}<p class="hint">Organizers manage inventory corrections. Confirmed purchases and trades update quantities. Your full inventory stays private; scanning a badge shares no items.</p></section>`;
   }
   function reviewModal(decision) {
     wideModal(decision === 'approve' ? 'Approve character' : 'Request character changes', `<p class="hint">${esc(selected.profile.name)} · ${esc(memberName(selected.userId))}</p><form id="character-review-form" data-decision="${decision}">${err}<label>${decision === 'approve' ? 'Feedback · optional' : 'What should the player change?'}<textarea name="feedback" maxlength="2000" ${decision === 'request_changes' ? 'required' : ''}></textarea></label><button type="submit" class="primary">${decision === 'approve' ? 'Approve character' : 'Send change request'}</button></form>`);
@@ -107,7 +110,8 @@ export function createCharacterUI(ctx) {
     wideModal('Copy character to another event', `${events.length ? `<form id="character-copy-form">${err}<label>Destination event<select name="targetEventId">${events.map((event) => `<option value="${esc(event.id)}">${esc(event.name)}</option>`).join('')}</select></label><p class="hint">Creates a new draft assigned to you. The destination event’s character limits and rules apply. Attribute values use its defaults; only matching skills remain.</p><p class="hint">Faction, private objectives, starting equipment, and inventory are cleared. Review the new draft before submitting it.</p><button type="submit" class="primary">Create a copy</button></form>` : '<p class="hint">Join or create another active event before copying a character.</p>'}`);
   }
   function inventoryModal(item = null) {
-    wideModal(item ? 'Edit inventory item' : 'Add inventory item', `<form id="character-inventory-form" data-id="${esc(item?.id || '')}" data-version="${item?.version || ''}">${err}${field('name', 'Item name', item?.name || '', 'required maxlength="100"')}${field('quantity', 'Quantity', item?.quantity ?? 1, 'type="number" min="0" max="9999" required')}<label>Notes · optional<textarea name="notes" maxlength="500">${esc(item?.notes || '')}</textarea></label><div class="actions"><button type="submit" class="primary">Save item</button>${item ? `<button type="button" class="quiet danger" data-action="character-inventory-delete" data-id="${esc(item.id)}" data-version="${item.version}">Remove item</button>` : ''}<button type="button" data-action="character-sheet-return">Back to sheet</button></div></form>`);
+    wideModal(item ? 'Edit inventory item' : 'Add inventory item', `<form id="character-inventory-form" data-id="${esc(item?.id || '')}" data-version="${item?.version || ''}">${err}${field('name', 'Item name', item?.name || '', 'required maxlength="100"')}${field('quantity', 'Quantity', item?.quantity ?? 1, 'type="number" min="0" max="9999" required')}<label>Notes · optional<textarea name="notes" maxlength="500">${esc(item?.notes || '')}</textarea></label>${field('reason', 'Reason for this inventory change', '', 'required maxlength="1000"')}<p class="hint">Your reason and quantity correction are recorded in event activity.</p><div class="actions"><button type="submit" class="primary">Save item</button>${item ? `<button type="button" class="quiet danger" data-action="character-inventory-delete" data-id="${esc(item.id)}" data-version="${item.version}">Remove item</button>` : ''}<button type="button" data-action="character-sheet-return">Back to sheet</button></div></form>`);
+    inventoryBaseline = inventoryValues();
   }
   function factionModal(faction = null) {
     wideModal(faction ? 'Edit faction' : 'Add faction', `<form id="character-faction-form" data-id="${esc(faction?.id || '')}" data-version="${faction?.version || ''}">${err}${field('name', 'Faction name', faction?.name || '', 'required maxlength="80"')}<label>Description<textarea name="description" maxlength="2000">${esc(faction?.description || '')}</textarea></label><div class="actions"><button type="submit" class="primary">Save faction</button>${faction ? `<button type="button" class="quiet danger" data-action="character-faction-delete" data-id="${esc(faction.id)}" data-version="${faction.version}">Delete faction</button>` : ''}</div></form>`);
@@ -143,8 +147,8 @@ export function createCharacterUI(ctx) {
     if (start) start.hidden = false; if (stop) stop.hidden = true;
     const label = document.querySelector('#character-scan-status'); if (label) label.textContent = 'Camera stopped. You can enter a code or choose a QR image.';
   }
-  function cleanupModal(reset = true) { modalEpoch++; stopCamera(); document.body.classList.remove('character-printing'); if (reset) { draft = null; dirty = false; portraitBusy = false; } }
-  function confirmDiscard() { if ((dirty || portraitBusy) && !window.confirm('Discard your unsaved character changes?')) return false; cleanupModal(); return true; }
+  function cleanupModal(reset = true) { modalEpoch++; stopCamera(); document.body.classList.remove('character-printing'); if (reset) { draft = null; dirty = false; portraitBusy = false; inventoryBaseline = null; } }
+  function confirmDiscard() { if ((dirty || portraitBusy || inventoryDirty()) && !window.confirm('Discard your unsaved character changes?')) return false; cleanupModal(); return true; }
   async function handleHash() {
     if (!location.hash.startsWith('#badge/') || !state.session?.user) return false;
     if (!confirmDiscard()) { history.replaceState(null, '', `${location.pathname}${location.search}`); return true; }
@@ -162,7 +166,7 @@ export function createCharacterUI(ctx) {
       case 'character-refresh': await open(); toast('Characters refreshed.'); break;
       case 'character-create': startEditor(); break;
       case 'character-sheet': await showSheet(button.dataset.id); break;
-      case 'character-sheet-return': await showSheet(selected.id); break;
+      case 'character-sheet-return': if (confirmDiscard()) await showSheet(selected.id); break;
       case 'character-edit': startEditor(selected); break;
       case 'character-step-back': capture(); step--; showStep(); break;
       case 'character-save-draft': { const form = document.querySelector('#character-editor-form'); if (form.reportValidity()) await saveDraft(); break; }
@@ -183,7 +187,7 @@ export function createCharacterUI(ctx) {
       case 'character-camera-stop': modalEpoch++; stopCamera(); break;
       case 'character-inventory-new': inventoryModal(); break;
       case 'character-inventory-edit': inventoryModal(inventory.find((item) => item.id === button.dataset.id)); break;
-      case 'character-inventory-delete': if (window.confirm('Remove this inventory item?')) { await api(`${path(selected.id)}/inventory/${button.dataset.id}`, 'DELETE', { version: Number(button.dataset.version) }); await showSheet(selected.id); toast('Inventory item removed.'); } break;
+      case 'character-inventory-delete': { const form = button.closest('form'); if (form.reportValidity() && window.confirm('Remove this inventory item?')) { await api(`${path(selected.id)}/inventory/${button.dataset.id}`, 'DELETE', { version: Number(button.dataset.version), reason: new FormData(form).get('reason') }); inventoryBaseline = null; await showSheet(selected.id); toast('Inventory item removed.'); } break; }
       case 'character-faction-new': factionModal(); break;
       case 'character-faction-edit': factionModal(factions.find((faction) => faction.id === button.dataset.id)); break;
       case 'character-faction-delete': if (window.confirm('Delete this faction? Characters using it must be reassigned first.')) { await api(`${base()}/factions/${button.dataset.id}`, 'DELETE', { version: Number(button.dataset.version) }); closeModal(true); await open(); toast('Faction deleted.'); } break;
@@ -199,7 +203,7 @@ export function createCharacterUI(ctx) {
       case 'character-review-form': await api(`${path(selected.id)}/review`, 'POST', { version: selected.version, decision: form.dataset.decision, feedback: String(data.get('feedback') || '') }); await refresh(); render(); await showSheet(selected.id); toast(form.dataset.decision === 'approve' ? 'Character approved.' : 'Changes requested.'); break;
       case 'character-assign-form': await api(`${path(selected.id)}/assign`, 'POST', { version: selected.version, userId: data.get('userId') || null }); await refresh(); render(); await showSheet(selected.id); toast('Character assignment saved.'); break;
       case 'character-copy-form': { const result = await api(`${path(selected.id)}/copy`, 'POST', { targetEventId: data.get('targetEventId') }); closeModal(true); await loadEvent(result.character.eventId); await open(); await showSheet(result.character.id); toast(result.warnings?.length ? `Draft copied. ${result.warnings.join(' ')}` : 'Character copied as a new draft. Review it before submitting.'); break; }
-      case 'character-inventory-form': { const body = { name: data.get('name'), quantity: Number(data.get('quantity')), notes: data.get('notes') }; if (form.dataset.id) body.version = Number(form.dataset.version); await api(`${path(selected.id)}/inventory${form.dataset.id ? `/${form.dataset.id}` : ''}`, form.dataset.id ? 'PATCH' : 'POST', body); await showSheet(selected.id); toast('Inventory saved.'); break; }
+      case 'character-inventory-form': { const body = { name: data.get('name'), quantity: Number(data.get('quantity')), notes: data.get('notes'), reason: data.get('reason') }; if (form.dataset.id) body.version = Number(form.dataset.version); await api(`${path(selected.id)}/inventory${form.dataset.id ? `/${form.dataset.id}` : ''}`, form.dataset.id ? 'PATCH' : 'POST', body); inventoryBaseline = null; await showSheet(selected.id); toast('Inventory saved.'); break; }
       case 'character-faction-form': { const body = { name: data.get('name'), description: data.get('description') }; if (form.dataset.id) body.version = Number(form.dataset.version); await api(`${base()}/factions${form.dataset.id ? `/${form.dataset.id}` : ''}`, form.dataset.id ? 'PATCH' : 'POST', body); closeModal(true); await open(); toast('Faction saved.'); break; }
       case 'character-scan-form': await scanResult(data.get('code')); break;
     }
@@ -223,10 +227,10 @@ export function createCharacterUI(ctx) {
     } finally { if (epoch === modalEpoch) portraitBusy = false; }
   });
   window.addEventListener('pagehide', () => { modalEpoch++; stopCamera(); });
-  window.addEventListener('beforeunload', (event) => { if (dirty || portraitBusy) { event.preventDefault(); event.returnValue = ''; } });
+  window.addEventListener('beforeunload', (event) => { if (dirty || portraitBusy || inventoryDirty()) { event.preventDefault(); event.returnValue = ''; } });
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopCamera(); });
   window.addEventListener('afterprint', () => document.body.classList.remove('character-printing'));
-  return { render, action, submit, open, handleHash, confirmDiscard, cleanupModal, isDirty: () => dirty || portraitBusy };
+  return { render, action, submit, open, handleHash, confirmDiscard, cleanupModal, isDirty: () => dirty || portraitBusy || inventoryDirty() };
 }
 
 async function preparePortrait(file) {

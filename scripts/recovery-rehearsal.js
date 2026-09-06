@@ -99,7 +99,7 @@ try {
   const actionInput = { requestId, version: 1, characterId: fixture.character, nodeId: relic.id, kind: "examine", examId: relic.examinations[0].id, code: relic.code };
   const payloadHash = digest(JSON.stringify({ override: false, input: Object.fromEntries(Object.keys(actionInput).sort().map((key) => [key, actionInput[key]])) }));
   await transaction(source, async (client) => {
-    await client.query("INSERT INTO users(id,email,display_name,password_hash,is_superuser,is_disabled) VALUES($1,$2,'Recovery rehearsal','not-a-login-credential',true,true)", [fixture.user, `recovery-${fixture.user}@example.invalid`]);
+    await client.query("INSERT INTO users(id,email,display_name,password_hash,is_superuser,is_disabled) VALUES($1,$2,'Recovery rehearsal','not-a-login-credential',true,false)", [fixture.user, `recovery-${fixture.user}@example.invalid`]);
     await client.query("INSERT INTO users(id,email,display_name,password_hash) VALUES($1,$2,'Recovery exchange peer','not-a-login-credential')", [fixture.peer, `recovery-${fixture.peer}@example.invalid`]);
     await client.query("INSERT INTO events(id,owner_user_id,name,setup,status) VALUES($1,$2,'Recovery rehearsal event',$3,'rehearsal')", [fixture.event, fixture.user, JSON.stringify(setup)]);
     await client.query("INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'owner')", [fixture.event, fixture.user]);
@@ -148,7 +148,34 @@ try {
     const trace = { kind: "theory", title: "Recovery private hypothesis", notes: "The reported movement may be an innocent mistake; this is player speculation.", audience: { type: "private", ids: [] }, sources: [fixture.originJournal, fixture.rumorJournal], links: [] };
     await client.query("INSERT INTO trace_records(id,event_id,owner_user_id,character_id,document,version,archived) VALUES($1,$2,$3,$4,$5,3,false)", [fixture.trace, fixture.event, fixture.user, fixture.character, JSON.stringify(trace)]);
     await client.query("INSERT INTO trace_requests(event_id,actor_user_id,request_id,payload_hash,record_id) VALUES($1,$2,$3,$4,$5)", [fixture.event, fixture.user, randomUUID(), digest(JSON.stringify(trace)), fixture.trace]);
+    // A settled agreement with immutable economic evidence ensures every new
+    // schema-8 table contains real values in the PostgreSQL dump/restore gate.
+    const resourceId = "recovery-tokens", shopId = randomUUID(), stockId = randomUUID(), agreementId = randomUUID(), transactionId = randomUUID();
+    await client.query("INSERT INTO economy_resources(event_id,id,name) VALUES($1,$2,'Recovery fictional tokens')", [fixture.event, resourceId]);
+    for (const [characterId, quantity] of [[fixture.character, 7], [fixture.peerCharacter, 13]])
+      await client.query("INSERT INTO economy_balances(event_id,character_id,resource_id,quantity,version) VALUES($1,$2,$3,$4,3)", [fixture.event, characterId, resourceId, quantity]);
+    await client.query("INSERT INTO economy_shops(id,event_id,name,description,enabled,version) VALUES($1,$2,'Recovery supply shop','Preserve the authored fictional shop.',true,2)", [shopId, fixture.event]);
+    await client.query("INSERT INTO economy_stock(id,event_id,shop_id,name,description,quantity,initial_quantity,resource_id,unit_price,version) VALUES($1,$2,$3,'Recovery rope','Public inventory description.',2,3,$4,2,4)", [stockId, fixture.event, shopId, resourceId]);
+    const settledAt = new Date().toISOString();
+    const settlement = [{ fromCharacterId: fixture.character, toCharacterId: fixture.peerCharacter, resourceId, quantity: 3 }];
+    const economyReceipt = { id: transactionId, kind: "oath", createdAt: settledAt, referenceId: agreementId, transfers: [{ fromCharacterId: fixture.character, fromName: profile.name, toCharacterId: fixture.peerCharacter, toName: "Recovery exchange recipient", items: [], resources: [{ resourceId, name: "Recovery fictional tokens", quantity: 3 }] }] };
+    const terms = "The travellers accepted the delivery of the recovered lantern and a three-token settlement.";
+    await client.query("INSERT INTO oath_agreements(id,event_id,creator_user_id,creator_character_id,title,terms,settlement,status,version,terms_version,settled_at,receipt) VALUES($1,$2,$3,$4,'Recovery delivery agreement',$5,$6,'fulfilled',7,2,$7,$8)", [agreementId, fixture.event, fixture.user, fixture.character, terms, JSON.stringify(settlement), settledAt, JSON.stringify(economyReceipt)]);
+    for (const [characterId, ownerId, name] of [[fixture.character, fixture.user, profile.name], [fixture.peerCharacter, fixture.peer, "Recovery exchange recipient"]])
+      await client.query("INSERT INTO oath_participants(event_id,agreement_id,character_id,owner_user_id,name,kind,accepted_terms_version,accepted_at,settlement_terms_version,settlement_confirmed_at) VALUES($1,$2,$3,$4,$5,'participant',2,$6,2,$6)", [fixture.event, agreementId, characterId, ownerId, name, settledAt]);
+    await client.query("INSERT INTO oath_history(id,event_id,agreement_id,actor_user_id,character_id,character_name,action,terms_version,details) VALUES($1,$2,$3,$4,$5,$6,'revised',2,$7)", [randomUUID(), fixture.event, agreementId, fixture.user, fixture.character, profile.name, JSON.stringify({ snapshot: { title: "Recovery delivery agreement", terms, participantIds: [fixture.character, fixture.peerCharacter], witnessIds: [], expiresAt: null, settlement }, reason: "Preserve the exact terms accepted by both characters." })]);
+    const settlementRequestId = randomUUID();
+    await client.query("INSERT INTO oath_requests(event_id,actor_user_id,request_id,payload_hash,agreement_id) VALUES($1,$2,$3,$4,$5)", [fixture.event, fixture.peer, settlementRequestId, digest(JSON.stringify({ action: "settle", agreementId, characterId: fixture.peerCharacter, version: 6 })), agreementId]);
+    await client.query("INSERT INTO economy_transactions(id,event_id,kind,reference_id,payload_hash,actor_user_id,receipt,created_at) VALUES($1,$2,'oath',$3,$4,$5,$6,$7)", [transactionId, fixture.event, agreementId, digest(JSON.stringify(settlement)), fixture.peer, JSON.stringify(economyReceipt), settledAt]);
+    for (const [ownerId, characterId] of [[fixture.user, fixture.character], [fixture.peer, fixture.peerCharacter]])
+      await client.query("INSERT INTO economy_receipts(event_id,transaction_id,owner_user_id,owner_character_id) VALUES($1,$2,$3,$4)", [fixture.event, transactionId, ownerId, characterId]);
+    await client.query("INSERT INTO economy_requests(event_id,actor_user_id,request_id,payload_hash,action,response) VALUES($1,$2,$3,$4,'resources.create',$5)", [fixture.event, fixture.user, randomUUID(), digest(JSON.stringify({ id: resourceId, name: "Recovery fictional tokens" })), JSON.stringify({ resource: { id: resourceId, name: "Recovery fictional tokens" } })]);
+    const baseline = (await client.query("SELECT * FROM character_inventory WHERE event_id=$1 ORDER BY id", [fixture.event])).rows;
+    await client.query("INSERT INTO economy_baselines(event_id,inventory) VALUES($1,$2)", [fixture.event, JSON.stringify(baseline)]);
+    await client.query("INSERT INTO exchange_trade_offers(event_id,exchange_id,side,snapshot) VALUES($1,$2,'initiator',$3)", [fixture.event, fixture.exchange, JSON.stringify({ items: [], resources: [], valid: true })]);
   });
+  for (const table of ["economy_resources", "economy_balances", "economy_shops", "economy_stock", "economy_transactions", "economy_receipts", "economy_requests", "economy_baselines", "exchange_trade_offers", "oath_agreements", "oath_participants", "oath_history", "oath_requests"])
+    assert.ok((await source.query(`SELECT count(*)::int AS n FROM ${table}`)).rows[0].n > 0, `${table} must contain actual recovery data.`);
   await source.query(`CREATE DATABASE "${name}"`);
   const out = await open(backup, "wx", 0o600);
   try {
@@ -219,6 +246,19 @@ try {
     ["story_activity", "id"],
     ["trace_records", "id"],
     ["trace_requests", "event_id,actor_user_id,request_id"],
+    ["economy_resources", "event_id,id"],
+    ["economy_balances", "event_id,character_id,resource_id"],
+    ["economy_shops", "id"],
+    ["economy_stock", "id"],
+    ["economy_transactions", "id"],
+    ["economy_receipts", "event_id,transaction_id,owner_user_id,owner_character_id"],
+    ["economy_requests", "event_id,actor_user_id,request_id"],
+    ["economy_baselines", "event_id"],
+    ["exchange_trade_offers", "event_id,exchange_id,side"],
+    ["oath_agreements", "id"],
+    ["oath_participants", "event_id,agreement_id,character_id"],
+    ["oath_history", "id"],
+    ["oath_requests", "event_id,actor_user_id,request_id"],
     ["schema_migrations", "version"],
   ]) {
     const a = (await source.query(`SELECT * FROM ${table} ORDER BY ${order}`))
@@ -257,7 +297,7 @@ try {
   const systemAudit = (await restored.query("INSERT INTO system_audit_entries(actor_id,target_user_id,action) VALUES($1,$1,'recovery.rehearsed') RETURNING id", [fixture.user])).rows[0];
   assert.ok(BigInt(systemAudit.id) > maximumSystemAudit, "Restored system audit identity sequence must advance safely.");
   console.log(
-    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventures, journals, sharing policies, exchange sessions, provenance, bilateral contacts and receipts, story groups and draft/publication separation, hidden truths, collected rumors, activity, private investigations, replay records, both audit sequences, and migration after restore passed.",
+    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventures, journals, sharing policies, exchange sessions, provenance, bilateral contacts and receipts, story groups and draft/publication separation, hidden truths, collected rumors, activity, private investigations, fictional balances and finite shops, atomic transaction receipts, inventory baselines, fixed agreement terms and captured signatures, replay records, both audit sequences, and migration after restore passed.",
   );
 } finally {
   if (restored) await restored.end();

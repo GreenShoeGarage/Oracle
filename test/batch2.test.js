@@ -8,6 +8,7 @@ import { migrate, checkSchema } from "../src/db.js";
 import { createApp } from "../src/app.js";
 import { readConfig } from "../src/config.js";
 import { defaultSetup, THEMES } from "../public/kit.js";
+import { defaultStoryDocument } from "../public/story-model.js";
 import { defaultCharacterProfile } from "../public/characters-model.js";
 import { defaultAdventure, defaultAdventureNode } from "../public/adventure-model.js";
 
@@ -78,7 +79,7 @@ before(async () => {
   await pool.query("INSERT INTO audit_entries(event_id,actor_id,action,details) VALUES($1,$2,'event.created','{}')", [legacy.event, legacy.user]);
   // Preserve populated deployed character and adventure data through migration,
   // while the assertions below continue checking the original Batch 1 data.
-  for (const name of ["002_event_setup.sql", "003_superuser.sql", "004_characters.sql", "005_adventures.sql", "006_exchanges.sql"]) {
+  for (const name of ["002_event_setup.sql", "003_superuser.sql", "004_characters.sql", "005_adventures.sql", "006_exchanges.sql", "007_story.sql"]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     await pool.query(sql);
     await pool.query("INSERT INTO schema_migrations(version,name,checksum) VALUES($1,$2,$3)", [Number(name.slice(0, 3)), name, createHash("sha256").update(sql).digest("hex")]);
@@ -130,6 +131,23 @@ before(async () => {
   legacy.exchangeTables = {};
   for (const table of ["event_sharing_settings", "exchange_sessions", "exchange_copies", "exchange_receipts", "exchange_contacts", "exchange_requests"])
     legacy.exchangeTables[table] = (await pool.query(`SELECT * FROM ${table} WHERE event_id=$1 ORDER BY 1,2`, [legacy.storyEvent])).rows;
+  // Populate every deployed schema-7 table before schema-8 migration. Preserve
+  // private drafts, published snapshots, citations, and exact acceptance history.
+  const groupId = randomUUID(), rumorId = randomUUID(), traceId = randomUUID(), rumorJournalId = randomUUID();
+  await pool.query("INSERT INTO story_groups(id,event_id,name,character_ids,version) VALUES($1,$2,'Existing investigation group',$3,4)", [groupId, legacy.storyEvent, JSON.stringify([legacy.storyCharacter, legacy.peerCharacter])]);
+  const rumor = { ...defaultStoryDocument(), title: "Existing witness account", body: "An already published account.", topic: "Private staff topic", truth: "Private staff truth", audience: { type: "group", ids: [groupId] }, shareable: true };
+  await pool.query("INSERT INTO story_entries(id,event_id,kind,document,status,version,published,published_version,created_by) VALUES($1,$2,'rumor',$3,'submitted',6,$4,5,$5)", [rumorId, legacy.storyEvent, JSON.stringify({ ...rumor, body: "A correction awaiting review.", correctionNote: "An exact preserved correction." }), JSON.stringify({ ...rumor, publishedAt: "2026-09-01T12:00:00.000Z" }), legacy.user]);
+  await pool.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,type) VALUES($1,$2,$3,$4,$5,$6,$7,'whisper')", [rumorJournalId, legacy.storyEvent, legacy.storyCharacter, `whisper:${rumorId}`, `whisper:${rumorId}:5`, rumor.title, rumor.body]);
+  await pool.query("INSERT INTO story_readings(id,event_id,entry_id,owner_user_id,character_id,publication_version,journal_id) VALUES($1,$2,$3,$4,$5,5,$6)", [randomUUID(), legacy.storyEvent, rumorId, legacy.user, legacy.storyCharacter, rumorJournalId]);
+  await pool.query("INSERT INTO story_requests(event_id,actor_user_id,request_id,payload_hash,target_id,action) VALUES($1,$2,$3,'existing-collection-hash',$4,'collect')", [legacy.storyEvent, legacy.user, randomUUID(), rumorId]);
+  await pool.query("INSERT INTO story_activity(id,event_id,entry_id,actor_id,action,version) VALUES($1,$2,$3,$4,'published',5)", [randomUUID(), legacy.storyEvent, rumorId, legacy.user]);
+  const trace = { kind: "theory", title: "Existing private theory", notes: "Private speculation awaiting evidence.", audience: { type: "private", ids: [] }, sources: [legacy.originJournal, rumorJournalId], links: [] };
+  await pool.query("INSERT INTO trace_records(id,event_id,owner_user_id,character_id,document,version) VALUES($1,$2,$3,$4,$5,3)", [traceId, legacy.storyEvent, legacy.user, legacy.storyCharacter, JSON.stringify(trace)]);
+  await pool.query("INSERT INTO trace_requests(event_id,actor_user_id,request_id,payload_hash,record_id) VALUES($1,$2,$3,'existing-theory-hash',$4)", [legacy.storyEvent, legacy.user, randomUUID(), traceId]);
+  legacy.narrativeTables = {};
+  for (const table of ["story_groups", "story_entries", "story_readings", "story_requests", "story_activity", "trace_records", "trace_requests"])
+    legacy.narrativeTables[table] = (await pool.query(`SELECT * FROM ${table} WHERE event_id=$1 ORDER BY 1,2`, [legacy.storyEvent])).rows;
+  legacy.operator = (await pool.query("SELECT * FROM users WHERE id=$1", [legacy.user])).rows[0];
   // Re-capture the journal after its authorized exchange copy was added.
   legacy.storyTables.adventure_journal = (await pool.query("SELECT * FROM adventure_journal WHERE event_id=$1", [legacy.storyEvent])).rows;
   await migrate(pool);
@@ -150,9 +168,9 @@ after(async () => {
   if (database) await database.close();
 });
 
-test("Batch 1 to Batch 6 migration preserves event identity, lifecycle, membership, invitations and audit", async () => {
-  assert.equal(await migrate(pool), 7);
-  assert.equal(await checkSchema(pool), 7);
+test("Batch 1 to Batch 7 migration preserves event identity, lifecycle, membership, invitations and audit", async () => {
+  assert.equal(await migrate(pool), 8);
+  assert.equal(await checkSchema(pool), 8);
   const event = (await pool.query("SELECT * FROM events WHERE id=$1", [legacy.event])).rows[0];
   assert.equal(event.name, "Existing live event");
   assert.equal(event.description, "Original description");
@@ -169,26 +187,34 @@ test("Batch 1 to Batch 6 migration preserves event identity, lifecycle, membersh
   assert.equal(user.password_hash, "existing-hash");
   assert.equal(user.is_superuser, true, "An enabled existing superuser must retain their access and password.");
   assert.equal(user.is_disabled, false);
-  assert.deepEqual((await pool.query("SELECT version FROM schema_migrations ORDER BY version")).rows.map((row) => row.version), [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual((await pool.query("SELECT * FROM users WHERE id=$1", [legacy.user])).rows[0], legacy.operator, "The entire enabled operator row must survive migration unchanged.");
+  assert.deepEqual((await pool.query("SELECT version FROM schema_migrations ORDER BY version")).rows.map((row) => row.version), [1, 2, 3, 4, 5, 6, 7, 8]);
 });
 
-test("Batch 3 character identities, approval, private sheets, inventory and settings survive Batch 6 migration", async () => {
+test("Batch 3 character identities, approval, private sheets, inventory and settings survive Batch 7 migration", async () => {
   for (const [table, before] of Object.entries(legacy.tables))
     assert.deepEqual((await pool.query(`SELECT * FROM ${table} WHERE event_id=$1`, [legacy.event])).rows, before, `${table} must survive the additive migrations unchanged.`);
   assert.equal((await pool.query("SELECT count(*)::int AS n FROM event_adventures WHERE event_id=$1", [legacy.event])).rows[0].n, 0, "Existing events must not silently acquire a starter adventure.");
 });
 
-test("Batch 4 definitions, progress, private journals, retries and attendance survive Batch 6", async () => {
+test("Batch 4 definitions, progress, private journals, retries and attendance survive Batch 7", async () => {
   for (const [table, before] of Object.entries(legacy.storyTables))
     assert.deepEqual((await pool.query(`SELECT * FROM ${table} WHERE event_id=$1`, [legacy.storyEvent])).rows, before, `${table} must survive the additive story migration unchanged.`);
-  assert.equal((await pool.query("SELECT count(*)::int AS n FROM story_entries WHERE event_id=$1", [legacy.storyEvent])).rows[0].n, 0, "Migration must not seed new story content into existing adventures.");
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM story_entries WHERE event_id=$1", [legacy.event])).rows[0].n, 0, "Migration must not seed new story content into existing adventures.");
 });
 
-test("Batch 5 sharing, completed exchanges, private copies, bilateral receipts and replay records survive Batch 6", async () => {
+test("Batch 5 sharing, completed exchanges, private copies, bilateral receipts and replay records survive Batch 7", async () => {
   for (const [table, before] of Object.entries(legacy.exchangeTables))
-    assert.deepEqual((await pool.query(`SELECT * FROM ${table} WHERE event_id=$1 ORDER BY 1,2`, [legacy.storyEvent])).rows, before, `${table} must survive schema 6 to 7 unchanged.`);
-  assert.equal((await pool.query("SELECT count(*)::int AS n FROM story_groups WHERE event_id=$1", [legacy.storyEvent])).rows[0].n, 0, "An existing event must not silently acquire audience groups.");
-  assert.equal((await pool.query("SELECT count(*)::int AS n FROM trace_records WHERE event_id=$1", [legacy.storyEvent])).rows[0].n, 0, "Migration must not create private player investigation records.");
+    assert.deepEqual((await pool.query(`SELECT * FROM ${table} WHERE event_id=$1 ORDER BY 1,2`, [legacy.storyEvent])).rows, before, `${table} must survive schema 6 to 8 unchanged.`);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM story_groups WHERE event_id=$1", [legacy.event])).rows[0].n, 0, "An existing event must not silently acquire audience groups.");
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM trace_records WHERE event_id=$1", [legacy.event])).rows[0].n, 0, "Migration must not create private player investigation records.");
+});
+
+test("Populated Batch 6 rumors, publications, private investigations and replay records survive Batch 7", async () => {
+  for (const table of ["economy_resources", "economy_balances", "economy_shops", "economy_stock", "economy_transactions", "economy_receipts", "economy_requests", "economy_baselines", "exchange_trade_offers", "oath_agreements", "oath_participants", "oath_history", "oath_requests"])
+    assert.equal((await pool.query(`SELECT count(*)::int AS n FROM ${table}`)).rows[0].n, 0, `Migration must not silently seed ${table} into existing events.`);
+  for (const [table, before] of Object.entries(legacy.narrativeTables))
+    assert.deepEqual((await pool.query(`SELECT * FROM ${table} WHERE event_id=$1 ORDER BY 1,2`, [legacy.storyEvent])).rows, before, `${table} must survive schema 7 to 8 unchanged.`);
 });
 
 test("catalog requires authentication and theme module is served under the script CSP", async () => {
@@ -310,7 +336,7 @@ test("invalid or future event packs cannot create or overwrite records", async (
     (p) => { p.event.status = "live"; },
     (p) => { p.memberships = [{ user_id: users.owner.id, role: "owner" }]; },
     (p) => { p.setup.theme.script = "alert(1)"; },
-    (p) => { p.setup.enabledInstruments = ["bazaar"]; },
+    (p) => { p.setup.enabledInstruments = ["sigil"]; },
   ]) {
     const invalid = structuredClone(pack); mutate(invalid);
     const result = await request("/api/events/import", "POST", { pack: invalid }, users.outsider);

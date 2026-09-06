@@ -586,6 +586,153 @@ if (publicOnly) {
     return { rumors, group, sourceTraceId: shared.id, ownerPrivateTraceId: privateA.id };
   }
 
+  async function economyJourney(owner, player, event, assigned) {
+    const [a, b] = assigned;
+    const base = `/api/events/${event.id}`;
+    const market = (p) => request(p.account, `${base}/bazaar?characterId=${p.character.id}`);
+    const inventory = (p) => request(p.account, `${base}/characters/${p.character.id}/inventory`);
+    const journal = (p) => request(p.account, `${base}/adventure/play?characterId=${p.character.id}`);
+    assert.ok(event.setup.enabledInstruments.includes("bazaar") && event.setup.enabledInstruments.includes("oathbook"), "New complete adventures must explicitly enable economy and agreements.");
+    await request(player, `${base}/bazaar/manage`, { status: 403 });
+    await request(player, `${base}/bazaar/resources`, { method: "POST", body: { requestId: randomUUID(), id: "forged", name: "Forbidden resource" }, status: 403 });
+    const initial = await market(a);
+    assert.ok(initial.balances.every((balance) => balance.quantity === 0), "New starter characters must not silently receive spendable balances.");
+    const { resource } = await request(owner, `${base}/bazaar/resources`, { method: "POST", body: { requestId: randomUUID(), id: "ci-tokens", name: "Fictional staging tokens" }, status: 201 });
+    const { shop } = await request(owner, `${base}/bazaar/shops`, { method: "POST", body: { requestId: randomUUID(), name: "Staging supply stall", description: "Fictional stock used only in this disposable event.", enabled: true }, status: 201 });
+    let { stock } = await request(owner, `${base}/bazaar/shops/${shop.id}/stock`, { method: "POST", body: { requestId: randomUUID(), name: "Staging trade lantern", description: "A fictional item with no private notes.", quantity: 3, resourceId: resource.id, unitPrice: 2 }, status: 201 });
+    const balance = (snapshot) => snapshot.balances.find((entry) => entry.resourceId === resource.id);
+    const adjust = async (p, quantity, reason, agreementId) => {
+      const current = balance(await market(p));
+      return request(owner, `${base}/bazaar/adjust`, { method: "POST", body: { requestId: randomUUID(), characterId: p.character.id, resourceId: resource.id, quantity, version: current?.version || 0, reason, ...(agreementId ? { agreementId } : {}) } });
+    };
+    await adjust(a, 20, "Grant the organizer character its fictional test allocation.");
+    await adjust(b, 10, "Grant the player character its fictional test allocation.");
+    const outdatedStockVersion = stock.version;
+    stock = (await request(owner, `${base}/bazaar/shops/${shop.id}/stock/${stock.id}`, { method: "PATCH", body: { requestId: randomUUID(), version: stock.version, name: stock.name, description: stock.description, quantity: 3, resourceId: resource.id, unitPrice: 3, reason: "Correct the fictional price before the purchase." } })).stock;
+    const purchaseInput = { requestId: randomUUID(), characterId: b.character.id, shopId: shop.id, stockId: stock.id, version: stock.version, quantity: 1 };
+    await request(player, `${base}/bazaar/purchase`, { method: "POST", body: { ...purchaseInput, requestId: randomUUID(), version: outdatedStockVersion }, status: 409 });
+    const purchase = await request(player, `${base}/bazaar/purchase`, { method: "POST", body: purchaseInput });
+    const purchaseReplay = await request(player, `${base}/bazaar/purchase`, { method: "POST", body: purchaseInput });
+    assert.equal(purchaseReplay.receipt.id, purchase.receipt.id, "An exact purchase retry must return the same immutable transaction.");
+    assert.equal(purchaseReplay.outcome.replayed, true, "The repeated purchase must be identified as a replay.");
+    await request(player, `${base}/bazaar/purchase`, { method: "POST", body: { ...purchaseInput, quantity: 2 }, status: 409 });
+    let afterPurchase = await market(b);
+    assert.equal(balance(afterPurchase).quantity, 7, "The purchase must debit the corrected price exactly once.");
+    stock = afterPurchase.shops.find((entry) => entry.id === shop.id).stock.find((entry) => entry.id === stock.id);
+    assert.equal(stock.quantity, 2, "The purchase must decrement finite stock exactly once.");
+    assert.equal(stock.initialQuantity, 3, "Purchasing must preserve the authored stock baseline.");
+    const purchasedItem = afterPurchase.inventory.find((entry) => entry.name === "Staging trade lantern");
+    assert.equal(purchasedItem.quantity, 1, "A paid purchase must deliver one owned inventory item.");
+    await request(player, `${base}/bazaar/purchase`, { method: "POST", body: { ...purchaseInput, requestId: randomUUID(), version: stock.version, quantity: 3 }, status: 409 });
+    await adjust(b, 0, "Exercise insufficient fictional funds without changing shop stock.");
+    const beforeRejectedPurchase = await market(b);
+    await request(player, `${base}/bazaar/purchase`, { method: "POST", body: { ...purchaseInput, requestId: randomUUID(), version: stock.version }, status: 409 });
+    assert.deepEqual(await market(b), beforeRejectedPurchase, "An insufficient-funds purchase must leave balance, inventory, stock and receipts unchanged.");
+    await adjust(b, 7, "Restore the fictional funds for the bilateral trade.");
+    pass("BAZAAR uses explicit fictional grants, corrected displayed prices, finite stock, atomic purchases, and one durable transaction on retry");
+
+    let { item } = await request(owner, `${base}/characters/${a.character.id}/inventory`, { method: "POST", body: { name: "Staging barter compass", quantity: 1, notes: `Private inventory marker ${runId}` }, status: 201 });
+    const created = (await request(owner, `${base}/exchanges`, { method: "POST", body: { requestId: randomUUID(), characterId: a.character.id }, status: 201 })).exchange;
+    let exchange = (await request(player, `${base}/exchanges/join`, { method: "POST", body: { requestId: randomUUID(), characterId: b.character.id, code: created.code } })).exchange;
+    const exchangeAction = async (p, action, fields = {}, requestId = randomUUID(), status = 200) => {
+      const result = await request(p.account, `${base}/exchanges/${exchange.id}/${action}`, { method: action === "offer" ? "PUT" : "POST", body: { requestId, characterId: p.character.id, version: exchange.version, ...fields }, status });
+      if (status === 200) exchange = result.exchange;
+      return result;
+    };
+    const aOffer = () => ({ readingIds: [], items: [{ itemId: item.id, quantity: 1, version: item.version }], resources: [{ resourceId: resource.id, quantity: 2 }] });
+    const bOffer = { readingIds: [], items: [{ itemId: purchasedItem.id, quantity: 1, version: purchasedItem.version }], resources: [{ resourceId: resource.id, quantity: 3 }] };
+    await exchangeAction(a, "offer", aOffer());
+    await exchangeAction(b, "offer", bOffer);
+    await exchangeAction(a, "confirm");
+    await exchangeAction(b, "offer", { ...bOffer, resources: [{ resourceId: resource.id, quantity: 2 }] });
+    assert.equal(exchange.own.confirmed, false, "Changing a resource offer must clear the actor's prior confirmation.");
+    assert.equal(exchange.partner.confirmed, false, "Changing a resource offer must clear the other player's prior confirmation.");
+    await exchangeAction(b, "offer", bOffer);
+    await exchangeAction(a, "confirm");
+    const hidden = JSON.stringify((await request(player, `${base}/exchanges/${exchange.id}?characterId=${b.character.id}`)).exchange);
+    for (const marker of [`Private inventory marker ${runId}`, owner.email, player.email]) assert.ok(!hidden.includes(marker), "A pending trade must omit private notes and account identifiers.");
+    assert.ok(!Object.hasOwn(exchange.partner, "balances") && !Object.hasOwn(exchange.partner, "inventory"), "The partner sees selected transfer terms only.");
+    item = (await request(owner, `${base}/characters/${a.character.id}/inventory/${item.id}`, { method: "PATCH", body: { version: item.version, name: item.name, quantity: 0, notes: `Private inventory marker ${runId}` } })).item;
+    const beforeFailedTrade = await Promise.all([market(a), market(b), journal(a), journal(b)]);
+    await exchangeAction(b, "confirm", {}, randomUUID(), 409);
+    assert.deepEqual(await Promise.all([market(a), market(b), journal(a), journal(b)]), beforeFailedTrade, "A stale or unavailable last-leg item must roll back all resources, inventory, readings and receipts.");
+    item = (await request(owner, `${base}/characters/${a.character.id}/inventory/${item.id}`, { method: "PATCH", body: { version: item.version, name: item.name, quantity: 1, notes: `Private inventory marker ${runId}` } })).item;
+    await exchangeAction(a, "offer", aOffer());
+    await exchangeAction(a, "confirm");
+    const finalVersion = exchange.version, finalRequestId = randomUUID();
+    await exchangeAction(b, "confirm", {}, finalRequestId);
+    assert.equal(exchange.status, "completed", "Both reviewed offers must complete the atomic trade.");
+    assert.ok(exchange.receipt.assets.transactionId, "Completed barter must retain its authoritative economy transaction.");
+    const tradeId = exchange.id, tradeTransactionId = exchange.receipt.assets.transactionId;
+    const tradeReplay = await request(player, `${base}/exchanges/${tradeId}/confirm`, { method: "POST", body: { requestId: finalRequestId, characterId: b.character.id, version: finalVersion } });
+    assert.equal(tradeReplay.exchange.receipt.assets.transactionId, tradeTransactionId, "Retrying a completed trade must return the original transaction.");
+    const [afterA, afterB] = await Promise.all([market(a), market(b)]);
+    assert.equal(balance(afterA).quantity, 21, "The first player must receive exactly the agreed net resources.");
+    assert.equal(balance(afterB).quantity, 6, "The second player must receive exactly the agreed net resources.");
+    assert.equal(afterA.inventory.filter((entry) => entry.name === "Staging trade lantern").reduce((sum, entry) => sum + entry.quantity, 0), 1);
+    assert.equal(afterB.inventory.filter((entry) => entry.name === "Staging barter compass").reduce((sum, entry) => sum + entry.quantity, 0), 1);
+    assert.ok(!(await inventory(b)).inventory.some((entry) => entry.notes.includes(`Private inventory marker ${runId}`)), "Receiving an item must not transfer the sender's private notes.");
+    pass("QR barter resets consent on revised terms, rejects stale assets without partial writes, transfers both sides atomically, and preserves one receipt on replay");
+
+    const witness = await register("Witness");
+    const { invitation } = await request(owner, `${base}/invites`, { method: "POST", body: { role: "player", maxUses: 1, expiresInHours: 1 }, status: 201 });
+    await request(witness, "/api/events/join", { method: "POST", body: { code: invitation.code } });
+    let witnessCharacter = (await request(owner, `${base}/characters`, { method: "POST", body: { profile: { ...defaultCharacterProfile(event.setup.rules), name: "Staging independent witness" }, userId: witness.id }, status: 201 })).character;
+    witnessCharacter = (await request(owner, `${base}/characters/${witnessCharacter.id}/submit`, { method: "POST", body: { version: witnessCharacter.version } })).character;
+    if (witnessCharacter.status === "pending") witnessCharacter = (await request(owner, `${base}/characters/${witnessCharacter.id}/review`, { method: "POST", body: { version: witnessCharacter.version, decision: "approve", feedback: "Approved only for the disposable witness journey." } })).character;
+    assert.equal(witnessCharacter.status, "approved");
+    const w = { account: witness, character: witnessCharacter };
+    const participants = [a.character.id, b.character.id];
+    const document = { title: "Staging supply compact", terms: "Both travellers agree to carry the lantern to the gathering.", participantIds: participants, witnessIds: [w.character.id], expiresAt: new Date(Date.now() + 3600000).toISOString(), settlement: [{ fromCharacterId: a.character.id, toCharacterId: b.character.id, resourceId: resource.id, quantity: 4 }] };
+    let agreement = (await request(owner, `${base}/oaths`, { method: "POST", body: { requestId: randomUUID(), characterId: a.character.id, ...document }, status: 201 })).agreement;
+    assert.equal(agreement.status, "proposed");
+    assert.ok(agreement.participants.every((entry) => !entry.accepted), "Creating an agreement must not impersonate anyone's acceptance, including the creator.");
+    const oathAction = async (p, action, fields = {}, requestId = randomUUID(), status = 200) => {
+      const result = await request(p.account, `${base}/oaths/${agreement.id}/${action}`, { method: "POST", body: { requestId, characterId: p.character.id, version: agreement.version, ...fields }, status });
+      if (status === 200) agreement = result.agreement;
+      return result;
+    };
+    await oathAction(a, "accept");
+    await oathAction(w, "witness");
+    const previousTermsVersion = agreement.termsVersion;
+    const revised = { ...document, terms: `${document.terms} The confirmed settlement is five fictional tokens.`, settlement: [{ ...document.settlement[0], quantity: 5 }] };
+    agreement = (await request(owner, `${base}/oaths/${agreement.id}`, { method: "PUT", body: { requestId: randomUUID(), characterId: a.character.id, version: agreement.version, ...revised } })).agreement;
+    assert.ok(agreement.termsVersion > previousTermsVersion, "Editing proposed terms must create a new exact terms revision.");
+    assert.ok(agreement.participants.every((entry) => !entry.accepted) && agreement.witnesses.every((entry) => !entry.witnessed), "Changing terms must clear every acceptance and witness attestation.");
+    await oathAction(a, "accept");
+    await oathAction(b, "accept");
+    assert.equal(agreement.status, "active", "All participants must explicitly accept before an agreement becomes active.");
+    await oathAction(w, "witness");
+    assert.ok(agreement.participants.every((entry) => entry.acceptedTermsVersion === agreement.termsVersion), "Every acceptance must identify the exact current terms version.");
+    assert.equal(agreement.witnesses[0].termsVersion, agreement.termsVersion, "The independent witness must attest the displayed revision.");
+    await oathAction(w, "settle", {}, randomUUID(), 403);
+    const priorBalances = [balance(await market(a)).quantity, balance(await market(b)).quantity];
+    await oathAction(a, "settle");
+    assert.deepEqual([balance(await market(a)).quantity, balance(await market(b)).quantity], priorBalances, "One settlement confirmation must not move fictional resources.");
+    const settlementVersion = agreement.version, settlementRequestId = randomUUID();
+    await oathAction(b, "settle", {}, settlementRequestId);
+    assert.equal(agreement.status, "fulfilled");
+    const settlementId = agreement.receipt.id;
+    const settlementReplay = await request(player, `${base}/oaths/${agreement.id}/settle`, { method: "POST", body: { requestId: settlementRequestId, characterId: b.character.id, version: settlementVersion } });
+    assert.equal(settlementReplay.agreement.receipt.id, settlementId, "An accepted settlement retry must not create another resource transfer.");
+    assert.deepEqual([balance(await market(a)).quantity, balance(await market(b)).quantity], [16, 11]);
+    await oathAction(a, "dispute", { reason: "The fictional delivery took place later than promised." });
+    assert.equal(agreement.status, "disputed");
+    agreement = (await request(owner, `${base}/oaths/${agreement.id}/adjudicate`, { method: "POST", body: { requestId: randomUUID(), version: agreement.version, outcome: "fulfilled", reason: "Organizer reviewed the delivery and retained the already completed payment.", settle: true } })).agreement;
+    assert.equal(agreement.status, "adjudicated");
+    assert.equal(agreement.receipt.id, settlementId, "Adjudicating a previously settled agreement must preserve its one original payment.");
+    assert.deepEqual([balance(await market(a)).quantity, balance(await market(b)).quantity], [16, 11]);
+    const correction = await adjust(b, 12, "Organizer grants one fictional token as an audited correction for the delay.", agreement.id);
+    assert.equal(correction.receipt.correction.agreementId, agreement.id, "A correction must identify its agreement without rewriting the original settlement.");
+    assert.ok(agreement.history.some((entry) => entry.action.includes("adjudicat") && entry.reason), "The final ruling must retain an explicit audit reason.");
+    const agreementText = JSON.stringify((await request(witness, `${base}/oaths/${agreement.id}?characterId=${w.character.id}`)).agreement);
+    for (const marker of [owner.email, player.email, witness.email, owner.id, player.id, witness.id]) assert.ok(!agreementText.includes(marker), "Agreement participants and witnesses must see character identities without account identifiers.");
+    const saved = (await request(player, `${base}/oaths?characterId=${b.character.id}`)).agreements;
+    assert.ok(saved.some((entry) => entry.id === agreement.id), "Completed agreements must survive a fresh list load.");
+    pass("OATHBOOK records exact revised terms, independent witnessing, bilateral settlement, replay-safe fulfillment, a dispute, organizer adjudication, and a linked audited correction");
+    return { resourceId: resource.id, shopId: shop.id, stockId: stock.id, agreementId: agreement.id, tradeId, characterCount: 3 };
+  }
+
   async function adventureJourney(owner, player) {
     const catalog = await request(owner, "/api/adventure-templates");
     assert.deepEqual(catalog.templates.map((template) => template.id).sort(), ["cyberpunk", "fantasy", "wasteland"], "All three complete starter adventures must be available.");
@@ -710,8 +857,10 @@ if (publicOnly) {
       event = await patchEvent(owner, event, { status: "live" });
       const completedExchange = theme === "fantasy" ? await exchangeJourney(owner, player, event, assigned, definition, version) : null;
       const completedStory = theme === "fantasy" ? await storyJourney(owner, player, event, assigned) : null;
+      const completedEconomy = theme === "fantasy" ? await economyJourney(owner, player, event, assigned) : null;
       const original = await request(owner, playPath(assigned[0].character));
       const originalInventory = (await request(owner, `/api/events/${event.id}/characters/${assigned[0].character.id}/inventory`)).inventory;
+      const originalEconomy = completedEconomy ? await request(owner, `/api/events/${event.id}/bazaar?characterId=${assigned[0].character.id}`) : null;
       const { event: rehearsal } = await request(owner, `${base}/rehearsal`, { method: "POST", body: {}, status: 201 });
       ownedEvents.push({ account: owner, id: rehearsal.id });
       assert.notEqual(rehearsal.id, event.id, "Rehearsal must create a separate event.");
@@ -722,11 +871,24 @@ if (publicOnly) {
       assert.equal(rehearsalManage.sourceEventId, event.id, "A rehearsal must identify its original source event.");
       assert.equal(rehearsalManage.progress.length, 0, "Rehearsal copies must not transfer original progress.");
       const rehearsalCharacters = (await request(owner, `/api/events/${rehearsal.id}/characters`)).characters;
-      assert.equal(rehearsalCharacters.length, 2, "Rehearsal must copy both authored character identities.");
+      assert.equal(rehearsalCharacters.length, completedEconomy?.characterCount || 2, "Rehearsal must copy the authored character identities without their play history.");
       assert.ok(rehearsalCharacters.every((character) => character.userId === null && !assigned.some((entry) => entry.character.id === character.id)), "Rehearsal characters must have new identities and await assignment.");
       const { character: rehearsalCharacter } = await request(owner, `/api/events/${rehearsal.id}/characters/${rehearsalCharacters[0].id}/assign`, {
         method: "POST", body: { version: rehearsalCharacters[0].version, userId: owner.id },
       });
+      let rehearsalEconomy;
+      if (completedEconomy) {
+        const copied = await request(owner, `/api/events/${rehearsal.id}/bazaar?characterId=${rehearsalCharacter.id}`);
+        assert.ok(copied.balances.every((entry) => entry.quantity === 0), "A rehearsal must begin with zero fictional balances.");
+        assert.equal(copied.receipts.length, 0, "A rehearsal must not inherit source economic receipts.");
+        assert.equal((await request(owner, `/api/events/${rehearsal.id}/oaths?characterId=${rehearsalCharacter.id}`)).agreements.length, 0, "A rehearsal must not inherit private source agreements.");
+        const shop = copied.shops.find((entry) => entry.name === "Staging supply stall");
+        const stock = shop.stock.find((entry) => entry.name === "Staging trade lantern");
+        assert.notEqual(shop.id, completedEconomy.shopId, "A copied shop must have a fresh identity.");
+        assert.notEqual(stock.id, completedEconomy.stockId, "Copied stock must have a fresh identity.");
+        assert.equal(stock.quantity, 3, "A rehearsal must copy authored initial stock, not the source's remaining stock.");
+        rehearsalEconomy = { shop, stock, inventory: (await request(owner, `/api/events/${rehearsal.id}/characters/${rehearsalCharacter.id}/inventory`)).inventory };
+      }
       let rehearsalStory;
       if (completedStory) {
         const storyBase = `/api/events/${rehearsal.id}/story`;
@@ -778,6 +940,16 @@ if (publicOnly) {
         for (const [account, character] of [[owner, rehearsalCharacter], [player, rehearsalPeer]])
           await request(account, `${exchangeBase}/${rehearsalExchange.id}/confirm`, { method: "POST", body: { requestId: randomUUID(), characterId: character.id, version: rehearsalExchange.version } });
         assert.equal((await request(owner, `${exchangeBase}?characterId=${rehearsalCharacter.id}`)).contacts.length, 1, "The rehearsal reset check must include an actual completed exchange and contact.");
+        if (rehearsalEconomy) {
+          const marketBase = `/api/events/${rehearsal.id}/bazaar`;
+          await request(owner, `${marketBase}/adjust`, { method: "POST", body: { requestId: randomUUID(), characterId: rehearsalCharacter.id, resourceId: completedEconomy.resourceId, quantity: 10, version: 0, reason: "Give the rehearsal character disposable purchase funds." } });
+          await request(owner, `${marketBase}/purchase`, { method: "POST", body: { requestId: randomUUID(), characterId: rehearsalCharacter.id, shopId: rehearsalEconomy.shop.id, stockId: rehearsalEconomy.stock.id, version: rehearsalEconomy.stock.version, quantity: 1 } });
+          const played = await request(owner, `${marketBase}?characterId=${rehearsalCharacter.id}`);
+          assert.ok(played.receipts.length > 0 && played.balances.some((entry) => entry.quantity > 0), "Reset must exercise actually spent stock, credited funds and committed receipts.");
+          assert.equal(played.shops.find((entry) => entry.id === rehearsalEconomy.shop.id).stock.find((entry) => entry.id === rehearsalEconomy.stock.id).quantity, 2);
+          const { agreement } = await request(owner, `/api/events/${rehearsal.id}/oaths`, { method: "POST", body: { requestId: randomUUID(), characterId: rehearsalCharacter.id, title: "Disposable rehearsal compact", terms: "This agreement exists only to verify reset isolation.", participantIds: [rehearsalCharacter.id, rehearsalPeer.id], witnessIds: [], expiresAt: null, settlement: [] }, status: 201 });
+          rehearsalEconomy.agreementId = agreement.id;
+        }
       }
       await request(owner, `${base}/reset`, { method: "POST", body: { version, confirm: true }, status: 409 });
       await request(owner, `${rehearsalBase}/reset`, { method: "POST", body: { version: rehearsalManage.version, confirm: true } });
@@ -789,6 +961,21 @@ if (publicOnly) {
         assert.equal(afterReset.sessions.length, 0, "Rehearsal reset must remove completed exchange sessions and receipts.");
         assert.equal(afterReset.contacts.length, 0, "Rehearsal reset must remove contacts created during rehearsal.");
         await request(owner, `/api/events/${rehearsal.id}/exchanges/${rehearsalExchange.id}?characterId=${rehearsalCharacter.id}`, { status: 404 });
+      }
+      if (rehearsalEconomy) {
+        const afterReset = await request(owner, `/api/events/${rehearsal.id}/bazaar?characterId=${rehearsalCharacter.id}`);
+        assert.ok(afterReset.balances.every((entry) => entry.quantity === 0), "Rehearsal reset must zero disposable balances.");
+        assert.equal(afterReset.receipts.length, 0, "Rehearsal reset must clear disposable economic receipts.");
+        assert.equal(afterReset.shops.find((entry) => entry.id === rehearsalEconomy.shop.id).stock.find((entry) => entry.id === rehearsalEconomy.stock.id).quantity, 3, "Reset must restore authored shop stock.");
+        const restoredInventory = (await request(owner, `/api/events/${rehearsal.id}/characters/${rehearsalCharacter.id}/inventory`)).inventory;
+        const contents = (rows) => rows.map(({ id, name, quantity, notes }) => ({ id, name, quantity, notes })).sort((a, b) => a.id.localeCompare(b.id));
+        assert.deepEqual(contents(restoredInventory), contents(rehearsalEconomy.inventory), "Reset must restore the captured initial inventory and remove purchased or transferred items.");
+        assert.equal((await request(owner, `/api/events/${rehearsal.id}/oaths?characterId=${rehearsalCharacter.id}`)).agreements.length, 0, "Reset must clear actually created agreements and their histories.");
+        await request(owner, `/api/events/${rehearsal.id}/oaths/${rehearsalEconomy.agreementId}?characterId=${rehearsalCharacter.id}`, { status: 404 });
+        assert.deepEqual(await request(owner, `/api/events/${event.id}/bazaar?characterId=${assigned[0].character.id}`), originalEconomy, "Rehearsal reset must leave every source balance, stock line and transaction unchanged.");
+        const originalAgreement = (await request(owner, `/api/events/${event.id}/oaths/${completedEconomy.agreementId}?characterId=${assigned[0].character.id}`)).agreement;
+        assert.equal(originalAgreement.status, "adjudicated", "Rehearsal reset must preserve the source agreement and its ruling.");
+        pass("Economy rehearsal copies reset to initial stock, zero balances and no agreements; actual purchases and agreements reset to baseline inventory while the source remains intact");
       }
       if (rehearsalStory) {
         const storyBase = `/api/events/${rehearsal.id}/story`;
@@ -816,6 +1003,15 @@ if (publicOnly) {
         const retained = (await request(owner, `/api/events/${event.id}/exchanges/${completedExchange}?characterId=${assigned[0].character.id}`)).exchange;
         assert.equal(retained.status, "completed", "A completed receipt must remain available to its authorized owner after the peer leaves.");
         assert.ok(retained.receipt, "Peer departure must not erase already completed exchange receipts.");
+      }
+      if (completedEconomy) {
+        await request(player, `/api/events/${event.id}/bazaar?characterId=${assigned[1].character.id}`, { status: 404 });
+        await request(player, `/api/events/${event.id}/oaths/${completedEconomy.agreementId}?characterId=${assigned[1].character.id}`, { status: 404 });
+        const retained = (await request(owner, `/api/events/${event.id}/oaths/${completedEconomy.agreementId}?characterId=${assigned[0].character.id}`)).agreement;
+        assert.equal(retained.status, "adjudicated", "A participant's departure must preserve an authorized counterpart's agreement history.");
+        assert.ok(retained.receipt, "A completed agreement receipt must survive peer departure for its authorized owner.");
+        const trade = (await request(owner, `/api/events/${event.id}/exchanges/${completedEconomy.tradeId}?characterId=${assigned[0].character.id}`)).exchange;
+        assert.ok(trade.receipt.assets.transactionId, "Spent items and peer departure must not invalidate a completed trade receipt.");
       }
       completedSources.push({ event, journalEntries: original.journal.length });
       pass(`${theme} starter: two assigned characters, conditional readings, puzzle outcomes, scenes, replay, privacy, persistence, and isolated rehearsal reset`);

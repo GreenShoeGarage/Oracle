@@ -1,6 +1,7 @@
 // Exchange requests contain identifiers only. Readings and identities always
 // come from the server's currently authorized records.
 import { characterRecord, characterInteger } from "./characters-model.js";
+import { validateTradeAssets } from "./economy-model.js";
 export const EXCHANGE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const EXCHANGE_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{12}$/;
 export const EXCHANGE_STATUSES = ["waiting", "negotiating", "completed", "cancelled", "rejected", "expired", "unavailable"];
@@ -10,10 +11,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fail = (message) => { const error = new Error(message); error.status = 400; throw error; };
 export function exchangeIdentifier(value, label = "Identifier") { if (typeof value !== "string" || !UUID.test(value)) fail(`${label} must be a UUID.`); return value.toLowerCase(); }
 export function validateExchangeRequest(value, action) {
-  const fieldMap = { create: ["requestId", "characterId"], join: ["requestId", "characterId", "code"], offer: ["requestId", "characterId", "version", "readingIds"], confirm: ["requestId", "characterId", "version"], cancel: ["requestId", "characterId", "version"], reject: ["requestId", "characterId", "version"] };
+  const fieldMap = { create: ["requestId", "characterId"], join: ["requestId", "characterId", "code"], offer: ["requestId", "characterId", "version", "readingIds", "items", "resources"], confirm: ["requestId", "characterId", "version"], cancel: ["requestId", "characterId", "version"], reject: ["requestId", "characterId", "version"] };
   const fields = Object.hasOwn(fieldMap, action) ? fieldMap[action] : null;
   if (!fields) fail("Unsupported exchange action.");
-  characterRecord(value, fields, "Exchange request");
+  characterRecord(value, fields, "Exchange request", fields.filter(field => !["items", "resources"].includes(field)));
   const result = { requestId: exchangeIdentifier(value.requestId, "Request identifier"), characterId: exchangeIdentifier(value.characterId, "Character identifier") };
   if (fields.includes("version")) result.version = characterInteger(value.version, "Exchange version", 1, 2147483647);
   if (action === "join") { if (typeof value.code !== "string" || !EXCHANGE_CODE_PATTERN.test(value.code)) fail("Enter the 12-character exchange code."); result.code = value.code; }
@@ -24,6 +25,9 @@ export function validateExchangeRequest(value, action) {
     result.readingIds = items.map((id) => exchangeIdentifier(id, "Reading identifier"));
     if (new Set(result.readingIds).size !== result.readingIds.length) fail("Each reading may be offered only once.");
     result.readingIds.sort();
+    const assets = validateTradeAssets({ items: Object.hasOwn(value, "items") ? value.items : [], resources: Object.hasOwn(value, "resources") ? value.resources : [] });
+    if (Object.hasOwn(value, "items")) result.items = assets.items;
+    if (Object.hasOwn(value, "resources")) result.resources = assets.resources;
   }
   return result;
 }

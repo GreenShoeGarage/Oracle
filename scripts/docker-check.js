@@ -58,6 +58,7 @@ try {
     "/", "/app.js", "/builder.js", "/kit.js", "/characters-model.js", "/characters-ui.js", "/admin-ui.js",
     "/adventure-model.js", "/adventure-player.js", "/adventure-organizer.js", "/prop-code.js", "/offline.js", "/sw.js",
     "/exchange-model.js", "/exchanges-ui.js", "/exchange-code.js", "/sharing-ui.js", "/exchanges.css", "/sharing.css",
+    "/economy-model.js", "/economy-ui.js", "/economy.css", "/oath-model.js", "/oath-ui.js", "/oath.css",
     "/story-model.js", "/story-ui.js", "/story.css", "/trace-model.js", "/trace-ui.js", "/trace.css",
     "/qr.js", "/vendor/qrcode-generator-2.0.4.js", "/vendor/jsqr-1.4.0.js",
     "/style.css", "/themes.css", "/adventure.css", "/adventure-organizer.css", "/api/session",

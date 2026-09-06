@@ -4,6 +4,9 @@ import { defaultCharacterSettings, projectCharacter } from "../public/characters
 import { readSharing, sharingPolicyFor } from "./sharing.js";
 import { canShareWhisper, filterStoryJournal } from "./story.js";
 import { limit } from "./security.js";
+import { readEconomyAssets, resolveTradeAssets, transferEconomyAssets } from "./economy.js";
+const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])])) : value;
+const emptyAssets = () => ({ items: [], resources: [], valid: true });
 
 const pending = (row) => ["waiting", "negotiating"].includes(row.status);
 const playable = (event) => ["live", "rehearsal"].includes(event.status);
@@ -75,6 +78,15 @@ export function createExchangeHandler({ pool, config, helpers }) {
     if (Buffer.byteLength(JSON.stringify(originals), "utf8") > 2_000_000) fail(409, "The combined exchange is too large. Offer fewer readings (at most 2 MB total).");
     return { initiator: first, recipient: second };
   }
+  async function tradeOffers(db, event, row, strict = true) {
+    const saved = (await db.query("SELECT side,snapshot FROM exchange_trade_offers WHERE event_id=$1 AND exchange_id=$2", [event.id, row.id])).rows;
+    const result = {};
+    for (const side of ["initiator", "recipient"]) {
+      const snapshot = saved.find(entry => entry.side === side)?.snapshot || emptyAssets();
+      result[side] = row.status === "completed" ? { ...snapshot, valid: true } : await resolveTradeAssets(db, event, row[`${side}_character_id`], snapshot, { strict });
+    }
+    return result;
+  }
   async function detail(db, event, user, character, row, context = null) {
     const side = sideFor(row, user.id, character.id); if (!side) notFound();
     context ||= await projectionContext(db, event);
@@ -86,17 +98,19 @@ export function createExchangeHandler({ pool, config, helpers }) {
     let resolved;
     try { resolved = await offers(db, event, row, context, false); } catch (error) { if (!error.status) throw error; blockedReason ||= error.message; resolved = { initiator: [], recipient: [] }; }
     if (pending(row) && !blockedReason && [...resolved.initiator, ...resolved.recipient].some((entry) => !entry.valid)) blockedReason = "An offered reading is no longer shareable. Update the offer; both players will need to confirm again.";
+    const assets = await tradeOffers(db, event, row, false);
+    if (pending(row) && !assets.initiator.valid || pending(row) && !assets.recipient.valid) blockedReason ||= "An offered asset changed or is unavailable. Update the offer; both players will need to confirm again.";
     if (status === "expired") blockedReason = "This invitation has expired. Create a new exchange.";
     else if (pending(row) && !playable(event)) blockedReason ||= "Exchanges can be confirmed only while the event is live or in rehearsal.";
     else if (status === "waiting") blockedReason ||= "Waiting for the other player to join.";
     const metadata = (entries, owner) => entries.map((entry) => ({ id: entry.id, title: owner || entry.valid || row.status === "completed" ? entry.title : "Unavailable reading", type: owner || entry.valid || row.status === "completed" ? entry.type : "unavailable" }));
     const receipt = row.status === "completed" ? (await db.query("SELECT receipt FROM exchange_receipts WHERE exchange_id=$1 AND event_id=$2 AND owner_user_id=$3 AND owner_character_id=$4", [row.id, event.id, user.id, character.id])).rows[0]?.receipt || null : null;
     const cancellable = pending(row) && !expired(row) && event.status !== "archived";
-    return { id: row.id, event: { id: event.id, name: event.name, status: event.status }, character: brief(character), status, version: row.version, expiresAt: row.expires_at, serverTime: row.server_time, updatedAt: row.updated_at, code: side === "initiator" && status === "waiting" ? row.code : null, own: { character: identity(own.character, context), offered: metadata(resolved[side], true), confirmed: row[`${side}_confirmed_version`] === row.version }, partner: peer?.eligible ? { character: identity(peer.character, context), offered: metadata(resolved[peerSide], false), confirmed: row[`${peerSide}_confirmed_version`] === row.version } : null, readOnly: !pending(row) || status === "expired" || status === "unavailable" || !playable(event) || !own.eligible, blockedReason, receipt, canCancel: cancellable, canReject: cancellable && side === "recipient" };
+    return { id: row.id, event: { id: event.id, name: event.name, status: event.status }, character: brief(character), status, version: row.version, expiresAt: row.expires_at, serverTime: row.server_time, updatedAt: row.updated_at, code: side === "initiator" && status === "waiting" ? row.code : null, own: { character: identity(own.character, context), offered: metadata(resolved[side], true), assets: assets[side], confirmed: row[`${side}_confirmed_version`] === row.version }, partner: peer?.eligible ? { character: identity(peer.character, context), offered: metadata(resolved[peerSide], false), assets: assets[peerSide], confirmed: row[`${peerSide}_confirmed_version`] === row.version } : null, readOnly: !pending(row) || status === "expired" || status === "unavailable" || !playable(event) || !own.eligible, blockedReason, receipt, canCancel: cancellable, canReject: cancellable && side === "recipient" };
   }
   async function overview(db, event, user, own) {
     const characters = (await db.query("SELECT id,profile FROM characters WHERE event_id=$1 AND user_id=$2 AND status='approved' ORDER BY created_at,id", [event.id, user.id])).rows.map(brief);
-    const result = { event: { id: event.id, name: event.name, status: event.status }, character: own ? brief(own.character) : null, characters, readOnly: !own?.eligible || !playable(event), readings: [], sessions: [], contacts: [] };
+    const result = { event: { id: event.id, name: event.name, status: event.status }, character: own ? brief(own.character) : null, characters, readOnly: !own?.eligible || !playable(event), readings: [], sessions: [], contacts: [], ...(await readEconomyAssets(db, event.id, own?.character.id)) };
     if (!own) return { ...result, message: "Choose an approved character before exchanging introductions or readings." };
     const character = own.character, context = await projectionContext(db, event);
     const readingRows = (await db.query("SELECT id,node_id,title,type FROM adventure_journal WHERE event_id=$1 AND character_id=$2 AND type<>'exchange_receipt' ORDER BY created_at DESC,id DESC LIMIT 500", [event.id, character.id])).rows;
@@ -140,6 +154,17 @@ export function createExchangeHandler({ pool, config, helpers }) {
   }
   async function complete(db, event, user, row, context) {
     const resolved = await offers(db, event, row, context, true);
+    const assets = await tradeOffers(db, event, row, true);
+    const participants = [];
+    for (const side of ["initiator", "recipient"]) {
+      const party = await participant(db, event.id, row[`${side}_user_id`], row[`${side}_character_id`]);
+      if (!party?.eligible) fail(409, "A participant is no longer eligible for this exchange.");
+      participants.push({ characterId: party.character.id, userId: row[`${side}_user_id`], name: party.character.profile.name });
+    }
+    const economyReceipt = await transferEconomyAssets(db, event, {
+      kind: "exchange", actorUserId: user.id, referenceId: row.id, participants,
+      transfers: ["initiator", "recipient"].map(side => ({ fromCharacterId: row[`${side}_character_id`], toCharacterId: row[`${otherSide(side)}_character_id`], items: assets[side].items.map(({itemId,quantity,version}) => ({itemId,quantity,version})), resources: assets[side].resources.map(({resourceId,quantity}) => ({resourceId,quantity})) }))
+    });
     const completedAt = new Date(await clock(db)).toISOString();
     if (new Date(row.expires_at) <= new Date(completedAt)) fail(409, "This exchange has expired.");
     for (const side of ["initiator", "recipient"]) {
@@ -148,10 +173,15 @@ export function createExchangeHandler({ pool, config, helpers }) {
       const sent = resolved[side].map((entry) => ({ title: entry.title }));
       const peer = await participant(db, event.id, row[`${other}_user_id`], row[`${other}_character_id`]);
       const partnerName = peer.character.profile.name;
-      const receipt = { completedAt, partnerName, sent, received, introduced: true };
+      const assetDirection = characterId => {
+        const transfer = economyReceipt?.transfers.find(entry => entry.fromCharacterId === characterId);
+        return { items: transfer?.items || [], resources: transfer?.resources || [] };
+      };
+      const receipt = { completedAt, partnerName, sent, received, introduced: true, assets: { sent: assetDirection(row[`${side}_character_id`]), received: assetDirection(row[`${other}_character_id`]), transactionId: economyReceipt?.id || null } };
       await db.query("INSERT INTO exchange_receipts(exchange_id,event_id,owner_user_id,owner_character_id,receipt) VALUES($1,$2,$3,$4,$5)", [row.id, event.id, row[`${side}_user_id`], row[`${side}_character_id`], JSON.stringify(receipt)]);
       await db.query("INSERT INTO exchange_contacts(id,event_id,owner_user_id,owner_character_id,peer_user_id,peer_character_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(event_id,owner_user_id,owner_character_id,peer_user_id,peer_character_id) DO NOTHING", [randomUUID(), event.id, row[`${side}_user_id`], row[`${side}_character_id`], row[`${other}_user_id`], row[`${other}_character_id`]]);
-      const lines = ["Both players confirmed this introduction and these readings.", `With: ${partnerName}`, "", `Sent (${sent.length}):`, ...sent.map((entry) => `- ${entry.title}`), "", `Received (${received.length}):`, ...received.map((entry) => `- ${entry.title} (${entry.alreadyKnown ? "already known" : "new reading"})`)];
+      const lines = ["Both players confirmed this introduction, these readings, and the listed assets.", `With: ${partnerName}`, "", `Sent (${sent.length}):`, ...sent.map((entry) => `- ${entry.title}`), "", `Received (${received.length}):`, ...received.map((entry) => `- ${entry.title} (${entry.alreadyKnown ? "already known" : "new reading"})`)];
+      if (economyReceipt) for (const direction of ["sent", "received"]) lines.push("", `${direction === "sent" ? "Sent" : "Received"} assets:`, ...receipt.assets[direction].items.map(item => `- ${item.quantity} × ${item.name}`), ...receipt.assets[direction].resources.map(resource => `- ${resource.quantity} ${resource.name}`));
       await db.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,audio,type) VALUES($1,$2,$3,'exchange',$4,'Exchange receipt',$5,NULL,'exchange_receipt')", [randomUUID(), event.id, row[`${side}_character_id`], `exchange-receipt:${row.id}`, lines.join("\n")]);
     }
     await db.query("UPDATE exchange_sessions SET status='completed',completed_at=$2,updated_at=clock_timestamp() WHERE id=$1", [row.id, completedAt]);
@@ -177,13 +207,14 @@ export function createExchangeHandler({ pool, config, helpers }) {
     if (action === "join" && !(await limit(pool, `exchange-join:${eventId}:${user.id}`, 30))) fail(429, "Too many exchange-code attempts. Wait 15 minutes and try again.");
     let firstCreation = false;
     const result = await transaction(pool, async (db) => {
-      const event = await membership(db, eventId, user.id, true);
+      let event = await membership(db, eventId, user.id, true);
       const previous = (await db.query("SELECT payload_hash,exchange_id FROM exchange_requests WHERE event_id=$1 AND actor_user_id=$2 AND request_id=$3", [eventId, user.id, input.requestId])).rows[0];
       let row;
       if (previous) row = await getSession(db, eventId, previous.exchange_id, true);
       else if (targetId) row = await getSession(db, eventId, targetId, true);
       else if (action === "join") { row = (await db.query("SELECT *,clock_timestamp() AS server_time FROM exchange_sessions WHERE event_id=$1 AND code=$2 FOR UPDATE", [eventId, input.code])).rows[0]; if (!row) notFound(); }
       await lockUsers(db, [user.id, row?.initiator_user_id, row?.recipient_user_id]);
+      event = await membership(db, eventId, user.id);
       if (row) row.server_time = await clock(db);
       const own = await ownCharacter(db, event, user, input.characterId); if (!own) lostCharacter();
       let side = row ? sideFor(row, user.id, own.character.id) : null;
@@ -200,6 +231,7 @@ export function createExchangeHandler({ pool, config, helpers }) {
             if (!playable(event) || !own.eligible) fail(409, "This exchange is not currently available.");
             for (const party of ["initiator", "recipient"]) if (row[`${party}_user_id`] && !(await participant(db, eventId, row[`${party}_user_id`], row[`${party}_character_id`]))?.eligible) fail(409, "A participant is no longer eligible for this exchange.");
             await offers(db, event, row, context, true);
+            await tradeOffers(db, event, row, true);
           }
         }
         return { exchange: await detail(db, event, user, own.character, row, context), outcome: { message: "Current exchange state restored.", replayed: true } };
@@ -224,14 +256,17 @@ export function createExchangeHandler({ pool, config, helpers }) {
         } else {
           if (input.version !== row.version) fail(409, "This offer changed. Review the current exchange before continuing.");
           if (action === "offer") {
-            const changed = JSON.stringify(input.readingIds) !== JSON.stringify(row[`${side}_offer`]);
+            const newAssets = await resolveTradeAssets(db, event, own.character.id, { items: input.items || [], resources: input.resources || [] });
+            const savedAssets = (await db.query("SELECT snapshot FROM exchange_trade_offers WHERE event_id=$1 AND exchange_id=$2 AND side=$3", [eventId, row.id, side])).rows[0]?.snapshot || emptyAssets();
+            const changed = JSON.stringify(input.readingIds) !== JSON.stringify(row[`${side}_offer`]) || JSON.stringify(stable(newAssets)) !== JSON.stringify(stable(savedAssets));
             const prospective = { ...row, [`${side}_offer`]: input.readingIds };
             // Validate the edited side now. A partner can separately repair
             // their invalid offer; neither side can confirm until both pass.
             await offerRows(db, event, own.character.id, input.readingIds, context, true);
             await offers(db, event, prospective, context, false);
             if (changed) await db.query(`UPDATE exchange_sessions SET ${side}_offer=$2,version=version+1,initiator_confirmed_version=NULL,recipient_confirmed_version=NULL,updated_at=clock_timestamp() WHERE id=$1`, [row.id, JSON.stringify(input.readingIds)]);
-            if (changed) await audit(db, eventId, user.id, "exchange.offer_changed", { exchangeId: row.id, count: input.readingIds.length });
+            if (changed && (newAssets.items.length || newAssets.resources.length || savedAssets.items.length || savedAssets.resources.length)) await db.query("INSERT INTO exchange_trade_offers(event_id,exchange_id,side,snapshot) VALUES($1,$2,$3,$4) ON CONFLICT(event_id,exchange_id,side) DO UPDATE SET snapshot=EXCLUDED.snapshot", [eventId, row.id, side, JSON.stringify(newAssets)]);
+            if (changed) await audit(db, eventId, user.id, "exchange.offer_changed", { exchangeId: row.id, count: input.readingIds.length, itemCount: newAssets.items.length, resourceCount: newAssets.resources.length });
           } else if (action === "cancel" || action === "reject") {
             if (event.status === "archived") fail(409, "Archived events are read-only.");
             if (action === "reject" && side !== "recipient") fail(403, "Only the invited player can reject this exchange.");
@@ -240,6 +275,7 @@ export function createExchangeHandler({ pool, config, helpers }) {
           } else if (action === "confirm") {
             if (row.status !== "negotiating" || !row.recipient_user_id) fail(409, "Wait for the other player to join before confirming.");
             await offers(db, event, row, context, true);
+            await tradeOffers(db, event, row, true);
             if (new Date(row.expires_at) <= new Date(await clock(db))) fail(409, "This exchange has expired.");
             await db.query(`UPDATE exchange_sessions SET ${side}_confirmed_version=version,updated_at=clock_timestamp() WHERE id=$1`, [row.id]);
             row = await getSession(db, eventId, row.id);
@@ -250,7 +286,7 @@ export function createExchangeHandler({ pool, config, helpers }) {
         row = await getSession(db, eventId, row.id);
       }
       await db.query("INSERT INTO exchange_requests(event_id,actor_user_id,request_id,payload_hash,exchange_id) VALUES($1,$2,$3,$4,$5)", [eventId, user.id, input.requestId, hash, row.id]);
-      return { exchange: await detail(db, event, user, own.character, row, context), outcome: { message: row.status === "completed" ? "Both players confirmed. Your introduction and readings are saved." : action === "create" ? "Show this temporary code to the other player." : action === "join" ? "Review the offers. Each player must confirm independently." : action === "offer" ? "Offer saved. Changed offers require both players to confirm again." : action === "confirm" ? "Your confirmation is saved. Waiting for the other player." : "Exchange closed.", replayed: false } };
+      return { exchange: await detail(db, event, user, own.character, row, context), outcome: { message: row.status === "completed" ? "Both players confirmed. Your introduction, readings, and agreed transfers are saved." : action === "create" ? "Show this temporary code to the other player." : action === "join" ? "Review the offers. Each player must confirm independently." : action === "offer" ? "Offer saved. Changed offers require both players to confirm again." : action === "confirm" ? "Your confirmation is saved. Waiting for the other player." : "Exchange closed.", replayed: false } };
     });
     send(res, firstCreation ? 201 : 200, result); return true;
   };

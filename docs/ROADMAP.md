@@ -2,16 +2,16 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 1.8 · September 6, 2026
+Development roadmap · Planning revision: 1.9 · September 6, 2026
 
-Status: Batch 6 (v0.6.0, schema 7) is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Local verification, real PostgreSQL CI, the complete remote staging workflow, Railway production, and all 37 exact-commit public checks passed. The existing operator account remains enabled with identity and password preserved. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 7 is the next development batch; Batches 7–12 remain planned.
+Status: Batch 7 (v0.7.0, schema 8) is implemented as a release candidate. Full local verification passed 183 tests (179 passed, zero failures, four TCP-only skips), and its complete local HTTP staging rehearsal passed. Exact-candidate CI, remote staging, and production promotion remain pending. Current production is the verified Batch 6 v0.6.0/schema 7 release at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com), with the existing operator enabled and identity/password preserved. Scheduled backups remain outstanding because Railway reports zero managed-backup capacity. Batch 8 is next after this release; Batches 8–12 remain planned.
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
 
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
-The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–6 are deployed; Batches 7–12 remain planned.
+The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are targeted to be functional by v0.9; field hardening, a beta pilot, and release preparation follow. Versions express dependency order and completion gates, not calendar commitments. Batches 1–6 are deployed; Batch 7 is implemented pending release verification; Batches 8–12 remain planned.
 
 **Product commitments**
 
@@ -20,7 +20,7 @@ The first complete adventure is delivered in v0.4, with all three themes verifie
 - Three initial themes: fantasy, cyberpunk, and wasteland. Each receives a complete starter adventure by v0.4.
 - Separate theme packs, event packs, and rules profiles. Appearance changes preserve stable identifiers and existing progress; rule changes are explicit and validated.
 - Players can create characters, receive prewritten characters, and copy a character template into another event. Progression, approvals, equipment, and private knowledge remain event-specific.
-- QR codes support public introductions, controlled information sharing, and later item exchanges. Every scanning workflow also accepts a short code.
+- QR codes support public introductions, controlled information sharing, and atomic item/resource exchanges. Every scanning workflow also accepts a short code.
 - PostgreSQL is authoritative for shared inventories, exchanges, permissions, and event state. Offline behavior is explicitly defined for each action.
 - Backward compatibility begins with the first persisted schema: version detection, validated imports, tested migrations, and recovery procedures.
 - No mandatory social integrations or third-party game accounts. No behavioral analytics. Operational logs exclude private story content and credentials where practical.
@@ -112,6 +112,14 @@ Completion gate: Two players can receive different accounts, share selected evid
 
 **Batch 7 — v0.7: Economy, trades, and agreements**
 
+Implementation status: Source v0.7.0/schema 8 implements BAZAAR whole-unit fictional resources, independent immutable resource catalogs, organizer shops and finite stock, versioned purchases, private inventory/balances, bilateral item/resource QR barter, transaction receipts, and reasoned corrections. Final transfers and reading copies are atomic; changed offers clear both confirmations and current item versions/ownership must still qualify. No resource default silently grants funds.
+
+OATHBOOK records exact proposed terms, 2–8 distinct-player participants, up to five independent witnesses, expiration, acceptance revisions, and up to 16 fixed resource settlement transfers. Every participant must accept and later confirm fulfillment; witnesses cannot authorize spending. Narrative obligations require human judgment. Disputes and organizer rulings preserve original signatures and receipts; linked corrections create separate evidence. No item lending, borrowing, escrow, or external payments are implemented.
+
+Migration 008 adds 13 tables without changing migrations 001–007 or existing records. New starter events explicitly seed a themed resource/shop, with all balances zero; existing events receive no economic seed data. Rehearsal copies include independent initial shop stock, zero balances/history, and no agreements. Reset clears economy/agreement play and restores captured initial inventory while preserving the source. Current assets, pending trade terms, and agreement records require connectivity; completed authorized trade journal receipts use the existing bounded archive; no private offline queue is introduced.
+
+The complete local HTTP staging rehearsal passed 305 reads/342 writes, retaining every previous three-theme adventure, exchange, and story journey. The 37-test migration/foundation set passed across its initial run and a corrected-fixture rerun, with one existing TCP-only skip; all 13 new tables passed recovery-fixture constraints and repeat migration locally. Root integration checks passed 22 tests and kit/offline checks passed 27. Eight full-app DOM/API checks passed with zero uncaught errors and ten focused OATHBOOK UI scenarios passed. Economy HTTP passed seven tests, OATHBOOK thirteen, story thirteen, and exchange fourteen plus one TCP-only skip. Full local `npm run verify` passed 183 tests (179 passed, zero failures, four deliberate TCP-only skips), with syntax/version/static assets passed. Exact-candidate PostgreSQL/Docker/restore CI, remote staging, and production remain pending. The deployed runtime is still v0.6.0/schema 7; see [STATUS.md](STATUS.md). Schema-8 recovery requires a compatible roll-forward fix. Physical-device and human field testing and scheduled backups remain outstanding.
+
 Implement BAZAAR and OATHBOOK. Add fictional resource balances, item ownership and quantities, organizer-defined shops, stock, purchases, and bilateral barter. Extend QR exchanges to atomic trades: all agreed transfers succeed together or none do.
 
 Add agreements with participants, terms, witnesses, expiration, status, and organizer adjudication. Support explicit settlement terms where practical; narrative obligations require human judgment. Record receipts and organizer corrections. Inventory transfers require server confirmation; borrowing and complex lending rules are reserved for later expansion.
@@ -176,7 +184,7 @@ Completion gate: All twelve instruments meet their acceptance criteria; each sta
 | Trade | Guild quartermaster | Black-market exchange | Trading post |
 | News | Town crier's broadsheet | Underground newswire | Settlement bulletin |
 
-Theme packs affect presentation and vocabulary. Event packs supply the story and content. Rules profiles define game data and, as gameplay instruments arrive, their supported behavior. In v0.2 they are bounded definitions only. The theme can rename an explicitly configured resource but cannot silently change balances, ability requirements, or outcomes. Every interface retains understandable actions and accessibility overrides.
+Theme packs affect presentation and vocabulary. Event packs supply the story and content. Rules profiles define game data and, as gameplay instruments arrive, their supported behavior. In v0.2 they are bounded definitions only. Theme presentation can change vocabulary, but accepted economic resource IDs and names remain fixed; a theme change cannot silently change balances, ability requirements, or outcomes. Every interface retains understandable actions and accessibility overrides.
 
 **Checks required throughout development**
 
@@ -193,4 +201,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next development batch: Batch 7 — economy, trades, and agreements. Batch 6 is fully deployed; scheduled database backups remain a separate operational item. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next development batch: Batch 8 — cooperative challenges and immersive props, after Batch 7 passes release verification. Batch 6 remains the current deployed release; scheduled database backups remain a separate operational item. Public branding uses ORACLE with the subtitle “LARP Field Kit.”

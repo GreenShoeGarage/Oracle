@@ -223,3 +223,20 @@ test('received WHISPER grants survive original departure and require explicit ne
   assert.deepEqual(await filterStoryJournal(pool, f.event.id, users.two.id, [{ id: original.id }]), [{ id: original.id }]);
   assert.equal((await pool.query('SELECT owner_user_id FROM story_readings WHERE journal_id=$1', [original.id])).rows[0].owner_user_id, users.one.id);
 });
+
+
+test('trade receipt journal entries remain account-bound after a character is reassigned', async () => {
+  const f = await fixture(), sessionId = randomUUID(), journalId = randomUUID();
+  await pool.query("INSERT INTO exchange_sessions(id,event_id,code,status,initiator_user_id,initiator_character_id,recipient_user_id,recipient_character_id,expires_at,completed_at) VALUES($1,$2,'ZZZZZZZZZZZZ','completed',$3,$4,$5,$6,clock_timestamp()+interval '15 minutes',clock_timestamp())", [sessionId,f.event.id,users.one.id,f.characters.one.id,users.two.id,f.characters.two.id]);
+  await pool.query('INSERT INTO exchange_receipts(exchange_id,event_id,owner_user_id,owner_character_id,receipt) VALUES($1,$2,$3,$4,$5)', [sessionId,f.event.id,users.one.id,f.characters.one.id,JSON.stringify({received:[],assets:{sent:{items:[{name:'Private negotiated item',quantity:1}]}}})]);
+  await pool.query("INSERT INTO adventure_journal(id,event_id,character_id,node_id,entry_key,title,text,type) VALUES($1,$2,$3,'exchange',$4,'Exchange receipt','Private negotiated item: one unit','exchange_receipt')", [journalId,f.event.id,f.characters.one.id,`exchange-receipt:${sessionId}`]);
+  const playPath = `/api/events/${f.event.id}/adventure/play?characterId=${f.characters.one.id}`;
+  assert.ok(ok(await request(playPath,'GET',undefined,users.one)).journal.some(row => row.id === journalId));
+  await pool.query("INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'player')", [f.event.id,users.outsider.id]);
+  await pool.query('UPDATE characters SET user_id=$2 WHERE id=$1', [f.characters.one.id,users.outsider.id]);
+  const inherited = ok(await request(playPath,'GET',undefined,users.outsider));
+  assert.ok(!inherited.journal.some(row => row.id === journalId));
+  assert.ok(!JSON.stringify(inherited).includes('Private negotiated item'));
+  assert.equal((await request(playPath,'GET',undefined,users.one)).status,404);
+  assert.equal((await pool.query('SELECT text FROM adventure_journal WHERE id=$1',[journalId])).rows[0].text,'Private negotiated item: one unit');
+});

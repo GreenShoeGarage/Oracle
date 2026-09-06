@@ -8,6 +8,8 @@ import { createExchangeHandler } from "./exchanges.js";
 import { createSharingHandler } from "./sharing.js";
 import { createStoryHandler } from "./story.js";
 import { createTraceHandler } from "./trace.js";
+import { createEconomyHandler } from "./economy.js";
+import { createOathHandler } from "./oaths.js";
 import { checkSchema, transaction } from "./db.js";
 import {
   THEMES,
@@ -184,6 +186,8 @@ export function createApp({
   const sharingHandler = createSharingHandler({ pool, config, helpers });
   const storyHandler = createStoryHandler({ pool, config, helpers });
   const traceHandler = createTraceHandler({ pool, config, helpers });
+  const economyHandler = createEconomyHandler({ pool, config, helpers });
+  const oathHandler = createOathHandler({ pool, config, helpers });
   return async function handle(req, res) {
     const requestId = randomUUID();
     res.setHeader("X-Request-Id", requestId);
@@ -245,6 +249,12 @@ export function createApp({
           "/trace-model.js": ["trace-model.js", "text/javascript"],
           "/trace-ui.js": ["trace-ui.js", "text/javascript"],
           "/trace.css": ["trace.css", "text/css"],
+          "/economy-model.js": ["economy-model.js", "text/javascript"],
+          "/economy-ui.js": ["economy-ui.js", "text/javascript"],
+          "/economy.css": ["economy.css", "text/css"],
+          "/oath-model.js": ["oath-model.js", "text/javascript"],
+          "/oath-ui.js": ["oath-ui.js", "text/javascript"],
+          "/oath.css": ["oath.css", "text/css"],
           "/characters-ui.js": ["characters-ui.js", "text/javascript"],
           "/characters-model.js": ["characters-model.js", "text/javascript"],
           "/characters.css": ["characters.css", "text/css"],
@@ -356,6 +366,8 @@ export function createApp({
       if (await sharingHandler({ req, res, path, url, method, user })) return;
       if (await storyHandler({ req, res, path, url, method, user })) return;
       if (await traceHandler({ req, res, path, url, method, user })) return;
+      if (await economyHandler({ req, res, path, url, method, user })) return;
+      if (await oathHandler({ req, res, path, url, method, user })) return;
       if (path === "/api/catalog" && method === "GET")
         return send(res, 200, { themes: THEMES, templates: TEMPLATES, instruments: INSTRUMENTS });
       if (path === "/api/auth/logout" && method === "POST") {

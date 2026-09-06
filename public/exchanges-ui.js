@@ -5,11 +5,14 @@ const activeStatuses = new Set(['waiting', 'negotiating', 'unavailable']);
 const statusNames = { waiting: 'Waiting for a player', negotiating: 'Reviewing offers', completed: 'Completed', cancelled: 'Cancelled', rejected: 'Declined', expired: 'Expired', unavailable: 'Unavailable' };
 const typeNames = { whisper: 'Rumor account', relic: 'Relic reading', dead_drop: 'Message', cipherbox: 'Cipher reading', wayfinder: 'Scene reading', shared_reading: 'Shared reading', exchange_receipt: 'Exchange receipt' };
 const sameIds = (a, b) => a.length === b.length && [...a].sort().every((id, index) => id === [...b].sort()[index]);
+const assetKey = assets => JSON.stringify({ items: (assets?.items || []).map(item => ({ itemId: item.itemId, quantity: Number(item.quantity), version: item.version })).sort((a, b) => a.itemId.localeCompare(b.itemId)), resources: (assets?.resources || []).map(resource => ({ resourceId: resource.resourceId, quantity: Number(resource.quantity) })).sort((a, b) => a.resourceId.localeCompare(b.resourceId)) });
+const quantityLabel = value => Number(value || 0).toLocaleString();
 
 export function createExchangeUI(ctx) {
   const { state, api, shell, esc, loadEvent, openModal, closeModal, toast, err } = ctx;
   let dashboard = null, detail = null, accountId = null, selectedCharacterId = null;
   let epoch = 0, modalEpoch = 0, pollTimer = null, clockTimer = null, pollBusy = false;
+  let selectedItems = new Map(), selectedResources = new Map();
   let selectedReadings = new Set(), draftVersion = null, offerDirty = false, offerConflict = false, scannerDirty = false;
   let pendingRequest = null, feedback = null, serverOffset = 0, scannerController = null, scannerStop = null, scanBusy = false;
   const connected = () => navigator.onLine !== false;
@@ -26,7 +29,7 @@ export function createExchangeUI(ctx) {
   function stopPolling() { if (pollTimer) clearTimeout(pollTimer); if (clockTimer) clearInterval(clockTimer); pollTimer = null; clockTimer = null; }
   function reset() {
     epoch++; modalEpoch++; stopPolling(); stopCamera(); accountId = null; dashboard = null; detail = null; selectedCharacterId = null;
-    selectedReadings.clear(); draftVersion = null; offerDirty = false; offerConflict = false; scannerDirty = false; pendingRequest = null; feedback = null; serverOffset = 0; scanBusy = false; pollBusy = false;
+    selectedReadings.clear(); selectedItems.clear(); selectedResources.clear(); draftVersion = null; offerDirty = false; offerConflict = false; scannerDirty = false; pendingRequest = null; feedback = null; serverOffset = 0; scanBusy = false; pollBusy = false;
   }
   function ensureAccount() {
     const current = state.session?.user?.id || null;
@@ -40,11 +43,17 @@ export function createExchangeUI(ctx) {
     if (!who || who !== state.session?.user?.id) { const error = new Error('Your account changed. Open this event again.'); error.status = 409; throw error; }
     return result;
   }
+  function selectedAssets() { return { items: [...selectedItems.values()], resources: [...selectedResources.values()] }; }
+  function restoreAssets(assets) {
+    selectedItems = new Map((assets?.items || []).map(item => [item.itemId, { ...item, quantity: String(item.quantity) }]));
+    selectedResources = new Map((assets?.resources || []).map(resource => [resource.resourceId, { ...resource, quantity: String(resource.quantity) }]));
+  }
+  function updateDirty() { offerDirty = !sameIds([...selectedReadings], detail.own.offered.map(reading => reading.id)) || assetKey(selectedAssets()) !== assetKey(detail.own.assets); }
   function applyDetail(result, preserveDraft = true) {
     const next = result.exchange, sameSession = detail?.id === next.id;
     const savedIds = next.own.offered.map((reading) => reading.id);
-    if (!sameSession || !preserveDraft || !offerDirty || sameIds([...selectedReadings], savedIds)) {
-      selectedReadings = new Set(savedIds); offerDirty = false; offerConflict = false; draftVersion = next.version;
+    if (!sameSession || !activeStatuses.has(next.status) || !preserveDraft || !offerDirty || (sameIds([...selectedReadings], savedIds) && assetKey(selectedAssets()) === assetKey(next.own.assets))) {
+      selectedReadings = new Set(savedIds); restoreAssets(next.own.assets); offerDirty = false; offerConflict = false; draftVersion = next.version;
     } else if (draftVersion !== next.version) offerConflict = true;
     detail = next; selectedCharacterId = next.character.id;
     serverOffset = Number.isFinite(Date.parse(next.serverTime)) ? Date.parse(next.serverTime) - Date.now() : 0;
@@ -60,7 +69,7 @@ export function createExchangeUI(ctx) {
     const result = await request(`${base(id)}${query}`);
     if (!currentContext(generation, who, id)) return;
     dashboard = result; selectedCharacterId = result.character?.id || null; detail = null;
-    selectedReadings.clear(); offerDirty = false; offerConflict = false; draftVersion = null;
+    selectedReadings.clear(); selectedItems.clear(); selectedResources.clear(); offerDirty = false; offerConflict = false; draftVersion = null;
     if (options.exchangeId && selectedCharacterId) {
       const exchange = await request(`${base(id)}/${options.exchangeId}?${new URLSearchParams({ characterId: selectedCharacterId })}`);
       if (!currentContext(generation, who, id)) return;
@@ -155,21 +164,33 @@ export function createExchangeUI(ctx) {
     for (const reading of detail.own.offered) if (!result.some((entry) => entry.id === reading.id)) result.push({ ...reading, shareable: false, policy: 'restricted' });
     return result;
   }
+  function assetOptions(editable) {
+    const enabled = state.event?.setup?.enabledInstruments?.includes('bazaar');
+    const items = [...(dashboard.inventory || [])], resources = [...(dashboard.resources || [])];
+    for (const offered of selectedItems.values()) if (!items.some(item => item.id === offered.itemId)) items.push({ id: offered.itemId, name: offered.name || 'Unavailable item', quantity: 0, version: offered.version, unavailable: true });
+    for (const offered of selectedResources.values()) if (!resources.some(resource => resource.id === offered.resourceId)) resources.push({ id: offered.resourceId, name: offered.name || 'Unavailable resource', unavailable: true });
+    if (!enabled && !selectedItems.size && !selectedResources.size) return '<p class="hint mt">Organizers can enable BAZAAR to add items and resources to exchanges.</p>';
+    return `<details class="exchange-asset-picker" open><summary>Offer items and resources</summary><p class="hint">Offer up to 10 item rows and 20 resource types. Enter whole quantities; zero leaves an asset out. Only these selected terms are shown to your partner. Assets stay yours until both players confirm and the server completes every transfer.</p>${!enabled ? '<p class="exchange-banner">BAZAAR is disabled. Remove the asset offers to continue with a reading exchange.</p>' : ''}${items.length ? `<h4 class="mt">Inventory</h4><div class="exchange-asset-options">${items.map(item => `<label class="exchange-asset-option"><span><strong>${esc(item.name)}</strong><span class="hint">${quantityLabel(item.quantity)} available${item.unavailable ? ' · Remove unavailable item' : selectedItems.has(item.id) && selectedItems.get(item.id).version !== item.version ? ' · Inventory changed; review before saving' : ''}</span></span><input type="number" inputmode="numeric" step="1" min="0" max="${Math.max(item.quantity, Number(selectedItems.get(item.id)?.quantity) || 0)}" name="item-${esc(item.id)}" data-trade-item="${esc(item.id)}" data-item-version="${item.version}" value="${esc(selectedItems.get(item.id)?.quantity || '0')}" aria-label="Quantity of ${esc(item.name)} to offer" ${!editable ? 'disabled' : ''}></label>`).join('')}</div>` : '<p class="hint mt">No inventory items are available.</p>'}${resources.length ? `<h4 class="mt">Resources</h4><div class="exchange-asset-options">${resources.map(resource => { const balance = dashboard.balances?.find(row => row.resourceId === resource.id); return `<label class="exchange-asset-option"><span><strong>${esc(resource.name)}</strong><span class="hint">${quantityLabel(balance?.quantity)} available${resource.unavailable ? ' · Remove unavailable resource' : ''}</span></span><input type="number" inputmode="numeric" step="1" min="0" max="${Math.max(balance?.quantity || 0, Number(selectedResources.get(resource.id)?.quantity) || 0)}" name="resource-${esc(resource.id)}" data-trade-resource="${esc(resource.id)}" value="${esc(selectedResources.get(resource.id)?.quantity || '0')}" aria-label="Quantity of ${esc(resource.name)} to offer" ${!editable ? 'disabled' : ''}></label>`; }).join('')}</div>` : ''}${detail.own.assets?.valid === false ? '<div class="exchange-banner"><p>Your saved assets changed or are no longer available. Review current inventory, remove unavailable entries and save a fresh offer.</p><button type="button" class="mt" data-action="exchange-refresh-assets">Review current inventory</button></div>' : ''}</details>`;
+  }
+  function assetTitles(assets, emptyText = 'No items or resources.') {
+    const lines = [...(assets?.items || []).map(item => `${quantityLabel(item.quantity)} × ${item.name}`), ...(assets?.resources || []).map(resource => `${quantityLabel(resource.quantity)} ${resource.name}`)];
+    return lines.length ? `<ul class="exchange-title-list exchange-assets-list">${lines.map(line => `<li>${esc(line)}</li>`).join('')}</ul>` : `<p class="hint">${emptyText}</p>`;
+  }
   function ownOffer() {
     const readings = availableReadings(), editable = canWrite();
-    return `<section class="panel exchange-offer"><p class="eyebrow">Your public identity</p>${publicIdentity(detail.own.character, true)}<details class="exchange-offer-picker" open><summary>Choose readings to offer</summary><p class="hint">Share up to 10 discovered readings. Their full text and any audio will be copied only after both players confirm. Leave the list empty for an introduction.</p><form id="exchange-offer-form">${err}<p id="exchange-selection-count" class="hint">${selectedReadings.size} of 10 selected</p>${readings.length ? `<div class="exchange-reading-options">${readings.map((reading) => `<label class="exchange-reading-option"><input type="checkbox" name="readingIds" value="${esc(reading.id)}" data-shareable="${reading.shareable ? 'true' : 'false'}" ${selectedReadings.has(reading.id) ? 'checked' : ''} ${!editable || (!reading.shareable && !selectedReadings.has(reading.id)) || (selectedReadings.size >= 10 && !selectedReadings.has(reading.id)) ? 'disabled' : ''}><span><strong>${esc(reading.title)}</strong><span class="hint">${esc(typeNames[reading.type] || 'Reading')}${!reading.shareable ? ' · Not available to share' : ''}</span></span></label>`).join('')}</div>` : '<p class="hint">You have no readings to offer yet. You can still introduce your character.</p>'}<p id="exchange-offer-save-status" class="save-status" role="status">${offerDirty ? 'Unsaved offer changes' : 'Offer saved'}</p>${offerConflict ? '<div class="exchange-banner"><p>This exchange changed while you were selecting readings. Your selection has been preserved. Review both sides before applying it to the updated offer.</p><button type="button" class="mt" data-action="exchange-review-latest">Keep my selection for this revision</button></div>' : ''}<button type="submit" class="primary" ${!editable || !offerDirty || offerConflict ? 'disabled' : ''}>Save my offer</button></form></details><p class="hint mt">Changing either saved offer clears both confirmations.</p></section>`;
+    return `<section class="panel exchange-offer"><p class="eyebrow">Your public identity</p>${publicIdentity(detail.own.character, true)}<form id="exchange-offer-form">${err}<details class="exchange-offer-picker" open><summary>Choose readings to offer</summary><p class="hint">Share up to 10 discovered readings. Their full text and any audio will be copied only after both players confirm. Leave everything empty for an introduction.</p><p id="exchange-selection-count" class="hint">${selectedReadings.size} of 10 selected</p>${readings.length ? `<div class="exchange-reading-options">${readings.map((reading) => `<label class="exchange-reading-option"><input type="checkbox" name="readingIds" value="${esc(reading.id)}" data-shareable="${reading.shareable ? 'true' : 'false'}" ${selectedReadings.has(reading.id) ? 'checked' : ''} ${!editable || (!reading.shareable && !selectedReadings.has(reading.id)) || (selectedReadings.size >= 10 && !selectedReadings.has(reading.id)) ? 'disabled' : ''}><span><strong>${esc(reading.title)}</strong><span class="hint">${esc(typeNames[reading.type] || 'Reading')}${!reading.shareable ? ' · Not available to share' : ''}</span></span></label>`).join('')}</div>` : '<p class="hint">You have no readings to offer yet. You can still introduce your character or offer assets.</p>'}</details>${assetOptions(editable)}<p id="exchange-offer-save-status" class="save-status" role="status">${offerDirty ? 'Unsaved offer changes' : 'Offer saved'}</p>${offerConflict ? '<div class="exchange-banner"><p>This exchange changed while you were editing. Your selection has been preserved. Review both sides before applying it to the updated offer.</p><button type="button" class="mt" data-action="exchange-review-latest">Keep my selection for this revision</button></div>' : ''}<button type="submit" class="primary" ${!editable || !offerDirty || offerConflict ? 'disabled' : ''}>Save my offer</button></form><p class="hint mt">Changing either saved offer clears both confirmations.</p></section>`;
   }
   function offerTitles(readings, emptyText) { return readings.length ? `<ul class="exchange-title-list">${readings.map((reading) => `<li>${esc(reading.title)}</li>`).join('')}</ul>` : `<p class="hint">${emptyText}</p>`; }
   function partnerOffer() {
-    return `<section class="panel exchange-offer"><p class="eyebrow">Their public identity</p>${detail.partner ? `${publicIdentity(detail.partner.character)}<h3 class="mt">Their saved offer</h3>${offerTitles(detail.partner.offered, 'An introduction with no readings.')}<p class="hint mt">You can read offered material after both players confirm.</p>` : detail.status === 'waiting' ? '<h3 class="mt">Waiting for the other player.</h3><p class="hint">They will appear here after joining your invitation.</p>' : '<h3 class="mt">Partner unavailable.</h3><p class="hint">Their current public identity is unavailable for this exchange.</p>'}</section>`;
+    return `<section class="panel exchange-offer"><p class="eyebrow">Their public identity</p>${detail.partner ? `${publicIdentity(detail.partner.character)}<h3 class="mt">Their saved offer</h3>${offerTitles(detail.partner.offered, 'No readings offered.')}${assetTitles(detail.partner.assets)}<p class="hint mt">You can read offered material after both players confirm.</p>` : detail.status === 'waiting' ? '<h3 class="mt">Waiting for the other player.</h3><p class="hint">They will appear here after joining your invitation.</p>' : '<h3 class="mt">Partner unavailable.</h3><p class="hint">Their current public identity is unavailable for this exchange.</p>'}</section>`;
   }
   function confirmation() {
-    return `<section class="panel exchange-review"><div class="panel-head"><h2>Review the exchange</h2><span class="hint">Offer revision ${detail.version}</span></div><p class="hint">Both public identities will be shared. Check the saved reading titles before confirming.</p><div class="exchange-review-columns"><section><h3>You will share</h3>${offerTitles(detail.own.offered, 'Your introduction only.')}</section><section><h3>You will receive</h3>${detail.partner ? offerTitles(detail.partner.offered, 'Their introduction only.') : '<p class="hint">Waiting for a partner.</p>'}</section></div><div class="exchange-confirmations"><p><span aria-hidden="true">${detail.own.confirmed ? '✓' : '○'}</span> You: <strong>${detail.own.confirmed ? 'confirmed this offer' : 'not confirmed'}</strong></p><p><span aria-hidden="true">${detail.partner?.confirmed ? '✓' : '○'}</span> ${esc(detail.partner ? nameOf(detail.partner.character) : 'Partner')}: <strong>${detail.partner?.confirmed ? 'confirmed this offer' : 'not confirmed'}</strong></p></div>${detail.blockedReason ? `<p class="exchange-banner">${esc(detail.blockedReason)}</p>` : ''}<p id="exchange-confirm-help" class="hint">${offerDirty ? 'Save your offer changes before confirming.' : detail.own.confirmed ? 'Your confirmation is recorded. Waiting for the other player to confirm this same offer.' : 'Confirmation applies to this saved offer. A change requires both players to confirm again.'}</p><button class="primary mt" data-action="exchange-confirm" ${!canConfirm() ? 'disabled' : ''}>${detail.own.confirmed ? 'Your confirmation is recorded' : 'Confirm this exchange'}</button></section>`;
+    return `<section class="panel exchange-review"><div class="panel-head"><h2>Review the exchange</h2><span class="hint">Offer revision ${detail.version}</span></div><p class="hint">Both public identities will be shared. Review every saved reading, item and resource quantity. All agreed transfers succeed together or none do.</p><div class="exchange-review-columns"><section><h3>You will share</h3>${offerTitles(detail.own.offered, 'No readings.')}${assetTitles(detail.own.assets)}</section><section><h3>You will receive</h3>${detail.partner ? `${offerTitles(detail.partner.offered, 'No readings.')}${assetTitles(detail.partner.assets)}` : '<p class="hint">Waiting for a partner.</p>'}</section></div><div class="exchange-confirmations"><p><span aria-hidden="true">${detail.own.confirmed ? '✓' : '○'}</span> You: <strong>${detail.own.confirmed ? 'confirmed this offer' : 'not confirmed'}</strong></p><p><span aria-hidden="true">${detail.partner?.confirmed ? '✓' : '○'}</span> ${esc(detail.partner ? nameOf(detail.partner.character) : 'Partner')}: <strong>${detail.partner?.confirmed ? 'confirmed this offer' : 'not confirmed'}</strong></p></div>${detail.blockedReason ? `<p class="exchange-banner">${esc(detail.blockedReason)}</p>` : ''}<p id="exchange-confirm-help" class="hint">${offerDirty ? 'Save your offer changes before confirming.' : detail.own.confirmed ? 'Your confirmation is recorded. Waiting for the other player to confirm this same offer.' : 'Confirmation applies to this saved offer. A change requires both players to confirm again.'}</p><button class="primary mt" data-action="exchange-confirm" ${!canConfirm() ? 'disabled' : ''}>${detail.own.confirmed ? 'Your confirmation is recorded' : 'Confirm this exchange'}</button></section>`;
   }
   function receipt() {
     const record = detail.receipt;
     if (!record) return '<p class="exchange-banner">This exchange is complete. Refresh to load its receipt.</p>';
-    return `<section class="panel exchange-receipt"><p class="eyebrow">Confirmed by both players</p><h2>Exchange complete</h2><p class="hint">${esc(date(record.completedAt))}</p>${record.introduced ? '<p class="mt">Your introduction is recorded in Contacts.</p>' : ''}<details class="exchange-receipt-sent mt"><summary>You shared · ${record.sent.length} readings</summary>${offerTitles(record.sent, 'An introduction with no readings.')}</details><h3 class="mt">You received</h3>${record.received.length ? `<div class="exchange-received-list">${record.received.map((reading) => `<article class="exchange-received"><h3>${esc(reading.title)}</h3><p class="hint">${reading.alreadyKnown ? 'Already in your journal · no duplicate added' : 'Saved to your journal'}</p><p class="prose mt">${esc(reading.text)}</p>${reading.audio ? `<audio controls preload="none" src="${esc(reading.audio)}" aria-label="Audio for ${esc(reading.title)}">Audio playback is unavailable.</audio>` : ''}</article>`).join('')}</div>` : '<p class="hint">An introduction with no readings.</p>'}<p class="hint mt">Shared information adds to your journal. It does not change your character’s inventory or adventure progress.</p><button class="primary mt" data-action="exchange-journal">Open journal in adventure</button></section>`;
+    return `<section class="panel exchange-receipt"><p class="eyebrow">Confirmed by both players</p><h2>Exchange complete</h2><p class="hint">${esc(date(record.completedAt))}</p>${record.introduced ? '<p class="mt">Your introduction is recorded in Contacts.</p>' : ''}<details class="exchange-receipt-sent mt"><summary>You shared · ${record.sent.length} readings</summary>${offerTitles(record.sent, 'An introduction with no readings.')}</details><h3 class="mt">You received</h3>${record.received.length ? `<div class="exchange-received-list">${record.received.map((reading) => `<article class="exchange-received"><h3>${esc(reading.title)}</h3><p class="hint">${reading.alreadyKnown ? 'Already in your journal · no duplicate added' : 'Saved to your journal'}</p><p class="prose mt">${esc(reading.text)}</p>${reading.audio ? `<audio controls preload="none" src="${esc(reading.audio)}" aria-label="Audio for ${esc(reading.title)}">Audio playback is unavailable.</audio>` : ''}</article>`).join('')}</div>` : '<p class="hint">An introduction with no readings.</p>'}${record.assets?.transactionId ? `<div class="exchange-review-columns mt"><section><h3>Assets sent</h3>${assetTitles(record.assets.sent)}</section><section><h3>Assets received</h3>${assetTitles(record.assets.received)}</section></div><p class="hint exchange-transaction-reference">Trade receipt ${esc(record.assets.transactionId)} · inventory and balances updated together.</p>` : ''}<p class="hint mt">Shared readings are saved in your journal. Reading exchanges do not grant adventure progress.</p><button class="primary mt" data-action="exchange-journal">Open journal in adventure</button></section>`;
   }
   function session() {
     const active = activeStatuses.has(detail.status);
@@ -201,7 +222,7 @@ export function createExchangeUI(ctx) {
     const interaction = preserveInteraction ? captureInteraction() : null;
     if (!dashboard || dashboard.event.id !== state.event?.id) { shell('<p role="status">Open an event to see its exchanges.</p>'); return; }
     const content = !connected() ? '<section class="empty"><h2>Reconnect to exchange information.</h2><p>Invitations, offers, and confirmations require a connection. Your previously saved adventure readings remain available.</p><button data-action="offline-open">Open saved readings</button></section>' : detail ? session() : overview();
-    shell(`<section class="exchanges-workspace"><div class="actions"><button class="quiet" data-action="${detail ? 'exchange-overview' : 'exchange-event'}">← ${detail ? 'All exchanges' : 'Event briefing'}</button></div><header class="page-head mt"><div><p class="eyebrow">${esc(dashboard.event.name)}</p><h1>Exchanges</h1><p class="muted">Meet another character and choose what you want to share.</p></div><button data-action="exchange-refresh" ${!connected() || pendingRequest?.sending ? 'disabled' : ''}>Refresh</button></header>${pendingBanner()}${feedback ? `<p class="exchange-feedback" role="status">${esc(feedback)}</p>` : ''}${content}</section>`);
+    shell(`<section class="exchanges-workspace"><div class="actions"><button class="quiet" data-action="${detail ? 'exchange-overview' : 'exchange-event'}">← ${detail ? 'All exchanges' : 'Event briefing'}</button></div><header class="page-head mt"><div><p class="eyebrow">${esc(dashboard.event.name)}</p><h1>Exchanges</h1><p class="muted">Meet another character, share readings and agree a trade.</p></div><button data-action="exchange-refresh" ${!connected() || pendingRequest?.sending ? 'disabled' : ''}>Refresh</button></header>${pendingBanner()}${feedback ? `<p class="exchange-feedback" role="status">${esc(feedback)}</p>` : ''}${content}</section>`);
     if (connected() && detail?.code && detail.status === 'waiting') {
       try { const canvas = renderBadgeQR(document.querySelector('#exchange-qr'), `${location.origin}/#exchange/${detail.event.id}/${detail.code}`, 256); canvas.setAttribute('aria-label', 'Temporary player exchange invitation QR code'); }
       catch { const qr = document.querySelector('#exchange-qr'); if (qr) qr.textContent = 'Use the invitation code below.'; }
@@ -298,7 +319,7 @@ export function createExchangeUI(ctx) {
     if (scope === 'modal') { if (scannerDirty && !window.confirm('Close this exchange invitation without joining?')) return false; return true; }
     if (offerDirty && !window.confirm('Discard your unsaved offer selection?')) return false;
     if (pendingRequest && !window.confirm('An action still needs a confirmed response. Keep this page open so you can return and retry it. Leave this exchange view?')) return false;
-    if (detail) { selectedReadings = new Set(detail.own.offered.map((reading) => reading.id)); draftVersion = detail.version; }
+    if (detail) { selectedReadings = new Set(detail.own.offered.map((reading) => reading.id)); restoreAssets(detail.own.assets); draftVersion = detail.version; }
     offerDirty = false; offerConflict = false; return true;
   }
   async function handleHash() {
@@ -317,7 +338,14 @@ export function createExchangeUI(ctx) {
       case 'exchange-event': if (confirmDiscard()) { stopPolling(); await loadEvent(state.event.id); } break;
       case 'exchange-overview': if (confirmDiscard()) await open({ characterId: selectedCharacterId }); break;
       case 'exchange-session': if (confirmDiscard()) await open({ characterId: selectedCharacterId, exchangeId: button.dataset.id }); break;
-      case 'exchange-refresh': await refresh(); break;
+      case 'exchange-refresh': if (confirmDiscard()) await refresh(); break;
+      case 'exchange-refresh-assets': {
+        if (!connected() || pendingRequest) throw new Error('Reconnect and resolve the pending action first.');
+        await refresh({ quiet: true });
+        if (!detail || state.view !== 'exchanges') break;
+        for (const [id, item] of selectedItems) { const currentItem = dashboard.inventory?.find(row => row.id === id); if (currentItem) selectedItems.set(id, { ...item, name: currentItem.name, version: currentItem.version }); }
+        draftVersion = detail.version; offerConflict = false; updateDirty(); feedback = 'Current inventory reviewed. Check quantities and save the new offer before confirming.'; render(); break;
+      }
       case 'exchange-journal': if (confirmDiscard()) { stopPolling(); if (typeof ctx.openJournal !== 'function') throw new Error('Open the adventure to read this character’s journal.'); await ctx.openJournal(selectedCharacterId); } break;
       case 'exchange-create': if (!dashboard?.character || dashboard.readOnly) throw new Error('Choose an approved character during live play or rehearsal.'); await runMutation(base(), { characterId: selectedCharacterId }, { kind: 'create' }); break;
       case 'exchange-scan': if (!connected() || pendingRequest) throw new Error('Reconnect and resolve any pending action before joining an exchange.'); scanModal(); break;
@@ -343,7 +371,7 @@ export function createExchangeUI(ctx) {
       if (!canWrite() || offerConflict) throw new Error('Review the latest exchange before saving your offer.');
       if (selectedReadings.size > 10) throw new Error('Choose no more than 10 readings.');
       if ([...selectedReadings].some((id) => !dashboard.readings.some((reading) => reading.id === id && reading.shareable))) throw new Error('Remove readings that are no longer available to share.');
-      await runMutation(`${base()}/${detail.id}/offer`, { characterId: selectedCharacterId, version: draftVersion, readingIds: [...selectedReadings] }, { kind: 'offer', method: 'PUT' });
+      await runMutation(`${base()}/${detail.id}/offer`, { characterId: selectedCharacterId, version: draftVersion, readingIds: [...selectedReadings], ...validatedAssets() }, { kind: 'offer', method: 'PUT' });
     }
     if (form.id === 'exchange-join-form') {
       if (scanBusy) throw new Error('Wait for the current QR image to finish.');
@@ -355,13 +383,30 @@ export function createExchangeUI(ctx) {
     }
     return true;
   }
-  document.addEventListener('input', (event) => { if (event.target.closest('#exchange-join-form')) scannerDirty = true; });
+  function validatedAssets() {
+    const assets = selectedAssets(), whole = (value, max) => { if (!/^\d+$/.test(String(value)) || !Number.isSafeInteger(Number(value)) || Number(value) < 1 || Number(value) > max) throw new Error('Offer positive whole quantities within your available inventory and balances.'); return Number(value); };
+    if (assets.items.length > 10 || assets.resources.length > 20) throw new Error('Choose no more than 10 item rows and 20 resource types.');
+    if ((assets.items.length || assets.resources.length) && !state.event?.setup?.enabledInstruments?.includes('bazaar')) throw new Error('Remove asset offers while BAZAAR is disabled.');
+    return { items: assets.items.map(item => { const row = dashboard.inventory?.find(candidate => candidate.id === item.itemId); const quantity = whole(item.quantity, 9999); if (!row || row.version !== item.version || row.quantity < quantity) throw new Error('Review current inventory and remove unavailable item quantities before saving.'); return { itemId: item.itemId, version: item.version, quantity }; }), resources: assets.resources.map(resource => { const row = dashboard.balances?.find(candidate => candidate.resourceId === resource.resourceId); const quantity = whole(resource.quantity, 1000000000); if (!row || row.quantity < quantity) throw new Error('Your offered resource quantity exceeds the available balance.'); return { resourceId: resource.resourceId, quantity }; }) };
+  }
+  document.addEventListener('input', (event) => {
+    if (event.target.closest('#exchange-join-form')) scannerDirty = true;
+    const input = event.target;
+    if (!input.closest('#exchange-offer-form') || !detail || pendingRequest || (!input.dataset.tradeItem && !input.dataset.tradeResource)) return;
+    if (input.dataset.tradeItem) { const id = input.dataset.tradeItem, row = dashboard.inventory?.find(item => item.id === id); if (input.value === '0') selectedItems.delete(id); else selectedItems.set(id, { itemId: id, quantity: input.value, version: row?.version || Number(input.dataset.itemVersion), name: row?.name || selectedItems.get(id)?.name || 'Unavailable item' }); }
+    else { const id = input.dataset.tradeResource, row = dashboard.resources?.find(resource => resource.id === id); if (input.value === '0') selectedResources.delete(id); else selectedResources.set(id, { resourceId: id, quantity: input.value, name: row?.name || selectedResources.get(id)?.name || 'Unavailable resource' }); }
+    updateDirty();
+    document.querySelector('#exchange-offer-save-status').textContent = offerDirty ? 'Unsaved offer changes' : 'Offer saved';
+    document.querySelector('#exchange-offer-form button[type="submit"]').disabled = !canWrite() || !offerDirty || offerConflict;
+    document.querySelector('[data-action="exchange-confirm"]').disabled = !canConfirm();
+    document.querySelector('#exchange-confirm-help').textContent = offerDirty ? 'Save your offer changes before confirming.' : 'Confirmation applies to this saved offer. A change requires both players to confirm again.';
+  });
   document.addEventListener('change', async (event) => {
     if (event.target.closest('#exchange-offer-form') && event.target.name === 'readingIds') {
       const checkbox = event.target;
       if (checkbox.checked && (checkbox.dataset.shareable !== 'true' || selectedReadings.size >= 10)) { checkbox.checked = false; return; }
       if (checkbox.checked) selectedReadings.add(checkbox.value); else selectedReadings.delete(checkbox.value);
-      offerDirty = !sameIds([...selectedReadings], detail.own.offered.map((reading) => reading.id));
+      updateDirty();
       document.querySelector('#exchange-selection-count').textContent = `${selectedReadings.size} of 10 selected`;
       document.querySelector('#exchange-offer-save-status').textContent = offerDirty ? 'Unsaved offer changes' : 'Offer saved';
       document.querySelector('#exchange-offer-form button[type="submit"]').disabled = !canWrite() || !offerDirty || offerConflict;
