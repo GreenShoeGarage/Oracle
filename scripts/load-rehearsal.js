@@ -318,7 +318,7 @@ export async function main(env = process.env, args = process.argv.slice(2)) {
     if (reportPath) { await mkdir(dirname(reportPath), { recursive: true }); await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 }); }
     console.log(`LOAD_REHEARSAL_RESULT ${JSON.stringify(report)}`);
   }
-  if (failure || report.result !== "passed") throw new Error("The load rehearsal did not pass with complete cleanup.");
+  if (failure || report.result !== "passed") throw failure || new Error("The load rehearsal did not pass with complete cleanup.");
   return report;
 }
 
