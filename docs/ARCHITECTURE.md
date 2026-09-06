@@ -2,7 +2,7 @@
 
 Application v0.10.0 · Database schema 10 · Briefing-pack format 1 · Adventure format 1
 
-Batch 10 is implemented; exact-commit release gates are pending. Batch 9 release `4133a6b51a9a4f2471723f88bd6d6f695a798b2a` remains the last verified staging/production release. Evidence and limits are recorded in [STATUS.md](STATUS.md).
+Batch 10 release `466b470eb6902fd84e903a0fbb1415b7f7a4fa8e` is deployed to staging and production. Both exact-commit PostgreSQL CI jobs, the complete remote all-twelve/all-three-theme workflow, and production exact readiness plus 68 public GET checks passed. Evidence, preserved operator status, and device/backup limits are recorded in [STATUS.md](STATUS.md).
 
 **Identity and data ownership.** An account belongs to a person. Event membership grants a role within one event. Characters, inventories, and factions carry an event ID and authorize against current membership; future clues and encounters must follow the same contract. Copying content into another event creates new event-owned records. The client never decides ownership or privileges.
 

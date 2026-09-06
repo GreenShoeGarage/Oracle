@@ -1,8 +1,8 @@
-# ORACLE v0.10.0 — Batch 10 candidate status
+# ORACLE v0.10.0 — Batch 10 release status
 
 Recorded September 6, 2026.
 
-Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Application `0.10.0`; database schema `10`; briefing-pack/adventure formats `1`. Batch 10 is implemented and awaits exact-commit GitHub CI, deployed staging, and production verification. The last verified live release remains Batch 9, commit `4133a6b51a9a4f2471723f88bd6d6f695a798b2a`, recorded below. No Batch 10 deployed or physical-device acceptance is claimed yet.
+Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). Application `0.10.0`; database schema `10`; briefing-pack/adventure formats `1`. Release `466b470eb6902fd84e903a0fbb1415b7f7a4fa8e` passed both exact-commit GitHub/PostgreSQL CI jobs, Railway staging, the complete remote all-twelve/all-three-theme workflow, and Railway production. Exact production readiness plus 68 public GET paths passed. Batch 10 is fully deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). The existing enabled operator retained identity/password. Actual physical-device and human field acceptance remain outstanding for Batch 11.
 
 ## Batch 10 implemented
 
@@ -14,7 +14,7 @@ Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). App
 - Camera/photo/manual-code recovery and current-authorized player/organizer paper fallback aids with historical timestamps and minimal default content.
 - No SQL migration or pack-format change. All ten migrations and populated schema-10 recovery expectations remain intact. The browser journal archive advances to IndexedDB version 2 using the same stores and retained readings, blocking legacy version-1 writers. Compatible recovery also requires this local storage boundary and the information-only/account-binding API and stable replay contract.
 
-## Batch 10 candidate verification
+## Batch 10 verification
 
 | Check | Recorded result |
 | --- | --- |
@@ -28,11 +28,21 @@ Source: [GreenShoeGarage/Oracle](https://github.com/GreenShoeGarage/Oracle). App
 | Full application DOM/API walkthrough | Nine groups passed with zero uncaught errors using actual root modules and the real local API |
 | Connection transport | Three checks passed |
 | Public cache, QR, and install modules | Twenty-one offline/cache checks, fourteen QR checks, and four install checks passed (39 total), including the legacy-archive upgrade/preservation fixture |
-| Exact-commit PostgreSQL CI and recovery | Pending; all twelve TCP gates, populated real dump/restore, repeated migration, startup, and Docker secure-cookie/graceful-stop checks remain required |
-| Railway staging and complete remote workflow | Pending |
-| Railway production and exact-commit public checks | Pending; exact readiness plus 68 public GET paths required; no production gameplay writes authorized for verification |
+| [Main CI 34013678298](https://github.com/GreenShoeGarage/Oracle/actions/runs/34013678298) | Exact release [verification job 101433703601](https://github.com/GreenShoeGarage/Oracle/actions/runs/34013678298/job/101433703601) passed |
+| [Staging CI 34013678237](https://github.com/GreenShoeGarage/Oracle/actions/runs/34013678237) | Exact release [verification job 101433703490](https://github.com/GreenShoeGarage/Oracle/actions/runs/34013678237/job/101433703490) passed |
+| PostgreSQL 18.6 and recovery/runtime gates | Both jobs passed 290 tests: 289 passed, zero failures, one PGlite-only snapshot skip; all twelve TCP gates, actual populated schema-10 dump/restore, repeated migration, startup, and Docker secure-cookie/graceful-stop checks passed |
+| Railway staging deployment | `440e3c45-0684-4081-8b35-66d0ad3cf0b5` succeeded on exact release v0.10.0/schema 10 |
+| [Remote staging job 101433847153](https://github.com/GreenShoeGarage/Oracle/actions/runs/34013678237/job/101433847153) | Exact-release complete all-twelve/all-three-theme workflow passed, including field requests, revocation/replays, actual copied play/reset, and cleanup |
+| Public desktop browser observation | Staging sign-in page loaded v0.10.0; zero ORACLE application console errors, one unrelated extension-metadata error; no offline/installation or physical-device acceptance inferred |
+| [Production CI 34014040708](https://github.com/GreenShoeGarage/Oracle/actions/runs/34014040708) | [Public smoke job 101434651182](https://github.com/GreenShoeGarage/Oracle/actions/runs/34014040708/job/101434651182) passed exact release/version/schema readiness plus 68 public GET paths (69 PASS lines total); no production gameplay writes |
 
 The local HTTP run checks the original server invitation deadline and invalidated sessions without an artificial expiry sleep. The passing controlled storage/integration fixtures cover local expiry and ambiguous request outcomes. PGlite, DOM, and shared IndexedDB simulations are automated evidence, not real concurrent PostgreSQL lock waits, isolated installed browser profiles, physical devices, or a human event.
+
+## Batch 10 deployment record
+
+Railway staging deployment `440e3c45-0684-4081-8b35-66d0ad3cf0b5` succeeded at 05:19:32 UTC on September 6. Startup confirmed schema 10 at 05:19:25 and `server_ready` v0.10.0 in staging at 05:19:30. No SQL migration was added; existing migration history remained at 10. The staging operator is absent as configured; this does not describe production's separately provisioned operator. Both verification jobs passed on `466b470eb6902fd84e903a0fbb1415b7f7a4fa8e`; the complete remote workflow and independent production gate passed. Remote readiness passed at 05:20:31 UTC. Fantasy/cyberpunk/wasteland field journeys passed at 05:22:16/05:23:57/05:25:35; membership-revocation/replay checks at 05:22:32/05:24:12/05:25:50; complete starter paths at 05:22:33/05:24:13/05:25:51. Actual copied play/reset and all twelve instruments in every theme passed. Cleanup finished at 05:25:55 UTC.
+
+Production deployment `1e402c0f-5db1-4700-a97d-57678e31d498` succeeded on the same release at 05:28:12 UTC. At 05:28:04, logs confirmed migration history remained at 10 and `superuser_provisioned` reported `matched: true`. At 05:28:08, `server_ready` confirmed v0.10.0 production and `superuser_status` reported `accountExists: true`, `enabled: true`. The [production smoke job 101434651182](https://github.com/GreenShoeGarage/Oracle/actions/runs/34014040708/job/101434651182) passed exact SHA/version/schema readiness at 05:28:16 and all 68 public GET paths through 05:28:24 (69 PASS lines including readiness). No production account, event, or gameplay data was created. Existing operator identity/password remained intact. Both runtime branches retain `466b470eb6902fd84e903a0fbb1415b7f7a4fa8e`; the final documentation update is main-only.
 
 ## Current limits and recovery position
 
