@@ -16,7 +16,8 @@ function fixture(t, options = {}) {
     if (data.type === 'ORACLE_APPLY_UPDATE') calls.apply++;
     ports[0].postMessage({ ok: options.incomplete !== true, version }); ports[0].close();
   } });
-  const active = worker(SHELL_VERSION), next = worker('1.2.0');
+  const [major, minor, patch] = SHELL_VERSION.split('.').map(Number);
+  const active = worker(SHELL_VERSION), next = worker(`${major}.${minor}.${patch + 1}`);
   const registration = { active, waiting: options.waiting ? next : null, installing: null, addEventListener() {}, update: async () => { calls.update++; await options.update?.(); } };
   const serviceWorker = { controller: active, addEventListener: (name, fn) => workerEvents.set(name, fn), register: async () => { calls.register++; return options.failFirst && calls.register === 1 ? Promise.reject(new Error('Offline')) : registration; } };
   const values = {

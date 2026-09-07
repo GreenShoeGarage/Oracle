@@ -42,11 +42,11 @@ const html = `<!doctype html>
 <title>Example screens · ORACLE · LARP Field Kit</title><link rel="icon" href="/favicon.svg" type="image/svg+xml">
 ${styles.map(name => `<link rel="stylesheet" href="/${name}.css">`).join('\n')}
 </head><body class="examples-page"><a class="skip" href="#examples">Skip to examples</a>
-<header class="examples-header"><div><p class="wordmark">ORACLE</p><p>LARP Field Kit · Example screens</p></div><a href="/">Open ORACLE</a><a href="/help.html">Help &amp; guides</a></header>
+<header class="examples-header"><div><p class="wordmark">ORACLE</p><p>LARP Field Kit · Example screens</p></div><a href="/tour.html">Screenshot tour</a><a href="/">Open ORACLE</a><a href="/help.html">Help &amp; guides</a></header>
 <main id="examples"><div class="examples-intro"><h1>A look inside the field kit</h1><p>Fictional, read-only examples rendered with ORACLE’s interface. The controls inside each example are inactive. No account is needed, and these examples do not connect to a live event.</p>
 <details class="examples-chooser"><summary>Choose an example screen</summary><nav aria-label="Example screens">${screens.map(s => `<a href="#${s.id}">${esc(s.title)}</a>`).join('')}</nav></details></div>
 ${screens.map(s => `<section class="example" id="${s.id}" aria-labelledby="title-${s.id}"><header class="example-caption"><h2 id="title-${s.id}">${esc(s.title)}</h2><p>${esc(s.description)}</p></header><div class="example-screen theme-${esc(typeof s.theme === 'string' ? s.theme : s.theme?.id || 'fantasy')}" inert aria-hidden="true">${s.html}</div><p class="example-note">Fictional example · ${esc(typeof s.theme === 'string' ? s.theme : s.theme?.name || 'fantasy')} theme. Controls are inactive.</p></section>`).join('\n')}
-</main><footer class="examples-footer"><a href="/">Open ORACLE</a><span>ORACLE · LARP Field Kit · Green Shoe Garage</span></footer></body></html>\n`;
+</main><footer class="examples-footer"><a href="/tour.html">Back to the screenshot tour</a><span>ORACLE · LARP Field Kit · Green Shoe Garage</span></footer></body></html>\n`;
 const fonts = {serif:'Georgia, Cambria, serif',sans:'system-ui, sans-serif',mono:'ui-monospace, SFMono-Regular, Consolas, monospace'};
 const css = `/* Frame only: example content keeps the shipped application styles. */
 .examples-header,.examples-intro,.example,.examples-footer { width:min(1280px,calc(100% - 2rem)); margin-inline:auto; }

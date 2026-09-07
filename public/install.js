@@ -1,6 +1,6 @@
 import { registerOfflineShell } from './offline.js';
 
-export const SHELL_VERSION = '1.1.0';
+export const SHELL_VERSION = '1.2.0';
 
 /** Public install/update controls. They never reload another tab or transmit game actions. */
 export function createInstallUI({ getDirty = () => false, confirmDiscard = () => true, onChange = () => {}, toast = () => {} } = {}) {

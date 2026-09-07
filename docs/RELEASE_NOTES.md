@@ -1,5 +1,14 @@
 # ORACLE release notes
 
+## v1.2.0 — public screenshot tour
+
+- Public `/tour.html` explains ORACLE before registration, with examples of every instrument, the three themes, character sheets and QR exchanges, organizer workflows, and field preparation.
+- Twenty-one browser screenshots use fictional data rendered by the shipped interface. Visitors can enlarge images and browse complete, inert examples without an account.
+- Homepage, help, and in-app navigation link to the tour. The production sitemap includes it; staging remains excluded from indexing.
+- Images load lazily below the first screen and stay outside the installed field kit’s offline cache. No gameplay, SQL schema, stored-data format, account, or permission changes.
+
+Exact deployment evidence will be recorded in [release status](STATUS.md) after the release gates pass. [Tour maintenance](TOUR.md) documents regeneration and screenshot provenance.
+
 ## v1.1.0 — feedback and field preparation
 
 Release `da681123a25141b47893cba794fc7738b34a5c6d` is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Exact main/staging PostgreSQL verification, the complete remote all-twelve/all-three-theme journey with cleanup, Railway production, and all 78 public GET checks passed. See [release status](STATUS.md) for evidence.

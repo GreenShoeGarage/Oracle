@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { VERSION } from "./config.js";
+import { TOUR_SCREEN_IDS } from "./tour-assets.js";
 import { createAdminHandler, isReservedSuperuserEmail, registerSuperuserAllowed, systemAudit } from "./admin.js";
 import { createCharacterHandler } from "./characters.js";
 import { createAdventureHandler } from "./adventures.js";
@@ -241,11 +242,12 @@ export function createApp({
             ? discoverable
               ? `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /health/\nSitemap: ${config.origin}/sitemap.xml\n`
               : "User-agent: *\nDisallow: /\n"
-            : `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${discoverable ? ["/", "/help.html"].map(page => `<url><loc>${config.origin}${page}</loc></url>`).join("") : ""}</urlset>\n`;
+            : `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${discoverable ? ["/", "/tour.html", "/help.html"].map(page => `<url><loc>${config.origin}${page}</loc></url>`).join("") : ""}</urlset>\n`;
           res.writeHead(200, { "Content-Type": path === "/robots.txt" ? "text/plain; charset=utf-8" : "application/xml; charset=utf-8", "X-ORACLE-Shell-Version": VERSION });
           return res.end(method === "HEAD" ? undefined : content);
         }
         const assets = {
+          ...Object.fromEntries(TOUR_SCREEN_IDS.map(id => [`/tour-images/${id}.jpg`, [`tour-images/${id}.jpg`, "image/jpeg"]])),
           "/": ["index.html", "text/html"],
           "/app.js": ["app.js", "text/javascript"],
           "/display.js": ["display.js", "text/javascript"],
@@ -267,6 +269,8 @@ export function createApp({
           "/guide.css": ["guide.css", "text/css"],
           "/help.html": ["help.html", "text/html"],
           "/help.css": ["help.css", "text/css"],
+          "/tour.html": ["tour.html", "text/html"],
+          "/tour.css": ["tour.css", "text/css"],
           "/tour-examples.html": ["tour-examples.html", "text/html"],
           "/tour-examples.css": ["tour-examples.css", "text/css"],
           "/tour-catalog.json": ["tour-catalog.json", "application/json"],

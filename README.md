@@ -4,7 +4,9 @@
 
 ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. Shared screens can present selected briefings, cooperative procedures, and explicitly fictional prop readings.
 
-[Open ORACLE](https://oracle.greenshoegarage.com) · [Help & guides](https://oracle.greenshoegarage.com/help.html) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
+[Open ORACLE](https://oracle.greenshoegarage.com) · [Public screenshot tour](https://oracle.greenshoegarage.com/tour.html) · [Help & guides](https://oracle.greenshoegarage.com/help.html) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
+
+The v1.2.0 public tour introduces all twelve instruments, character and QR workflows, three themes, organizer tools, and offline preparation without requiring an account. It includes 21 browser screenshots of fictional examples rendered by the actual UI components, with full-size image links and complete read-only examples. Tour screenshots do not enlarge the offline field cache. See [tour maintenance](docs/TOUR.md); deployment evidence is recorded in [release status](docs/STATUS.md).
 
 Version 1.1.0 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com), release `da681123a25141b47893cba794fc7738b34a5c6d`. Both exact main/staging PostgreSQL verification jobs, the complete all-twelve-instrument/all-three-theme remote journey with cleanup, and Railway production passed. Independent production verification confirmed the exact commit/version/schema and all 78 public GET paths without gameplay writes. See [docs/STATUS.md](docs/STATUS.md) for release evidence.
 

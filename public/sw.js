@@ -1,6 +1,6 @@
 // Public, immutable application builds only. No API response or private game data
 // enters the shell cache. Browser-client/build IDs keep active tabs on one build.
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const CACHE_NAME = `oracle-static-v${VERSION}`;
 const CONTROL_CACHE = 'oracle-shell-control-v1';
 const COMPLETE_PATH = '/__oracle_shell_complete__';

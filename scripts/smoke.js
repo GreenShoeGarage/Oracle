@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 import { VERSION, SCHEMA_VERSION } from "../src/config.js";
+import { TOUR_SCREEN_IDS } from "../src/tour-assets.js";
 const origin = process.env.SMOKE_ORIGIN;
 if (!origin)
   throw new Error("Set SMOKE_ORIGIN to the exact deployment origin.");
@@ -70,6 +71,8 @@ for (const path of [
   "/guide-ui.js",
   "/guide.css",
   "/help.html",
+  "/tour.html",
+  "/tour.css",
   "/tour-examples.html",
   "/tour-examples.css",
   "/tour-catalog.json",
@@ -123,6 +126,7 @@ for (const path of [
   "/kit.js",
   "/themes.css",
   "/favicon.svg",
+  ...TOUR_SCREEN_IDS.map(id => `/tour-images/${id}.jpg`),
 ]) {
   const response = await fetch(new URL(path, origin), {
     redirect: "error",
@@ -164,6 +168,12 @@ for (const path of [
     assert.equal(response.headers.get("content-type"), "image/png");
     const png = Buffer.from(await response.arrayBuffer());
     assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+  }
+  if (path.endsWith(".jpg")) {
+    assert.equal(response.headers.get("content-type"), "image/jpeg");
+    const bytes = Buffer.from(await response.arrayBuffer());
+    assert.equal(bytes.subarray(0, 3).toString("hex"), "ffd8ff");
+    assert.ok(bytes.length > 1000 && bytes.length < 2_000_000);
   }
   if (path === "/manifest.webmanifest") {
     assert.match(response.headers.get("content-type") || "", /^application\/manifest\+json\b/);
