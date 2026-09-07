@@ -2,7 +2,7 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 2.5 · September 7, 2026
+Development roadmap · Planning revision: 2.6 · September 7, 2026
 
 Status: v1.2.0 is deployed as release `705a3e702a42f4148ea12a74fd1e9eb93aef03ae` at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Exact main and accepted staging verification, Railway staging, the complete all-twelve/all-three-theme remote journey with cleanup, and Railway production passed. Independent production verification confirmed exact readiness and all 104 public GET paths. Actual device/human acceptance, application rollback rehearsal, scheduled live backups, and sustained Railway capacity remain open. See [STATUS.md](STATUS.md), including the unchanged-candidate staging retry.
 
@@ -12,6 +12,8 @@ Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event s
 Build one modular application for Live Action Roleplaying events. Organizers select a theme, configure an event, enable the instruments they need, and invite players. Players create or receive characters, discover information, interact through QR codes, and participate in scenes. The browser should support conversations, movement, and physical props through brief, purposeful interactions.
 
 The first complete adventure is delivered in v0.4, with all three themes verified through the remote workflow. Player-to-player information exchanges are delivered in v0.5. All twelve instruments are delivered in v0.9 and field resilience in v0.10. Versions express dependency order and completion gates, not calendar commitments. Batches 1–12 software releases are deployed; the Batch 11 actual device/human pilot remains open, and Batch 12 did not complete application rollback rehearsal. Automated results cannot close those acceptance dependencies.
+
+The next planned feature sequence is **Batches 13–17: connection cards, personal character arcs, and community projects**, with Fantasy/Cyberpunk/Wasteland content and field preparation. See [the engagement implementation roadmap](ENGAGEMENT_ROADMAP.md) for scope, privacy/offline behavior, dependencies, starter examples, and completion gates. These batches are planned; v1.2.0 remains the deployed baseline.
 
 **Product commitments**
 
@@ -210,6 +212,18 @@ Explain existing player/organizer workflows, all twelve instruments, three theme
 
 Completion gate: Regenerated examples retain renderer provenance and no executable gameplay controls or private data; public routes and images pass final-candidate checks; the actual desktop tour and example links render correctly; existing staging and independent production gates pass. Physical/mobile and assistive-technology acceptance remain separate.
 
+**Batches 13–17 — Engagement expansion (planned)**
+
+| Batch | Target | Deliverable |
+| --- | --- | --- |
+| 13 | v1.3 | Connection cards: optional conversation openings, agreed shared history, six cards per theme, and permitted offline/print copies |
+| 14 | v1.4 | Personal character arcs: three arcs per theme, player-owned progress, private local reflections, and prepared prompts |
+| 15 | v1.5 | Community projects: one per theme, varied narrative contributions, organizer review, and authoritative shared progress |
+| 16 | v1.6 | Verified project contributions and consequences: existing instrument evidence, atomic player-confirmed donations, and bounded published outcomes |
+| 17 | v1.7 | Three complete starter experiences, installation preview, rehearsal/reset, public examples, and actual field refinement |
+
+Each batch is independently usable and includes starter content. Prepared cards and arcs arrive with their feature; shared progress refreshes when connected. Project submissions and spending remain explicit online actions. Reassignment never transfers a former player's consent, private arc progress, or reflections. The detailed [engagement roadmap](ENGAGEMENT_ROADMAP.md) defines the release gates and keeps the existing human/device acceptance record separate from automated verification.
+
 **Theme mechanism**
 
 | Shared function | Fantasy | Cyberpunk | Wasteland |
@@ -239,4 +253,4 @@ Prioritize these using pilot feedback: additional theme packs and richer theme a
 
 The initial release does not attempt a universal rules engine, real-money marketplace, unrestricted scripting system, or automatic AI adjudication. These boundaries keep the first product focused on dependable event interactions.
 
-Next: record the actual device/human pilot and resolve its findings, including airplane-mode cold starts and reconnect behavior for prepared field material. Complete the application rollback rehearsal and configure verified live backups. Sustained Railway capacity remains unmeasured. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
+Next feature target: **Batch 13 — Connection cards**, followed by the engagement sequence above. Existing readiness work remains open: record the actual device/human pilot and resolve its findings, including airplane-mode cold starts and reconnect behavior for prepared field material; complete the application rollback rehearsal and configure verified live backups. Sustained Railway capacity remains unmeasured. Public branding uses ORACLE with the subtitle “LARP Field Kit.”
