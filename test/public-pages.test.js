@@ -57,3 +57,19 @@ test('startup and offline preparation modules are served as current public asset
     assert.ok(result.body.length > 0);
   }
 });
+
+test('fictional example screens are public and cannot submit or run live app controls', async () => {
+  const result = await page('/tour-examples.html');
+  assert.equal(result.status, 200);
+  assert.match(result.body, /Fictional, read-only examples/);
+  assert.match(result.body, /inert aria-hidden="true"/);
+  assert.doesNotMatch(result.body, /<(?:script|form|iframe|object|embed)\b/i);
+  assert.doesNotMatch(result.body, /\s(?:on\w+|formaction|action|contenteditable|autofocus)=/i);
+  assert.doesNotMatch(result.body, /mike@|greenshoegarage\.com\/api\/|__Host-oracle_session/);
+  for (const path of ['/tour-examples.css', '/tour-catalog.json']) assert.equal((await page(path)).status, 200, path);
+  const catalog = JSON.parse((await page('/tour-catalog.json')).body);
+  assert.ok(catalog.length >= 19);
+  assert.ok(catalog.every(row => /^[a-z][a-z0-9-]+$/.test(row.id) && row.title && row.description));
+  for (const row of catalog) assert.ok(result.body.includes(`id="${row.id}"`));
+  assert.equal((await page('/tour-examples.html', { method: 'POST' })).status, 405);
+});

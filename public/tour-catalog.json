@@ -1,0 +1,149 @@
+[
+  {
+    "id": "fantasy",
+    "title": "Fantasy event briefing",
+    "theme": "fantasy",
+    "description": "The Lantern Council shows how the same field kit changes its colors, typography, symbols, and world language for a fantasy event. Player briefing text is kept separate from organizer notes.",
+    "source": "public/builder.js:createKitUI.renderPlayer"
+  },
+  {
+    "id": "cyberpunk",
+    "title": "Cyberpunk event briefing",
+    "theme": "cyberpunk",
+    "description": "The Missing Signal shows how the same field kit changes its colors, typography, symbols, and world language for a cyberpunk event. Player briefing text is kept separate from organizer notes.",
+    "source": "public/builder.js:createKitUI.renderPlayer"
+  },
+  {
+    "id": "wasteland",
+    "title": "Wasteland event briefing",
+    "theme": "wasteland",
+    "description": "The Last Water Stop shows how the same field kit changes its colors, typography, symbols, and world language for a wasteland event. Player briefing text is kept separate from organizer notes.",
+    "source": "public/builder.js:createKitUI.renderPlayer"
+  },
+  {
+    "id": "character",
+    "title": "Create a place in the story",
+    "theme": "fantasy",
+    "description": "Morrow Vale’s approved sheet brings together biography, faction, event-defined abilities, private objectives, and inventory. Players can create drafts and submit them for organizer approval.",
+    "source": "public/characters-ui.js:createCharacterUI.action(character-sheet)"
+  },
+  {
+    "id": "badge",
+    "title": "Share a public identity by QR",
+    "theme": "fantasy",
+    "description": "The public badge shares only the identity fields allowed by the organizer. Private objectives and inventory stay off the badge. This fictional QR points to a reserved .invalid domain and cannot identify a real player.",
+    "source": "public/characters-ui.js:createCharacterUI.action(character-badge) + public/qr.js:renderBadgeQR"
+  },
+  {
+    "id": "relic",
+    "title": "RELIC · examine a physical prop",
+    "theme": "fantasy",
+    "description": "After identifying the lantern’s printed prop code, Morrow has recorded the inscription and can use Investigation to inspect its mechanism. Revealed readings stay in that character’s journal.",
+    "source": "public/adventure-player.js:createAdventurePlayer.open + submit(adv-scan-form)"
+  },
+  {
+    "id": "dead-drop",
+    "title": "DEAD DROP · receive a hidden message",
+    "theme": "fantasy",
+    "description": "A sealed letter has been opened for Morrow. Its contents now appear in their private discoveries. Organizers can require release codes and character access conditions.",
+    "source": "public/adventure-player.js:createAdventurePlayer.open"
+  },
+  {
+    "id": "cipherbox",
+    "title": "CIPHERBOX · work through a puzzle",
+    "theme": "fantasy",
+    "description": "The council lockbox tracks attempts for each character. One attempt has been used, a hint has been revealed, and the next answer can be submitted when the player is ready.",
+    "source": "public/adventure-player.js:createAdventurePlayer.open"
+  },
+  {
+    "id": "wayfinder",
+    "title": "WAYFINDER · gather for a scene",
+    "theme": "fantasy",
+    "description": "A conversation at the willow lists its location, play style, duration, and available places. Three players have joined a scene designed for three to six people.",
+    "source": "public/adventure-player.js:createAdventurePlayer.open"
+  },
+  {
+    "id": "organizer",
+    "title": "Prepare and rehearse the adventure",
+    "theme": "fantasy",
+    "description": "The organizer writes a player introduction and private running notes, adds instruments and access conditions, prints prop labels, and creates a separate rehearsal copy before live play.",
+    "source": "public/adventure-organizer.js:createAdventureOrganizer.open"
+  },
+  {
+    "id": "exchanges",
+    "title": "Meet, share, and trade",
+    "theme": "fantasy",
+    "description": "Start a temporary QR invitation or scan another player. Completed introductions become contacts, while sharing and trading require both players to confirm.",
+    "source": "public/exchanges-ui.js; createExchangeUI.open; Recent exchanges and Contacts expanded; fictional local GET fixtures; no live records"
+  },
+  {
+    "id": "exchange-receipt",
+    "title": "An exchange both players confirmed",
+    "theme": "fantasy",
+    "description": "A completed exchange preserves shared readings in the journal and records the exact items and fictional resources transferred.",
+    "source": "public/exchanges-ui.js; createExchangeUI.open with exchangeId; sent-readings disclosure expanded; fictional local GET fixtures; no live records"
+  },
+  {
+    "id": "story",
+    "title": "Rumors and event news",
+    "theme": "fantasy",
+    "description": "WHISPER lets characters collect conflicting accounts. BROADSIDE publishes organizer-reviewed news, printable notices, and player reports.",
+    "source": "public/story-ui.js; createStoryUI.open; collected account expanded; fictional local GET fixtures; no live records"
+  },
+  {
+    "id": "trace",
+    "title": "Follow the connections",
+    "theme": "fantasy",
+    "description": "TRACE connects evidence, people, places, and theories. Choose who can read a record, and cite journal readings without copying private source text.",
+    "source": "public/trace-ui.js; createTraceUI.open then trace-select; citations and connections expanded; fictional local GET fixtures; no live records"
+  },
+  {
+    "id": "bazaar",
+    "title": "An economy for the story",
+    "theme": "fantasy",
+    "description": "BAZAAR keeps fictional balances, shop stock, character inventory, and transaction receipts together. Players review purchases and agree trades using game resources.",
+    "source": "public/economy-ui.js; createEconomyUI.open; transaction receipts expanded; fictional local GET fixtures; no live records"
+  },
+  {
+    "id": "oathbook",
+    "title": "Put a promise on record",
+    "theme": "fantasy",
+    "description": "OATHBOOK records exact terms, participant acceptance, witnesses, disputes, and fulfillment. Agreed resource transfers wait for the required confirmations.",
+    "source": "public/oath-ui.js; createOathUI.open then oath-select; fictional local GET fixtures; no live records"
+  },
+  {
+    "id": "sigil",
+    "title": "Solve a challenge together",
+    "theme": "fantasy",
+    "description": "SIGIL gives a group shared roles, a server-confirmed timer, and checkpoints on one device. This fictional session has reached its second step.",
+    "source": "public/sigil-ui.js · createSigilUI.open() and action(sigil-run), using fictional dashboard and run responses."
+  },
+  {
+    "id": "static",
+    "title": "Let the world answer back",
+    "theme": "cyberpunk",
+    "description": "STATIC turns a marked prop or zone into a fictional signal. Its text, intensity, and state can follow the story, and players can collect a permitted reading in their journal.",
+    "source": "public/static-ui.js · createStaticUI.open() and handleHash(), with fictional lookup response; no camera or real sensor data."
+  },
+  {
+    "id": "stagehand",
+    "title": "Keep scenes and parties moving",
+    "theme": "wasteland",
+    "description": "STAGEHAND gives staff readiness checks, scene capacity, a party queue, whole-party dispatch, and return acknowledgments. Here three Lantern Keepers have accepted their assignment.",
+    "source": "public/stagehand-ui.js · createStagehandUI.open({ manage: true }), rendering public/stagehand-manage.js with fictional scene and party records."
+  },
+  {
+    "id": "stagehand-player",
+    "title": "Know where your party goes next",
+    "theme": "fantasy",
+    "description": "Players see their own assignment, destination, and return window. Staff dispatch the party together and acknowledge its return; a timer alone never releases occupied places.",
+    "source": "public/stagehand-ui.js · createStagehandUI.open(), using a fictional dispatched player assignment."
+  },
+  {
+    "id": "field-desk",
+    "title": "Prepare before the signal disappears",
+    "theme": "fantasy",
+    "description": "The Field desk keeps prepared reference material, saved readings, local notes, and unsent information requests separate. This fictional kit is prepared; shared gameplay still requires a connection.",
+    "source": "public/field-ui.js · createFieldUI.open(), using in-memory fictional stores and projectPreparation() validation from public/preparation-model.js."
+  }
+]
