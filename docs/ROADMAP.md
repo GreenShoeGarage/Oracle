@@ -2,9 +2,9 @@
 
 *LARP Field Kit*
 
-Development roadmap · Planning revision: 2.4 · September 6, 2026
+Development roadmap · Planning revision: 2.5 · September 7, 2026
 
-Status: v1.1.0 is deployed as release `da681123a25141b47893cba794fc7738b34a5c6d` at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Both exact PostgreSQL verification jobs, Railway staging, the complete remote all-twelve/all-three-theme journey with cleanup, and Railway production passed. Independent production verification confirmed exact version/schema/commit readiness and all 78 public GET paths. Actual device/human acceptance, application rollback rehearsal, scheduled live backups, and sustained Railway capacity remain open. See [STATUS.md](STATUS.md).
+Status: v1.2.0 is deployed as release `705a3e702a42f4148ea12a74fd1e9eb93aef03ae` at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com). Exact main and accepted staging verification, Railway staging, the complete all-twelve/all-three-theme remote journey with cleanup, and Railway production passed. Independent production verification confirmed exact readiness and all 104 public GET paths. Actual device/human acceptance, application rollback rehearsal, scheduled live backups, and sustained Railway capacity remain open. See [STATUS.md](STATUS.md), including the unchanged-candidate staging retry.
 
 Product name: ORACLE. Subtitle: LARP Field Kit.  
 Agreed delivery platform: GitHub and Railway, with PostgreSQL for shared event state.
@@ -201,6 +201,14 @@ Implementation status: Release `da681123a25141b47893cba794fc7738b34a5c6d` is dep
 Give the signed-out homepage a real static description, feature list, theme examples, and help/catalog links. Align initial browser color with the loading screen and saved display setting, add compatible mobile metadata, and provide guarded startup focus on the main content plus a persistent loading/completion announcement. Index only intentional public pages; publishing metadata does not prove search indexing.
 
 Completion gate: Relevant storage/privacy, offline fallback, loading/focus, and static-page checks pass on the exact candidate, followed by existing PostgreSQL/recovery/image, complete staging, and independent production gates. Record actual iPhone/Android airplane-mode cold starts and return-to-connectivity behavior separately when devices are available. SQL schema 10, briefing/adventure formats 1, and journal archive version 2 remain unchanged. Upgrade only the browser Field desk database to IndexedDB version 2, preserve existing stores and records, and block old version-1 writers from discarding prepared material. Guide users to save work and close or update older tabs when needed.
+
+**v1.2 — Public screenshot tour**
+
+Implementation status: Release `705a3e702a42f4148ea12a74fd1e9eb93aef03ae` is deployed to staging and production. Exact main and accepted second-attempt staging verification each passed 334 tests (333 passed, zero failures, one expected skip), plus existing TCP/load/recovery/startup/image gates. The complete all-twelve/all-three-theme remote journey, cleanup, Railway production, and independent exact readiness plus 104 public GET checks passed. The first staging load setup failure remains unexplained; the accepted retry used unchanged code, workload, and thresholds.
+
+Explain existing player/organizer workflows, all twelve instruments, three themes, character/QR interactions, and field preparation on a public page requiring no account. The tour shows 19 distinct browser screenshots and links to a gallery of 21 complete inert examples, using fictional data rendered by actual UI components. Add homepage/help/app links, descriptive image text, full-size image links, and production sitemap inclusion. Keep the gallery out of indexing and larger tour assets out of the offline field cache. No gameplay or stored-data contracts change.
+
+Completion gate: Regenerated examples retain renderer provenance and no executable gameplay controls or private data; public routes and images pass final-candidate checks; the actual desktop tour and example links render correctly; existing staging and independent production gates pass. Physical/mobile and assistive-technology acceptance remain separate.
 
 **Theme mechanism**
 

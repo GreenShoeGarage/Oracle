@@ -2,7 +2,9 @@
 
 ORACLE · LARP Field Kit helps you prepare a shared story, assign characters, and run short interactions around physical props and people. Start with one complete adventure, then add the instruments your event needs. Players use their own accounts and approved characters.
 
-This guide describes v1.0.0. See [release status](STATUS.md) for the exact deployed commit and remaining acceptance checks, and the [player guide](PLAYER_GUIDE.md) for instructions you can give participants.
+This guide describes v1.2.0. See [release status](STATUS.md) for the exact deployed commit and remaining acceptance checks, and the [player guide](PLAYER_GUIDE.md) for instructions you can give participants.
+
+For a visual introduction before registering, open the [public screenshot tour](https://oracle.greenshoegarage.com/tour.html). It shows all twelve instruments, the three themes, player/character and QR workflows, and organizer tools using fictional examples. The complete examples are read-only demonstrations; they do not create an event or change gameplay.
 
 ## Run your first adventure
 

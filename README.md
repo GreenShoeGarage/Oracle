@@ -1,22 +1,22 @@
 # ORACLE
 
-**LARP Field Kit** · v1.1.0 · Green Shoe Garage
+**LARP Field Kit** · v1.2.0 · Green Shoe Garage
 
 ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. Shared screens can present selected briefings, cooperative procedures, and explicitly fictional prop readings.
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Public screenshot tour](https://oracle.greenshoegarage.com/tour.html) · [Help & guides](https://oracle.greenshoegarage.com/help.html) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
 
-The v1.2.0 public tour introduces all twelve instruments, character and QR workflows, three themes, organizer tools, and offline preparation without requiring an account. It includes 21 browser screenshots of fictional examples rendered by the actual UI components, with full-size image links and complete read-only examples. Tour screenshots do not enlarge the offline field cache. See [tour maintenance](docs/TOUR.md); deployment evidence is recorded in [release status](docs/STATUS.md).
+The [public screenshot tour](https://oracle.greenshoegarage.com/tour.html) introduces all twelve instruments, character and QR workflows, three themes, organizer tools, and offline preparation without an account. It shows 19 distinct screenshots of fictional examples rendered by ORACLE's actual UI components, with full-size image links and a gallery of 21 complete read-only examples. Tour assets stay outside the offline field cache. See [tour maintenance](docs/TOUR.md).
 
-Version 1.1.0 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com), release `da681123a25141b47893cba794fc7738b34a5c6d`. Both exact main/staging PostgreSQL verification jobs, the complete all-twelve-instrument/all-three-theme remote journey with cleanup, and Railway production passed. Independent production verification confirmed the exact commit/version/schema and all 78 public GET paths without gameplay writes. See [docs/STATUS.md](docs/STATUS.md) for release evidence.
+Version 1.2.0 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com), release `705a3e702a42f4148ea12a74fd1e9eb93aef03ae`. Exact main and accepted staging verification, the complete all-twelve-instrument/all-three-theme remote journey with cleanup, and Railway production passed. Independent production verification confirmed exact version/schema/commit readiness and all 104 public GET paths without gameplay writes. See [release status](docs/STATUS.md) for evidence, including the unchanged-candidate staging retry.
 
-Both exact-candidate PostgreSQL suites passed 332 tests: 331 passed, zero failures, one expected PGlite-only skip. Isolated 100-player load, populated recovery, startup, and production-image gates passed. Three real-API/local-storage integration groups covered preparation, a cold reopen, and account clearing. A desktop staging check covered the public homepage/help, layout, startup status, and keyboard entry. Physical-device and human checks remain unrun; [docs/PILOT.md](docs/PILOT.md) records those required observations. Scheduled live backups, sustained Railway capacity, and the application rollback rehearsal remain outstanding.
+Main and accepted staging verification each passed 334 tests: 333 passed, zero failures, one expected PGlite-only skip, plus all existing TCP, isolated 100-player load, populated recovery, startup, and Docker gates. Desktop staging checks confirmed the tour's stable layout, loaded sample images, and link to the complete RELIC example. Physical-device/assistive-technology checks and the human pilot remain unrun; [docs/PILOT.md](docs/PILOT.md) records those required observations. Scheduled live backups, sustained Railway capacity, and the application rollback rehearsal remain outstanding.
 
-SQL schema 10, pack formats 1, journal archive version 2, and the information-only/account-binding API contract are retained. The separate browser Field desk database advances to version 2 while preserving existing records and blocking old version-1 writers.
+This release changes no gameplay or data contracts: SQL schema 10, briefing/adventure formats 1, journal archive version 2, Field desk database version 2, and explicit information-only/account-bound request replay are retained. Public tour pages read no account or event data.
 
 ## What works in this release
 
-See [organizer guide](docs/ORGANIZER_GUIDE.md), [player guide](docs/PLAYER_GUIDE.md), [theme and event packs](docs/THEME_AND_EVENT_PACKS.md), [troubleshooting](docs/TROUBLESHOOTING.md), and [release notes](docs/RELEASE_NOTES.md). Version 1.1.0 adds explicit field preparation, a public app description, and startup display/accessibility fixes; deployment status is recorded above.
+See [organizer guide](docs/ORGANIZER_GUIDE.md), [player guide](docs/PLAYER_GUIDE.md), [theme and event packs](docs/THEME_AND_EVENT_PACKS.md), [troubleshooting](docs/TROUBLESHOOTING.md), and [release notes](docs/RELEASE_NOTES.md). Version 1.2.0 adds the public screenshot tour and fictional example gallery; existing field preparation, gameplay, and permissions are unchanged. Deployment status is recorded above.
 
 - Clear player and organizer entry paths, a next-step event guide, and explanations of invitation, badge, prop, and exchange codes.
 - Three immediate event actions with specialist tools under collapsed sections; existing instruments and permissions remain available.

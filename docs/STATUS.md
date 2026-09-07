@@ -1,10 +1,48 @@
-# ORACLE v1.1.0 — feedback and field preparation
+# ORACLE v1.2.0 — public screenshot tour
+
+Recorded September 7, 2026.
+
+Version 1.2.0 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com), release `705a3e702a42f4148ea12a74fd1e9eb93aef03ae` (tree `ea387c5407e0868d04897a489d7a34cdc302ada8`). Exact main and accepted staging verification, the complete remote all-twelve/all-three-theme journey with cleanup, and Railway production passed. Independent production verification confirmed the exact version/schema/commit and all 104 public GET paths without gameplay writes.
+
+## Current release scope
+
+- [Public screenshot tour](https://oracle.greenshoegarage.com/tour.html) for player/organizer workflows, all twelve instruments, Fantasy/Cyberpunk/Wasteland, characters, QR exchanges, and offline preparation without registration.
+- Nineteen distinct screenshots on the tour, plus 21 complete read-only examples at `/tour-examples.html`. Captures use fictional fixtures rendered by the same UI components as the app; they contain no production player/event data.
+- Inert examples, descriptive image alternatives, full-size image links, and lazy loading below the first screen. Homepage, help, and app navigation link to the tour.
+- Public static delivery with no API reads or account forms. The tour joins the production sitemap; the auxiliary gallery uses `noindex,follow`. Tour pages/images do not expand the installed field cache.
+
+SQL schema 10, briefing/adventure formats 1, journal archive version 2, Field desk database version 2, and existing gameplay/authorization/replay contracts remain unchanged. [TOUR.md](TOUR.md) documents fixture regeneration and capture provenance. The public gallery is a demonstration, not an anonymous event or live game session.
+
+## v1.2.0 verification
+
+| Check | Recorded result |
+| --- | --- |
+| Exact main verification | [Run 34069476148](https://github.com/GreenShoeGarage/Oracle/actions/runs/34069476148), [job 101584036439](https://github.com/GreenShoeGarage/Oracle/actions/runs/34069476148/job/101584036439), passed: 334 tests, 333 passed, zero failures, one expected PGlite-only skip; all existing TCP, load, populated recovery, startup, and Docker gates passed |
+| Main isolated load | 100 players, 1,800 HTTP 200 responses, zero errors, 4.433 seconds, p95 439.22 ms; disposable database cleanup completed. This short CI burst does not establish sustained Railway capacity |
+| Focused local checks | 23 focused checks and syntax/static checks passed |
+| Railway staging | Deployment `515e65ae-dc70-43f8-a31f-dbae2f281214` succeeded on the exact candidate at 00:22:59 UTC on September 7 |
+| Exact staging verification | [Run 34069586766](https://github.com/GreenShoeGarage/Oracle/actions/runs/34069586766), attempt 2 [job 101585204995](https://github.com/GreenShoeGarage/Oracle/actions/runs/34069586766/job/101585204995), passed: 334 tests, 333 passed, zero failures, one expected skip; all TCP, load, populated recovery, startup, and Docker gates passed |
+| Staging isolated load | 100 players, 1,800 HTTP 200 responses, zero errors/timeouts, 4.861 seconds, p95 483.11 ms; cleanup signed out 101 accounts and dropped the disposable database |
+| Complete remote staging journey | [Job 101585443546](https://github.com/GreenShoeGarage/Oracle/actions/runs/34069586766/job/101585443546) passed exact-candidate readiness, all twelve instruments in all three themes, 104 public GET paths, and cleanup at 00:34:27 UTC on September 7; the overall attempt-2 staging run succeeded |
+| Desktop staging browser | Final stable tour had no horizontal overflow (scroll width 1,348 px at a 1,363 px viewport). Hero/character and RELIC/DEAD DROP images loaded. The complete-example link opened `/tour-examples.html#relic`. No account form is present on the tour |
+| Production deployment/public smoke | Deployment `61cb6f67-5d6b-44c7-b4a4-3b7f25aba045` succeeded on the exact release at 00:35:27 UTC on September 7. [Run 34070262849](https://github.com/GreenShoeGarage/Oracle/actions/runs/34070262849), [job 101586178944](https://github.com/GreenShoeGarage/Oracle/actions/runs/34070262849/job/101586178944), passed exact v1.2.0/schema-10/commit readiness at 00:35:30 UTC and all 104 public GET paths through 00:35:57 UTC (105 PASS lines including readiness); no gameplay writes |
+| Production desktop browser | Canonical `/tour.html` showed the correct v1.2.0 title, no forms, and a loaded hero image. The 1,363 px viewport had matching 1,348 px client/scroll widths and no horizontal overflow. [Tour preview](tour-preview.jpg) is an actual production browser capture |
+
+The first staging attempt [job 101584335849](https://github.com/GreenShoeGarage/Oracle/actions/runs/34069586766/job/101584335849) passed the full 334-test suite, then failed load setup and emitted no measured workload result; its generic setup failure did not identify a specific cause. Cleanup signed out all 101 accounts, archived the disposable event, and dropped its database with no pool errors. The exact candidate had already passed the measured main load gate. The native failed-jobs rerun passed verification and measured load with the same candidate, workload, and thresholds; no test or gate was weakened. Review found no runtime/API/database/load-script change explaining the first failure, and the generic log cannot establish its cause. The full staging gate subsequently passed on attempt 2; the same candidate advanced to production and passed deployment plus the independent public check.
+
+Production startup matched the existing operator and retained migration history 10 at 00:35:20 UTC. At 00:35:25 UTC, `server_ready` reported v1.2.0 in production and `superuser_status` confirmed `accountExists: true`, `enabled: true`. Staging/production retain the exact checked runtime release; final evidence documentation is main-only.
+
+Physical phones, mobile/assistive-technology acceptance, the human field pilot, sustained Railway capacity, scheduled live backups, and the unwired application rollback rehearsal remain outstanding. A public screenshot or passing HTTP test does not complete those gates.
+
+---
+
+## Previous verified release — ORACLE v1.1.0 / field preparation
 
 Recorded September 6, 2026.
 
 Version 1.1.0 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com), release `da681123a25141b47893cba794fc7738b34a5c6d` (tree `3bde1901ac6ee54d9fc84ac11212afbbbdbfc7e8`). Exact main/staging verification, the complete remote all-twelve-instrument/all-three-theme journey with cleanup, and Railway production passed. Independent production verification confirmed the exact version/schema/commit and all 78 public GET paths without gameplay writes.
 
-## Current release scope
+## v1.1.0 release scope
 
 - Explicit **Prepare for the field**: permission-filtered briefing/rules, the player's own approved character sheet, saved journal readings, read-back verification, preparation time, and visible storage failures.
 - Separate status for the installed public app and saved event material. Prepared information remains historical and read-only; live game actions still need the server.
