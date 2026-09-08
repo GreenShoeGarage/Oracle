@@ -1,0 +1,141 @@
+name: One-off Batch 16 integration maintenance
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  integrate-batch16:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Integrate Batch 16 engine and release shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          # v1.6 immutable shell derived from the proven v1.5 shell.
+          sw15=Path('public/sw-v15.js').read_text()
+          sw16=sw15.replace("const VERSION='1.5.0';","const VERSION='1.6.0';",1)
+          sw16=sw16.replace("'/app.js','/app-v14.js'","'/app.js','/app-v15.js','/app-v14.js'",1)
+          sw16=sw16.replace("'/projects.html','/projects.js','/projects.css',","'/projects.html','/projects.js','/projects.css','/project-effects-ui.js',",1)
+          Path('public/sw-v16.js').write_text(sw16)
+          install=Path('public/install-v15.js').read_text().replace("export const SHELL_VERSION = '1.5.0';","export const SHELL_VERSION = '1.6.0';",1)
+          Path('public/install-v16.js').write_text(install)
+
+          # package-lock root metadata follows package.json.
+          p=Path('package-lock.json'); s=p.read_text(); old='"version": "1.2.0"'
+          if s.count(old) < 2: raise SystemExit('package-lock root version markers not found')
+          s=s.replace(old,'"version": "1.6.0"',2); p.write_text(s)
+
+          # Unified completion/evidence engine.
+          p=Path('src/project-effects-app.js'); s=p.read_text()
+          s=s.replace('async function assess(db,eventId,projectId,actorId){','export async function assessProjectCompletion(db,eventId,projectId,actorId){',1)
+          s=s.replace('await assess(client,eventId,projectId,user.id);','await assessProjectCompletion(client,eventId,projectId,user.id);')
+          marker='async function milestoneProgress(db,eventId,projectId){'
+          if marker not in s: raise SystemExit('milestone progress marker missing')
+          evidence_fn="""async function listEligibleEvidence(db,eventId,user,character){
+  const rows=[];
+  const adventure=(await db.query('SELECT definition FROM event_adventures WHERE event_id=$1',[eventId])).rows[0];
+  const nodes=new Map((Array.isArray(adventure?.definition?.nodes)?adventure.definition.nodes:[]).map(node=>[node.id,node]));
+  for(const j of (await db.query('SELECT id,node_id,title,created_at FROM adventure_journal WHERE event_id=$1 AND character_id=$2 ORDER BY created_at DESC,id',[eventId,character.id])).rows){
+    const type=nodes.get(j.node_id)?.type;if(type==='relic'||type==='dead_drop')rows.push({id:j.id,kind:type,label:j.title,kindLabel:type==='relic'?'RELIC discovery':'DEAD DROP discovery',createdAt:j.created_at});
+  }
+  for(const o of (await db.query("SELECT id,text,created_at FROM sigil_outcomes WHERE event_id=$1 AND owner_user_id=$2 AND character_id=$3 AND status='succeeded' ORDER BY created_at DESC,id",[eventId,user.id,character.id])).rows)rows.push({id:o.id,kind:'sigil',label:o.text||'Successful SIGIL outcome',kindLabel:'SIGIL outcome',createdAt:o.created_at});
+  for(const o of (await db.query("SELECT DISTINCT a.id,a.title,a.updated_at FROM oath_agreements a JOIN oath_participants p ON p.event_id=a.event_id AND p.agreement_id=a.id WHERE a.event_id=$1 AND p.owner_user_id=$2 AND p.character_id=$3 AND a.status IN('fulfilled','adjudicated') ORDER BY a.updated_at DESC,a.id",[eventId,user.id,character.id])).rows)rows.push({id:o.id,kind:'oath',label:o.title,kindLabel:'OATHBOOK agreement',createdAt:o.updated_at});
+  return rows;
+}
+"""
+          s=s.replace(marker,evidence_fn+marker,1)
+          start="  if(method==='GET'&&section==='integrations'){"
+          end="  if(method==='GET'&&section==='unlocks'){"
+          a=s.index(start); b=s.index(end,a)
+          new_block="""  if(method==='GET'&&section==='integrations'){
+    const characterId=new URL(req.url,'http://oracle.local').searchParams.get('characterId');let character=null;if(characterId)character=await ownCharacter(pool,eventId,characterId,user.id);const project=(await pool.query('SELECT * FROM community_projects WHERE event_id=$1 AND id=$2',[eventId,projectId])).rows[0];if(!project||(!managers.has(event.role)&&!['open','completed'].includes(project.status)))fail(404,'Community project not found.');const milestones=(await pool.query('SELECT id,title,description,required_count,counting_rule,contribution_mode,resource_id,allowed_evidence FROM community_project_milestones WHERE event_id=$1 AND project_id=$2 ORDER BY position',[eventId,projectId])).rows;const progress=await milestoneProgress(pool,eventId,projectId);let resources=[],evidence=[];if(character){resources=(await pool.query(`SELECT r.id,r.name,COALESCE(b.quantity,0)::int quantity FROM economy_resources r LEFT JOIN economy_balances b ON b.event_id=r.event_id AND b.resource_id=r.id AND b.character_id=$2 WHERE r.event_id=$1 ORDER BY r.name`,[eventId,character.id])).rows;evidence=await listEligibleEvidence(pool,eventId,user,character);}let consequences=[],donations=[];if(managers.has(event.role)){consequences=(await pool.query('SELECT id,kind,title,body,audience,position,created_at FROM community_project_consequences WHERE event_id=$1 AND project_id=$2 ORDER BY position,id',[eventId,projectId])).rows;donations=(await pool.query(`SELECT c.id,c.summary,c.units,c.status,c.version,c.character_id,ch.profile->>'name' character_name,u.display_name player_name,c.created_at,EXISTS(SELECT 1 FROM community_project_refunds r WHERE r.contribution_id=c.id) refunded FROM community_project_contributions c JOIN characters ch ON ch.id=c.character_id JOIN users u ON u.id=c.user_id WHERE c.event_id=$1 AND c.project_id=$2 AND c.kind='resource' ORDER BY c.created_at`,[eventId,projectId])).rows;}return send(res,200,{project:{id:project.id,status:project.status},milestones:milestones.map(m=>({...m,acceptedCount:Number(progress.find(p=>p.id===m.id)?.accepted_count||0)})),resources,evidence,consequences,donations}),true;
+  }
+  if(method==='PATCH'&&section==='integrations'){
+    if(!managers.has(event.role))fail(403,'Only an organizer can configure project integrations.');if(event.status==='archived')fail(409,'Archived events are read-only.');const input=await body(req);if(!UUID.test(input.milestoneId||'')||!['reviewed','evidence','resource'].includes(input.contributionMode))fail(400,'Milestone integration is invalid.');const project=(await pool.query('SELECT status FROM community_projects WHERE event_id=$1 AND id=$2',[eventId,projectId])).rows[0];if(!project)fail(404,'Community project not found.');if(project.status==='completed')fail(409,'Completed project integration rules are historical.');let resourceId=null,allowed=[];if(input.contributionMode==='resource'){resourceId=clean(input.resourceId,'Resource ID',40);if(!(await pool.query('SELECT 1 FROM economy_resources WHERE event_id=$1 AND id=$2',[eventId,resourceId])).rows[0])fail(404,'That event resource does not exist.');}if(input.contributionMode==='evidence'){if(!Array.isArray(input.allowedEvidence)||!input.allowedEvidence.length||input.allowedEvidence.some(v=>!evidenceKinds.has(v)))fail(400,'Choose one or more supported evidence types.');allowed=[...new Set(input.allowedEvidence)];}const row=(await pool.query('UPDATE community_project_milestones SET contribution_mode=$1,resource_id=$2,allowed_evidence=$3,version=version+1 WHERE event_id=$4 AND project_id=$5 AND id=$6 RETURNING *',[input.contributionMode,resourceId,JSON.stringify(allowed),eventId,projectId,input.milestoneId])).rows[0];if(!row)fail(404,'Project milestone not found.');return send(res,200,{milestone:row}),true;
+  }
+"""
+          s=s[:a]+new_block+s[b:]
+          p.write_text(s)
+
+          # Batch 15 project engine projects Batch 16 fields and delegates completion.
+          p=Path('src/projects-app.js'); s=p.read_text()
+          if "./project-effects-app.js" not in s:
+            s=s.replace("import { PROJECT_STARTERS } from './project-starters.js';","import { PROJECT_STARTERS } from './project-starters.js';\nimport { assessProjectCompletion } from './project-effects-app.js';",1)
+          old="const milestoneInput=rows=>{if(!Array.isArray(rows)||rows.length<1||rows.length>20)fail(400,'Use between one and twenty milestones.');return rows.map((m,i)=>{if(!m||typeof m!=='object'||Array.isArray(m))fail(400,`Milestone ${i+1} is invalid.`);const requiredCount=Number(m.requiredCount);if(!Number.isInteger(requiredCount)||requiredCount<1||requiredCount>1000)fail(400,`Milestone ${i+1} count is invalid.`);const countingRule=m.countingRule==='accepted_contributions'?'accepted_contributions':'distinct_accounts';return{title:clean(m.title,`Milestone ${i+1} title`,160),description:clean(m.description||'',`Milestone ${i+1} description`,2000,false),requiredCount,countingRule};});};"
+          new="const milestoneInput=rows=>{if(!Array.isArray(rows)||rows.length<1||rows.length>20)fail(400,'Use between one and twenty milestones.');return rows.map((m,i)=>{if(!m||typeof m!=='object'||Array.isArray(m))fail(400,`Milestone ${i+1} is invalid.`);const requiredCount=Number(m.requiredCount);if(!Number.isInteger(requiredCount)||requiredCount<1||requiredCount>1000)fail(400,`Milestone ${i+1} count is invalid.`);const countingRule=m.countingRule==='accepted_contributions'?'accepted_contributions':'distinct_accounts';const contributionMode=['reviewed','evidence','resource'].includes(m.contributionMode)?m.contributionMode:'reviewed';const resourceId=contributionMode==='resource'?clean(m.resourceId||'',`Milestone ${i+1} resource`,40):null;const allowedEvidence=contributionMode==='evidence'&&Array.isArray(m.allowedEvidence)?[...new Set(m.allowedEvidence.filter(v=>['relic','dead_drop','sigil','oath'].includes(v)))]:[];if(contributionMode==='evidence'&&!allowedEvidence.length)fail(400,`Milestone ${i+1} needs an evidence type.`);return{title:clean(m.title,`Milestone ${i+1} title`,160),description:clean(m.description||'',`Milestone ${i+1} description`,2000,false),requiredCount,countingRule,contributionMode,resourceId,allowedEvidence};});};"
+          if old not in s: raise SystemExit('milestoneInput marker missing')
+          s=s.replace(old,new,1)
+          old="const contribution=row=>({id:row.id,projectId:row.project_id,milestoneId:row.milestone_id,characterId:row.character_id,routeKey:row.route_key,summary:row.summary,status:row.status,reviewNote:row.review_note,version:row.version,reviewedAt:row.reviewed_at,createdAt:row.created_at,updatedAt:row.updated_at,...(row.character_name?{characterName:row.character_name}:{}),...(row.player_name?{playerName:row.player_name}:{})});"
+          new="const contribution=row=>({id:row.id,projectId:row.project_id,milestoneId:row.milestone_id,characterId:row.character_id,routeKey:row.route_key,summary:row.summary,status:row.status,kind:row.kind||'narrative',units:Number(row.units||1),sourceKind:row.source_kind||null,sourceId:row.source_id||null,economyTransactionId:row.economy_transaction_id||null,reviewNote:row.review_note,version:row.version,reviewedAt:row.reviewed_at,createdAt:row.created_at,updatedAt:row.updated_at,...(row.character_name?{characterName:row.character_name}:{}),...(row.player_name?{playerName:row.player_name}:{})});"
+          if old not in s: raise SystemExit('contribution projection marker missing')
+          s=s.replace(old,new,1)
+          s=s.replace("CASE WHEN m.counting_rule='distinct_accounts' THEN count(DISTINCT c.user_id) FILTER (WHERE c.status='accepted') ELSE count(c.id) FILTER (WHERE c.status='accepted') END::int AS accepted_count,","CASE WHEN m.contribution_mode='resource' THEN COALESCE(sum(c.units) FILTER (WHERE c.status='accepted' AND c.kind='resource'),0)::int WHEN m.counting_rule='distinct_accounts' THEN count(DISTINCT c.user_id) FILTER (WHERE c.status='accepted') ELSE count(c.id) FILTER (WHERE c.status='accepted') END::int AS accepted_count,",1)
+          old="milestones:milestones.map(m=>({id:m.id,title:m.title,description:m.description,requiredCount:m.required_count,countingRule:m.counting_rule,acceptedCount:m.accepted_count,complete:m.completed||m.accepted_count>=m.required_count,position:m.position}))"
+          new="milestones:milestones.map(m=>({id:m.id,title:m.title,description:m.description,requiredCount:m.required_count,countingRule:m.counting_rule,contributionMode:m.contribution_mode||'reviewed',resourceId:m.resource_id||null,allowedEvidence:Array.isArray(m.allowed_evidence)?m.allowed_evidence:[],acceptedCount:m.accepted_count,complete:m.completed||m.accepted_count>=m.required_count,position:m.position}))"
+          if old not in s: raise SystemExit('milestone projection marker missing')
+          s=s.replace(old,new,1)
+          # Make the legacy evaluator resource-aware even though review now delegates to the unified evaluator.
+          s=s.replace("SELECT m.id,m.required_count,m.counting_rule,CASE WHEN m.counting_rule='distinct_accounts' THEN count(DISTINCT c.user_id) FILTER (WHERE c.status='accepted') ELSE count(c.id) FILTER (WHERE c.status='accepted') END::int accepted_count", "SELECT m.id,m.required_count,m.counting_rule,m.contribution_mode,CASE WHEN m.contribution_mode='resource' THEN COALESCE(sum(c.units) FILTER (WHERE c.status='accepted' AND c.kind='resource'),0)::int WHEN m.counting_rule='distinct_accounts' THEN count(DISTINCT c.user_id) FILTER (WHERE c.status='accepted') ELSE count(c.id) FILTER (WHERE c.status='accepted') END::int accepted_count",1)
+          s=s.replace("GROUP BY m.id,m.required_count,m.counting_rule`,[eventId,projectId]", "GROUP BY m.id,m.required_count,m.counting_rule,m.contribution_mode`,[eventId,projectId]",1)
+          s=s.replace('await assessCompletion(client,eventId,first,user.id);','await assessProjectCompletion(client,eventId,first,user.id);',1)
+
+          # Replace starter installation with explicit integration/consequence upgrade semantics.
+          a=s.index("    if(method==='POST'&&first==='install-starter'){")
+          b=s.index("    if(method==='POST'&&first==='create'){",a)
+          starter_block="""    if(method==='POST'&&first==='install-starter'){
+      if(!authors.has(event.role))fail(403,'Only an organizer can install a starter project.');if(event.status==='archived')fail(409,'Archived events are read-only.');const starter=PROJECT_STARTERS[event.setup?.theme?.id];if(!starter)fail(400,'This event theme has no starter community project.');
+      const existing=(await pool.query("SELECT id,status FROM community_projects WHERE event_id=$1 AND source='starter' AND theme_id=$2 AND lower(title)=lower($3)",[eventId,event.setup.theme.id,starter.title])).rows[0];
+      const client=await pool.connect();try{await client.query('BEGIN');const resource=(await client.query('SELECT id FROM economy_resources WHERE event_id=$1 ORDER BY id LIMIT 1',[eventId])).rows[0]?.id||null;
+        if(existing){const count=(await client.query('SELECT count(*)::int n FROM community_project_contributions WHERE project_id=$1',[existing.id])).rows[0].n;if(count===0&&existing.status!=='completed'){const milestones=(await client.query('SELECT id,position FROM community_project_milestones WHERE project_id=$1 ORDER BY position',[existing.id])).rows;for(const row of milestones){const m=starter.milestones[row.position];if(!m)continue;const mode=m.contributionMode==='resource-if-available'?(resource?'resource':'reviewed'):(m.contributionMode||'reviewed');await client.query('UPDATE community_project_milestones SET contribution_mode=$1,resource_id=$2,allowed_evidence=$3 WHERE id=$4',[mode,mode==='resource'?resource:null,JSON.stringify(mode==='evidence'?(m.allowedEvidence||[]):[]),row.id]);}for(const c of starter.consequences||[])await client.query('INSERT INTO community_project_consequences(id,event_id,project_id,kind,title,body,audience,position,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(project_id,position) DO NOTHING',[randomUUID(),eventId,existing.id,c.kind,c.title,c.body,JSON.stringify(c.audience||{type:'event'}),c.position,user.id]);}await client.query('COMMIT');return send(res,200,{installed:false,upgraded:count===0&&existing.status!=='completed',projectId:existing.id}),true;}
+        const id=randomUUID();await client.query(`INSERT INTO community_projects(id,event_id,title,purpose,contribution_routes,outcome_text,theme_id,source,status) VALUES($1,$2,$3,$4,$5,$6,$7,'starter','draft')`,[id,eventId,starter.title,starter.purpose,JSON.stringify(starter.routes),starter.outcomeText,event.setup.theme.id]);for(const [i,m] of starter.milestones.entries()){const mode=m.contributionMode==='resource-if-available'?(resource?'resource':'reviewed'):(m.contributionMode||'reviewed');await client.query(`INSERT INTO community_project_milestones(id,event_id,project_id,title,description,required_count,counting_rule,position,contribution_mode,resource_id,allowed_evidence) VALUES($1,$2,$3,$4,$5,$6,'distinct_accounts',$7,$8,$9,$10)`,[randomUUID(),eventId,id,m.title,m.description,m.requiredCount,i,mode,mode==='resource'?resource:null,JSON.stringify(mode==='evidence'?(m.allowedEvidence||[]):[])]);}for(const c of starter.consequences||[])await client.query('INSERT INTO community_project_consequences(id,event_id,project_id,kind,title,body,audience,position,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[randomUUID(),eventId,id,c.kind,c.title,c.body,JSON.stringify(c.audience||{type:'event'}),c.position,user.id]);await client.query('COMMIT');return send(res,201,{installed:true,projectId:id}),true;}catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}finally{client.release();}
+    }
+"""
+          s=s[:a]+starter_block+s[b:]
+          # Custom creation persists integration fields when supplied by API clients.
+          old="INSERT INTO community_project_milestones(id,event_id,project_id,title,description,required_count,counting_rule,position) VALUES($1,$2,$3,$4,$5,$6,$7,$8)"
+          new="INSERT INTO community_project_milestones(id,event_id,project_id,title,description,required_count,counting_rule,position,contribution_mode,resource_id,allowed_evidence) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)"
+          if old not in s: raise SystemExit('custom milestone insert marker missing')
+          s=s.replace(old,new,1)
+          oldargs="[randomUUID(),eventId,id,m.title,m.description,m.requiredCount,m.countingRule,i]"
+          newargs="[randomUUID(),eventId,id,m.title,m.description,m.requiredCount,m.countingRule,i,m.contributionMode,m.resourceId,JSON.stringify(m.allowedEvidence)]"
+          if oldargs not in s: raise SystemExit('custom milestone args marker missing')
+          s=s.replace(oldargs,newargs,1)
+          p.write_text(s)
+
+          # Schema expectations and recovery coverage.
+          for name in ['test/foundation.test.js','test/batch2.test.js']:
+            p=Path(name); s=p.read_text(); s=s.replace('assert.equal(await migrate(pool), 13);','assert.equal(await migrate(pool), 14);').replace('assert.equal(await checkSchema(pool), 13);','assert.equal(await checkSchema(pool), 14);').replace('assert.equal(await migrate(isolated.pool), 13);','assert.equal(await migrate(isolated.pool), 14);'); p.write_text(s)
+          p=Path('scripts/recovery-rehearsal.js'); s=p.read_text().replace('assert.equal(await migrate(restored), 13, "The recovered database must accept repeat migration at schema 13.");','assert.equal(await migrate(restored), 14, "The recovered database must accept repeat migration at schema 14.");')
+          # Ensure the restore equality gate includes new Batch 13/14 tables when present in its table list.
+          needle='["schema_migrations", "version"],'
+          addition='["community_projects", "id"],\n    ["community_project_milestones", "id"],\n    ["community_project_contributions", "id"],\n    ["community_project_receipts", "id"],\n    ["community_project_consequences", "id"],\n    ["community_project_effects", "id"],\n    ["community_project_refunds", "id"],\n    '
+          if needle in s and 'community_project_effects' not in s: s=s.replace(needle,addition+needle,1)
+          p.write_text(s)
+
+          # Release checker follows v1.6 shell and Batch 16 files.
+          p=Path('scripts/check.js'); s=p.read_text().replace('public/sw-v15.js','public/sw-v16.js').replace('The v1.5 cached public shell','The v1.6 cached public shell').replace('public/install-v15.js','public/install-v16.js').replace('The v1.5 install controller','The v1.6 install controller').replace('"/app.js","/app-v14.js"','"/app.js","/app-v15.js","/app-v14.js"').replace('"/projects.html","/projects.js","/projects.css"','"/projects.html","/projects.js","/projects.css","/project-effects-ui.js"').replace('"migrations/013_community_projects.sql"','"migrations/013_community_projects.sql","migrations/014_project_effects.sql","src/project-effects-app.js","src/app-v16.js","public/project-effects-ui.js"').replace('Batch 15, and offline-shell assets','Batch 16, and offline-shell assets'); p.write_text(s)
+
+          # Basic syntax/whitespace sanity before committing.
+          PY
+          git diff --check
+          node --check src/project-effects-app.js
+          node --check src/projects-app.js
+          node --check src/app-v16.js
+          node --check public/project-effects-ui.js
+      - name: Commit Batch 16 integration maintenance
+        shell: bash
+        run: |
+          git config user.name 'ORACLE maintenance bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add package-lock.json public/sw-v16.js public/install-v16.js src/project-effects-app.js src/projects-app.js test/foundation.test.js test/batch2.test.js scripts/recovery-rehearsal.js scripts/check.js
+          git commit -m 'Integrate Batch 16 project effects across the existing engine'
+          git push origin HEAD:main
