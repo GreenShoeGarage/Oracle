@@ -1,4 +1,4 @@
-export const VERSION = "1.8.0";
+export const VERSION = "1.9.0";
 export const SCHEMA_VERSION = 15;
 export function readConfig(env = process.env) {
   const production = env.NODE_ENV === "production";

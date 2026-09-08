@@ -35,12 +35,12 @@ export const FIELD_SHELL_ASSETS = Object.freeze({
   '/field-home.css': ['field-home.css', 'text/css'],
 });
 
-export function createAppV18({ pool, config, logger }) {
+export function createAppV18({ pool, config, logger, shellAssets = FIELD_SHELL_ASSETS }) {
   const delegate = createAppV17({ pool, config, logger });
   return async function handle(req, res) {
     const url = new URL(req.url, config.origin);
-    const asset = Object.hasOwn(FIELD_SHELL_ASSETS, url.pathname)
-      ? FIELD_SHELL_ASSETS[url.pathname] : null;
+    const asset = Object.hasOwn(shellAssets, url.pathname)
+      ? shellAssets[url.pathname] : null;
     if (!asset || !['GET', 'HEAD'].includes(req.method)) return delegate(req, res);
     try {
       const file = await readFile(new URL(`../public/${asset[0]}`, import.meta.url));

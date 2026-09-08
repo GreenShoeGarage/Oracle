@@ -145,5 +145,12 @@
     "theme": "fantasy",
     "description": "The Field desk keeps prepared reference material, saved readings, local notes, and unsent information requests separate. This fictional kit is prepared; shared gameplay still requires a connection.",
     "source": "public/field-ui.js · createFieldUI.open(), using in-memory fictional stores and projectPreparation() validation from public/preparation-model.js."
+  },
+  {
+    "id": "organizer-command-deck",
+    "title": "Organizer Command Deck",
+    "theme": "fantasy",
+    "description": "Three fictional work items: a character approval, a project contribution, and a bulletin draft. The organizer opens the original workflow to decide. Private arcs, reflections, and player engagement scores are never included.",
+    "source": "public/command-deck-ui.js"
   }
 ]

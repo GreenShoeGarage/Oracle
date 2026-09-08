@@ -1,3 +1,11 @@
+# Organizer Command Deck (v1.9 candidate)
+
+From an event in Organizer view, select **Command Deck**. Filter Needs attention, then choose Review to open the original character, project, bulletin, or scene workflow. Expand Community projects, Scenes and capacity, or Upcoming scenes for context. Refresh after decisions. Joined-player counts are memberships, not attendance. Ordinary staff retain their existing assigned tools. The deck is connected-only; disconnecting clears its private report rather than displaying stale operational data.
+
+See [the detailed contract](BATCH19_COMMAND_DECK.md). The remainder of this guide covers the existing event workflows.
+
+---
+
 # ORACLE organizer guide
 
 ORACLE · LARP Field Kit helps you prepare a shared story, assign characters, and run short interactions around physical props and people. Start with one complete adventure, then add the instruments your event needs. Players use their own accounts and approved characters.

@@ -1,22 +1,20 @@
 # ORACLE
 
-**LARP Field Kit** · v1.2.0 · Green Shoe Garage
+**LARP Field Kit** · v1.9.0 candidate · Green Shoe Garage
 
-ORACLE is a modular web application for Live Action Roleplaying events. Organizers build a themed event, prepare player briefings and private notes, invite participants, and manage the event through rehearsal and play. Players create or receive characters, carry private sheets and inventory, and scan approved public character badges. Shared screens can present selected briefings, cooperative procedures, and explicitly fictional prop readings.
+ORACLE is a themed event companion for live-action roleplaying. Players use connection cards, optional private character arcs, community projects, discoveries, QR exchanges, and prepared field material. Organizers build and run events with twelve optional instruments and three complete themed starter experiences.
 
-[Open ORACLE](https://oracle.greenshoegarage.com) · [Public screenshot tour](https://oracle.greenshoegarage.com/tour.html) · [Help & guides](https://oracle.greenshoegarage.com/help.html) · [Source repository](https://github.com/GreenShoeGarage/Oracle) · [Staging app](https://oracle-production-488d.up.railway.app)
+The **Organizer Command Deck** brings approvals, unassigned characters, project contribution reviews, BROADSIDE drafts, scene readiness/capacity, and broken connection assignments into one read-only “Needs attention” view. It opens the existing tools for decisions; it does not collect player engagement scores or expose private arcs/reflections. [Batch 19 details](docs/BATCH19_COMMAND_DECK.md).
 
-The [public screenshot tour](https://oracle.greenshoegarage.com/tour.html) introduces all twelve instruments, character and QR workflows, three themes, organizer tools, and offline preparation without an account. It shows 19 distinct screenshots of fictional examples rendered by ORACLE's actual UI components, with full-size image links and a gallery of 21 complete read-only examples. Tour assets stay outside the offline field cache. See [tour maintenance](docs/TOUR.md).
+**Production is v1.8.0 / Batch 18**, schema 15, release `dfdb7624786ded20d946c335453bb7749e213434`. **v1.9.0 is a candidate and has not been promoted.** Current release checks and remaining human/device/operations gates are recorded in [STATUS](docs/STATUS.md). No schema migration is introduced by Batch 19.
 
-Version 1.2.0 is deployed at [oracle.greenshoegarage.com](https://oracle.greenshoegarage.com), release `705a3e702a42f4148ea12a74fd1e9eb93aef03ae`. Exact main and accepted staging verification, the complete all-twelve-instrument/all-three-theme remote journey with cleanup, and Railway production passed. Independent production verification confirmed exact version/schema/commit readiness and all 104 public GET paths without gameplay writes. See [release status](docs/STATUS.md) for evidence, including the unchanged-candidate staging retry.
+[Open ORACLE](https://oracle.greenshoegarage.com) · [Public tour](https://oracle.greenshoegarage.com/tour.html) · [Help](https://oracle.greenshoegarage.com/help.html) · [Roadmap](docs/ROADMAP.md)
 
-Main and accepted staging verification each passed 334 tests: 333 passed, zero failures, one expected PGlite-only skip, plus all existing TCP, isolated 100-player load, populated recovery, startup, and Docker gates. Desktop staging checks confirmed the tour's stable layout, loaded sample images, and link to the complete RELIC example. Physical-device/assistive-technology checks and the human pilot remain unrun; [docs/PILOT.md](docs/PILOT.md) records those required observations. Scheduled live backups, sustained Railway capacity, and the application rollback rehearsal remain outstanding.
-
-This release changes no gameplay or data contracts: SQL schema 10, briefing/adventure formats 1, journal archive version 2, Field desk database version 2, and explicit information-only/account-bound request replay are retained. Public tour pages read no account or event data.
+The no-account tour includes fictional, inactive examples rendered with the shipped components. The Command Deck example adds no live-event access. Existing screenshot assets remain separate from the offline app cache; the new example is an HTML rendering, not evidence of human field testing.
 
 ## What works in this release
 
-See [organizer guide](docs/ORGANIZER_GUIDE.md), [player guide](docs/PLAYER_GUIDE.md), [theme and event packs](docs/THEME_AND_EVENT_PACKS.md), [troubleshooting](docs/TROUBLESHOOTING.md), and [release notes](docs/RELEASE_NOTES.md). Version 1.2.0 adds the public screenshot tour and fictional example gallery; existing field preparation, gameplay, and permissions are unchanged. Deployment status is recorded above.
+See [organizer guide](docs/ORGANIZER_GUIDE.md), [player guide](docs/PLAYER_GUIDE.md), [theme and event packs](docs/THEME_AND_EVENT_PACKS.md), [troubleshooting](docs/TROUBLESHOOTING.md), and [release notes](docs/RELEASE_NOTES.md). The current candidate adds the Organizer Command Deck while preserving the existing gameplay and field-preparation contracts. Deployment status is recorded above.
 
 - Clear player and organizer entry paths, a next-step event guide, and explanations of invitation, badge, prop, and exchange codes.
 - Three immediate event actions with specialist tools under collapsed sections; existing instruments and permissions remain available.
