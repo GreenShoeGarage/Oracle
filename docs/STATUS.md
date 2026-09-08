@@ -1,3 +1,15 @@
+# ORACLE v1.6.0 — Batch 16 candidate
+
+Recorded September 7, 2026.
+
+Batch 16 is implemented and verified on `main` but is **not yet deployed**. Production remains ORACLE v1.5.0 / Batch 15 at release `2a615cbb48dc55cc808640072909a7c13894cd6f`. The v1.6.0 candidate advances SQL schema to 14 and adds verified project evidence, atomic player-confirmed resource donations, bounded project consequences, explicit refunds/corrections, upgraded themed starter projects, and a v1.6 immutable offline shell. See [BATCH16_PROJECT_EFFECTS.md](BATCH16_PROJECT_EFFECTS.md).
+
+The clean Batch 16 implementation passed the normal ORACLE gate: full application verification including dedicated mixed-mode project tests, the 100-authenticated-player isolated PostgreSQL rehearsal, populated backup/restore including the new project tables, repeat schema migration/startup, exact production-image build, and production-session configuration. This is automated evidence only; human/device field acceptance and sustained Railway capacity remain separate.
+
+---
+
+## Previous deployed-status record
+
 # ORACLE v1.2.0 — public screenshot tour
 
 Recorded September 7, 2026.
