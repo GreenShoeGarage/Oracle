@@ -6,6 +6,8 @@ import { digest, readCookie } from './security.js';
 const STATIC={
   '/app.js':['app-v15.js','text/javascript'],
   '/app-v14.js':['app-v14.js','text/javascript'],
+  '/install.js':['install-v15.js','text/javascript'],
+  '/sw.js':['sw-v15.js','text/javascript'],
   '/projects.html':['projects.html','text/html'],
   '/projects.js':['projects-ui.js','text/javascript'],
   '/projects.css':['projects.css','text/css']
