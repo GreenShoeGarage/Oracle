@@ -1,8 +1,8 @@
 {
   "name": "oracle-larp-field-kit",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
-  "description": "ORACLE — LARP Field Kit. Themed adventures, connection cards, character arcs, community projects, verified contributions, bounded consequences, and offline field resilience.",
+  "description": "ORACLE — LARP Field Kit. Themed adventures, connection cards, character arcs, community projects, verified contributions, bounded consequences, complete starter experiences, and offline field resilience.",
   "type": "module",
   "engines": { "node": ">=22.9.0 <25" },
   "scripts": {
