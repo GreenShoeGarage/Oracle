@@ -1,0 +1,58 @@
+name: One-off v18 release plumbing
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  update-v18:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Generate v1.8 shell and release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          sw=Path('public/sw-v17.js').read_text().replace("const VERSION='1.7.0';","const VERSION='1.8.0';",1)
+          sw=sw.replace("'/app.js','/app-v16.js'","'/app.js','/app-v17.js','/app-v16.js'",1)
+          sw=sw.replace("'/projects.html','/projects.js','/projects.css','/project-effects-ui.js','/experiences.html','/experiences.js','/experiences.css',","'/projects.html','/projects.js','/projects.css','/project-effects-ui.js','/experiences.html','/experiences.js','/experiences.css','/field-home.html','/field-home.js','/field-home.css',",1)
+          Path('public/sw-v18.js').write_text(sw)
+          install=Path('public/install-v17.js').read_text().replace("export const SHELL_VERSION = '1.7.0';","export const SHELL_VERSION = '1.8.0';",1)
+          Path('public/install-v18.js').write_text(install)
+
+          p=Path('package-lock.json'); s=p.read_text().replace('"version": "1.7.0"','"version": "1.8.0"',2); p.write_text(s)
+
+          p=Path('src/app-v18.js'); s=p.read_text();
+          s=s.replace(" '/app-v17.js':['app-v17.js','text/javascript'],"," '/app-v17.js':['app-v17.js','text/javascript'],\n '/install.js':['install-v18.js','text/javascript'],\n '/sw.js':['sw-v18.js','text/javascript'],",1)
+          p.write_text(s)
+
+          p=Path('scripts/check.js'); s=p.read_text()
+          s=s.replace('public/sw-v17.js','public/sw-v18.js')
+          s=s.replace('public/install-v17.js','public/install-v18.js')
+          s=s.replace('The v1.7 cached public shell','The v1.8 cached public shell')
+          s=s.replace('The v1.7 install controller','The v1.8 install controller')
+          s=s.replace('"/app.js","/app-v16.js"','"/app.js","/app-v17.js","/app-v16.js"')
+          marker='"/experiences.html","/experiences.js","/experiences.css"'
+          if marker in s and '"/field-home.html"' not in s:
+              s=s.replace(marker,marker+',"/field-home.html","/field-home.js","/field-home.css"',1)
+          if 'public/field-home.html' not in s:
+              needle='"public/starter-experiences.html"'
+              s=s.replace(needle,needle+',"public/field-home.html","public/field-home.js","public/field-home.css","public/app-v18.js","src/app-v18.js"',1)
+          s=s.replace('Batch 17, and offline-shell assets verified.','Batch 18, and offline-shell assets verified.')
+          p.write_text(s)
+          PY
+          git diff --check
+          node --check src/app-v18.js
+          node --check public/field-home.js
+          node --check public/app-v18.js
+      - name: Commit v1.8 plumbing
+        run: |
+          git config user.name 'ORACLE maintenance bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add public/sw-v18.js public/install-v18.js package-lock.json src/app-v18.js scripts/check.js
+          git commit -m 'Wire ORACLE v1.8 offline shell and release checks'
+          git push origin HEAD:main
