@@ -346,7 +346,7 @@ try {
       `${table} restored content`,
     );
   }
-  assert.equal(await migrate(restored), 10, "The recovered database must accept repeat migration at schema 10.");
+  assert.equal(await migrate(restored), 13, "The recovered database must accept repeat migration at schema 13.");
   const event = (
     await restored.query("SELECT id,owner_user_id FROM events LIMIT 1")
   ).rows[0];
