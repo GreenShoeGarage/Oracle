@@ -28,9 +28,9 @@ Attention lists show at most 25 records per category while retaining their full 
 
 ## Connected field behavior
 
-Private deck reports live only in page memory and are sent with `Cache-Control: private, no-store`. They are not saved to browser storage or the service-worker cache. Disconnect, account change, event change, navigation, and permission errors clear the report. A failed refresh does not become a false zero or an apparently current cached report. Late responses cannot replace another account/event/view.
+Private deck reports live only in page memory and are sent with `Cache-Control: private, no-store`. They are not saved to browser storage or the service-worker cache. Disconnect, account change, event change, leaving the workspace, and permission errors clear the report. A failed refresh does not become a false zero or an apparently current cached report. Late responses cannot replace another account/event/view.
 
-Opening the deck, manual refresh, foreground focus, and successful reconnection recheck server state. There is no interval polling or telemetry. Filters, open overview panels, and keyboard focus are preserved during an ordinary refresh. Field player preparation remains unchanged.
+Opening the deck, manual refresh, foreground focus, and successful reconnection recheck server state. There is no interval polling or telemetry. Filters, open overview panels, and keyboard focus are preserved during an ordinary refresh. Display and install controls do not discard the checked deck. Switching to Player or Prop view closes the private deck before rendering the event preview. Field player preparation remains unchanged.
 
 The immutable v1.9 shell includes the new renderer/styles and complete inherited module chain. A shared asset responder preserves one current release identity across all modules; the full-shell HTTP regression and remote shell-smoke gates remain enabled.
 
@@ -40,7 +40,7 @@ Project creation/review previously committed a transaction and then requested it
 
 ## Verification and release boundary
 
-Dedicated tests exercise organizer/player/staff/outsider/superuser boundaries, expected-account protection, all three themes, cross-event isolation, queue reconciliation through actual approval/publication/review actions, resource-unit versus distinct-account counting, privacy, bounded responses, read-only SQL, mid-report demotion, paused/archived states, and overdue parties without mutation. UI tests cover escaping, original-workflow navigation, filters/focus, offline clearing, role failures, and late account/event responses.
+Dedicated tests exercise organizer/player/staff/outsider/superuser boundaries, expected-account protection, all three themes, cross-event isolation, queue reconciliation through actual approval/publication/review actions, resource-unit versus distinct-account counting, privacy, bounded responses, read-only SQL, mid-report demotion, paused/archived states, and overdue parties without mutation. UI tests cover escaping, original-workflow navigation, filters/focus, offline clearing, role failures, and late account/event responses. Three additional regressions exercise the actual main-app dispatcher for display controls, audience changes, event navigation, and connectivity checks.
 
 Local full-application DOM/HTTP checks use a disposable PGlite-backed app for event deep links, exact character/bulletin navigation, return-to-deck, offline clearing, and reconnection. Chromium rendered the resulting markup in memory at 1440, 390, and 320 pixels with no horizontal overflow, including a forced-colors render. Browser network navigation was unavailable in the local environment, so that render is not a full real-browser network journey. Neither result establishes physical iPhone/Android, assistive-technology, or human field acceptance.
 
