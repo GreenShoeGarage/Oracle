@@ -1,12 +1,10 @@
 {
   "name": "oracle-larp-field-kit",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
-  "description": "ORACLE \u2014 LARP Field Kit. Themed adventures, live event operations, and offline field resilience.",
+  "description": "ORACLE — LARP Field Kit. Themed adventures, live event operations, connection cards, and offline field resilience.",
   "type": "module",
-  "engines": {
-    "node": ">=22.9.0 <25"
-  },
+  "engines": { "node": ">=22.9.0 <25" },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --env-file-if-exists=.env src/server.js",
@@ -17,12 +15,6 @@
     "verify": "npm run check && npm test",
     "smoke": "node scripts/smoke.js"
   },
-  "dependencies": {
-    "pg": "8.16.3"
-  },
-  "devDependencies": {
-    "@electric-sql/pglite": "0.5.8",
-    "fake-indexeddb": "6.2.5",
-    "jsdom": "26.1.0"
-  }
+  "dependencies": { "pg": "8.16.3" },
+  "devDependencies": { "@electric-sql/pglite": "0.5.8", "fake-indexeddb": "6.2.5", "jsdom": "26.1.0" }
 }
