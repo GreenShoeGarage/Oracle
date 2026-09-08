@@ -1,0 +1,72 @@
+name: Apply Batches 20–23 candidate
+on:
+  push:
+    branches: [feature/batches20-23-experience-studio]
+    paths: [.github/workflows/b23-apply.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm}
+      - name: Verify and apply source transfer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, lzma
+          parts=sorted(Path('.github/b23').glob('part-*.txt'))
+          assert len(parts)==8
+          encoded=''.join(p.read_text().strip() for p in parts)
+          assert len(encoded)==72984
+          compressed=base64.b64decode(encoded,validate=True)
+          assert hashlib.sha256(compressed).hexdigest()=='90ca9704eefcda50aa9b472accd546c2b7d1e4466ca9f46f6f85430b9b1779f2'
+          patch=lzma.decompress(compressed)
+          assert len(patch)==218771
+          assert hashlib.sha256(patch).hexdigest()=='12ee83ae73558ba3a5fdc845f45ba1060fb5fc74e3f0d3d21f4b0f58f7deb23f'
+          Path('/tmp/b23.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/b23.patch
+          git apply /tmp/b23.patch
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('public')
+          sw=(p/'sw-v19.js').read_text().replace("const VERSION='1.9.0';","const VERSION='2.3.0';",1)
+          sw=sw.replace("'/app.js','/app-v18.js'","'/app.js','/app-v19.js','/app-v18.js'",1)
+          sw=sw.replace("  '/manifest.webmanifest'", "  '/experience-pack-model.js','/experience-library.js','/experience-studio-ui.js','/experience-studio.css','/field-acceptance-model.js',\n  '/manifest.webmanifest'",1)
+          (p/'sw-v23.js').write_text(sw)
+          (p/'install-v23.js').write_text((p/'install-v19.js').read_text().replace("export const SHELL_VERSION = '1.9.0';","export const SHELL_VERSION = '2.3.0';",1))
+          PY
+      - run: npm ci --ignore-scripts
+      - name: Generate public examples and verify candidate
+        run: |
+          set -euo pipefail
+          npm run tour:build
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          expected={'public/sw-v23.js':'2f02ea412fb0a6d41cd0c3aadaa4237b7ae070f46a99b60716bafcf42013cd7e','public/install-v23.js':'6e182f02f2be3a3c7b3b5526b13fea6034cb02acf40c03a4a5c04483fd00d2db','public/tour-examples.html':'3eff48259018aca6ebb4d4bbcb38af9d4d5246589e6431270b000858be80a41b','public/tour-catalog.json':'14a5a64d6bd9953f1f3b6010f08d23a9f15c91c2348cda456a45246552ec3294'}
+          for path,digest in expected.items():
+              assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==digest,path
+          PY
+          npm run check
+          node --test --test-concurrency=1 test/experience-pack.test.js test/experience-studio.test.js test/experience-studio-ui.test.js test/release-shell.test.js
+      - name: Commit exact clean tree without deploying
+        run: |
+          set -euo pipefail
+          rm -rf .github/b23
+          rm .github/workflows/b23-workspace.yml .github/workflows/b23-apply.yml
+          git diff --check
+          git add -A
+          actual=$(git write-tree)
+          test "$actual" = b63389807d50961503dfb03a7217079bee6575e4
+          git config user.name 'ORACLE maintenance bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'Implement ORACLE v2.3 Experience Studio and field acceptance tooling'
+          git push origin HEAD:feature/batches20-23-experience-studio
