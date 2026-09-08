@@ -69,8 +69,8 @@ after(async () => {
 });
 
 test("migration is repeatable and preserves existing accounts", async () => {
-  assert.equal(await migrate(pool), 13);
-  assert.equal(await checkSchema(pool), 13);
+  assert.equal(await migrate(pool), 14);
+  assert.equal(await checkSchema(pool), 14);
   assert.equal(
     (await pool.query("SELECT count(*)::int AS n FROM users")).rows[0].n,
     6,
@@ -260,7 +260,7 @@ test("an isolated database snapshot restores records and accepts repeat migratio
   const isolated = await testDatabase({ snapshot });
   try {
     assert.equal((await isolated.pool.query("SELECT name FROM events WHERE id=$1", [event.id])).rows[0].name, "Backup source");
-    assert.equal(await migrate(isolated.pool), 13);
+    assert.equal(await migrate(isolated.pool), 14);
   } finally { await isolated.close(); }
 });
 test("migration checksum drift blocks startup migration without changing data", async () => {

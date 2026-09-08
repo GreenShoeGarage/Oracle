@@ -239,8 +239,8 @@ after(async () => {
 });
 
 test("Batch 1 to Batch 9 migration preserves event identity, lifecycle, membership, invitations and audit", async () => {
-  assert.equal(await migrate(pool), 13);
-  assert.equal(await checkSchema(pool), 13);
+  assert.equal(await migrate(pool), 14);
+  assert.equal(await checkSchema(pool), 14);
   const event = (await pool.query("SELECT * FROM events WHERE id=$1", [legacy.event])).rows[0];
   assert.equal(event.name, "Existing live event");
   assert.equal(event.description, "Original description");
