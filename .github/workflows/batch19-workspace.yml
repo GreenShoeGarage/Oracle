@@ -1,0 +1,24 @@
+name: Batch 19 development workspace
+on:
+  push:
+    branches: [feature/batch19-command-deck]
+    paths: [.github/workflows/batch19-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - name: Package public source and declared test dependencies
+        run: tar --exclude=.git --exclude=.env -czf /tmp/oracle-workspace.tgz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oracle-batch19-workspace
+          path: /tmp/oracle-workspace.tgz
+          retention-days: 1
