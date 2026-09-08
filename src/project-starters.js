@@ -10,9 +10,13 @@ export const PROJECT_STARTERS = {
       { key: 'quiet', label: 'Prepare behind the scenes', help: 'Contribute notes, materials, or a private suggestion for the organizer to review.' }
     ],
     milestones: [
-      { title: 'A way in', description: 'The group has a credible way to reach or operate the lantern.', requiredCount: 1 },
-      { title: 'A workable plan', description: 'Players have contributed enough practical preparation to attempt the relighting.', requiredCount: 2 },
-      { title: 'A shared watch', description: 'At least two distinct players have helped establish how the warning will be carried forward.', requiredCount: 2 }
+      { title: 'A way in', description: 'Bring a relevant RELIC or DEAD DROP discovery, or another approved piece of verified evidence, that gives the group a credible way to reach or operate the lantern.', requiredCount: 1, contributionMode: 'evidence', allowedEvidence: ['relic','dead_drop','sigil','oath'] },
+      { title: 'A workable plan', description: 'Contribute two units of an available event resource toward the restoration when the event economy supports it; otherwise this remains a two-player reviewed preparation milestone.', requiredCount: 2, contributionMode: 'resource-if-available' },
+      { title: 'A shared watch', description: 'At least two distinct players have helped establish how the warning will be carried forward.', requiredCount: 2, contributionMode: 'reviewed' }
+    ],
+    consequences: [
+      { kind: 'content_unlock', title: 'The lantern is lit', body: 'The restored lantern now belongs to the shared life of the settlement. Its warning can be seen and acted on by the whole gathering.', audience: { type: 'event' }, position: 0 },
+      { kind: 'broadside_draft', title: 'The Border Lantern Burns Again', body: 'The border lantern has been restored through the work of the gathering. A common warning point now stands ready at the edge of the settlement.', audience: { type: 'event' }, position: 1 }
     ]
   },
   cyberpunk: {
@@ -26,9 +30,13 @@ export const PROJECT_STARTERS = {
       { key: 'quiet', label: 'Contribute off-channel', help: 'Submit a discreet note, plan, or support task without taking center stage.' }
     ],
     milestones: [
-      { title: 'Reach the node', description: 'The group has a credible route to the relay and the people around it.', requiredCount: 1 },
-      { title: 'Stabilize the relay', description: 'At least two distinct players have contributed to a plausible recovery plan.', requiredCount: 2 },
-      { title: 'Put it to use', description: 'At least two distinct players have helped define how the neighborhood will use the restored relay.', requiredCount: 2 }
+      { title: 'Reach the node', description: 'Use a verified discovery, successful SIGIL outcome, or completed OATHBOOK agreement to establish a credible route to the relay and the people around it.', requiredCount: 1, contributionMode: 'evidence', allowedEvidence: ['dead_drop','relic','sigil','oath'] },
+      { title: 'Stabilize the relay', description: 'Contribute two units of an available event resource when the economy supports it; otherwise two distinct players can complete this through reviewed preparation.', requiredCount: 2, contributionMode: 'resource-if-available' },
+      { title: 'Put it to use', description: 'At least two distinct players have helped define how the neighborhood will use the restored relay.', requiredCount: 2, contributionMode: 'reviewed' }
+    ],
+    consequences: [
+      { kind: 'content_unlock', title: 'Independent signal', body: 'The relay is online. The neighborhood now has a communications point that does not depend on the dominant network.', audience: { type: 'event' }, position: 0 },
+      { kind: 'broadside_draft', title: 'Neighborhood Relay Restored', body: 'The community relay is transmitting again. Local warnings and requests can now travel through an independent neighborhood node.', audience: { type: 'event' }, position: 1 }
     ]
   },
   wasteland: {
@@ -42,9 +50,13 @@ export const PROJECT_STARTERS = {
       { key: 'quiet', label: 'Support from the edge', help: 'Offer notes, logistics, or a lower-pressure contribution for organizer review.' }
     ],
     milestones: [
-      { title: 'Know the damage', description: 'The group understands enough of the failure to act.', requiredCount: 1 },
-      { title: 'Make it workable', description: 'At least two distinct players have contributed toward a credible restoration.', requiredCount: 2 },
-      { title: 'Keep the watch', description: 'At least two distinct players have helped define how the beacon will be watched after restoration.', requiredCount: 2 }
+      { title: 'Know the damage', description: 'Use a verified RELIC or DEAD DROP discovery, successful SIGIL outcome, or completed agreement to establish what has failed and what the settlement needs.', requiredCount: 1, contributionMode: 'evidence', allowedEvidence: ['relic','dead_drop','sigil','oath'] },
+      { title: 'Make it workable', description: 'Contribute two units of an available event resource when the economy supports it; otherwise two distinct players can complete this through reviewed restoration work.', requiredCount: 2, contributionMode: 'resource-if-available' },
+      { title: 'Keep the watch', description: 'At least two distinct players have helped define how the beacon will be watched after restoration.', requiredCount: 2, contributionMode: 'reviewed' }
+    ],
+    consequences: [
+      { kind: 'content_unlock', title: 'The watch holds', body: 'The beacon is working and the settlement has agreed how the water supply will be watched. The signal now carries a shared responsibility, not just an alarm.', audience: { type: 'event' }, position: 0 },
+      { kind: 'broadside_draft', title: 'Water Watch Restored', body: 'The damaged beacon has returned to service and the settlement has established a shared watch over the water supply.', audience: { type: 'event' }, position: 1 }
     ]
   }
 };
