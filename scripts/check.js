@@ -5,26 +5,24 @@ import { VERSION } from "../src/config.js";
 for (const dir of ["src", "scripts", "test", "public"]) {
   for (const file of await readdir(new URL(`../${dir}/`, import.meta.url))) {
     if (!file.endsWith(".js")) continue;
-    const result = spawnSync(process.execPath, ["--check", `${dir}/${file}`], {
-      stdio: "inherit",
-    });
+    const result = spawnSync(process.execPath, ["--check", `${dir}/${file}`], { stdio: "inherit" });
     if (result.status !== 0) process.exit(result.status || 1);
   }
 }
 const pkg = JSON.parse(await readFile("package.json", "utf8"));
 assert.equal(VERSION, pkg.version, "App/package versions must match.");
-const workerSource = await readFile("public/sw.js", "utf8");
-assert.ok(workerSource.includes(`const VERSION = '${VERSION}';`), "The cached public shell must match the server version.");
-assert.ok((await readFile("public/install.js", "utf8")).includes(`export const SHELL_VERSION = '${VERSION}';`), "The install controller must identify this shell version.");
-const html = await readFile("public/index.html", "utf8");
-for (const asset of ["/landing.css", "/display.js", "/startup.js", "/preparation-model.js"]) {
-  await readFile(`public${asset}`);
+const workerSource = await readFile("public/sw-v15.js", "utf8");
+assert.ok(workerSource.includes(`const VERSION='${VERSION}';`), "The v1.5 cached public shell must match the server version.");
+assert.ok((await readFile("public/install-v15.js", "utf8")).includes(`export const SHELL_VERSION = '${VERSION}';`), "The v1.5 install controller must identify this shell version.");
+for (const asset of ["/landing.css","/display.js","/startup.js","/preparation-model.js","/app.js","/app-v14.js","/app-v13.js","/app-core.js","/install.js","/connections.html","/connections.js","/connections.css","/arcs.html","/arcs.js","/arcs-store.js","/arcs.css","/projects.html","/projects.js","/projects.css"]) {
   assert.ok(workerSource.includes(`'${asset}'`), `${asset} must be included in offline installation.`);
 }
+const html = await readFile("public/index.html", "utf8");
 for (const asset of ["/style.css", "/themes.css", "/characters.css", "/adventure.css", "/adventure-organizer.css", "/exchanges.css", "/sharing.css", "/story.css", "/trace.css", "/economy.css", "/oath.css", "/sigil.css", "/static.css", "/stagehand.css", "/props.css", "/field.css", "/guide.css", "/app.js", "/favicon.svg", "/manifest.webmanifest", "/apple-touch-icon.png"]) {
   assert.ok(html.includes(asset));
   await readFile(`public${asset}`);
 }
+for (const file of ["public/projects.html","public/projects-ui.js","public/projects.css","src/projects-app.js","src/project-starters.js","migrations/013_community_projects.sql"]) await readFile(file);
 const manifest = JSON.parse(await readFile("public/manifest.webmanifest", "utf8"));
 assert.match(manifest.name, /ORACLE/);
 assert.equal(manifest.start_url, "/");
@@ -33,12 +31,7 @@ assert.equal(manifest.display, "standalone");
 for (const icon of manifest.icons) {
   assert.match(icon.src, /^\/[a-z0-9-]+\.(png|svg)$/);
   const bytes = await readFile(`public${icon.src}`);
-  if (icon.type === "image/svg+xml") {
-    assert.equal(icon.sizes, "any"); assert.match(bytes.toString("utf8"), /<svg\b/);
-  } else {
-    assert.equal(icon.type, "image/png");
-    assert.equal(bytes.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
-    assert.equal(`${bytes.readUInt32BE(16)}x${bytes.readUInt32BE(20)}`, icon.sizes);
-  }
+  if (icon.type === "image/svg+xml") { assert.equal(icon.sizes, "any"); assert.match(bytes.toString("utf8"), /<svg\b/); }
+  else { assert.equal(icon.type, "image/png"); assert.equal(bytes.subarray(0, 8).toString("hex"), "89504e470d0a1a0a"); assert.equal(`${bytes.readUInt32BE(16)}x${bytes.readUInt32BE(20)}`, icon.sizes); }
 }
-console.log("Syntax, version, and entrypoint assets verified.");
+console.log("Syntax, version, entrypoint, Batch 15, and offline-shell assets verified.");
