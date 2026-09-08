@@ -1,6 +1,6 @@
 // Public, immutable application builds only. No API response or private game data
 // enters the shell cache. Browser-client/build IDs keep active tabs on one build.
-const VERSION = '1.2.0';
+const VERSION = '1.4.0';
 const CACHE_NAME = `oracle-static-v${VERSION}`;
 const CONTROL_CACHE = 'oracle-shell-control-v1';
 const COMPLETE_PATH = '/__oracle_shell_complete__';
@@ -8,7 +8,7 @@ const NETWORK_TIMEOUT_MS = 4000;
 const INSTALL_TIMEOUT_MS = 12000;
 const MAX_ASSET_BYTES = 2_000_000;
 const STATIC_ASSETS = [
-  '/', '/app.js', '/style.css', '/themes.css', '/favicon.svg', '/kit.js', '/builder.js',
+  '/', '/app.js', '/app-v13.js', '/app-core.js', '/style.css', '/themes.css', '/favicon.svg', '/kit.js', '/builder.js',
   '/display.js', '/startup.js', '/landing.css', '/preparation-model.js',
   '/characters-ui.js', '/characters-model.js', '/characters.css', '/admin-ui.js', '/qr.js',
   '/vendor/qrcode-generator-2.0.4.js', '/vendor/jsqr-1.4.0.js',
@@ -22,6 +22,8 @@ const STATIC_ASSETS = [
   '/prop-effects.js', '/props.css', '/instrument-code.js',
   '/guide-ui.js', '/guide.css', '/help.html', '/help.css',
   '/field-store.js', '/field-sync.js', '/field-ui.js', '/field.css', '/connection.js',
+  '/connections.html', '/connections.js', '/connections.css',
+  '/arcs.html', '/arcs.js', '/arcs-store.js', '/arcs.css',
   '/manifest.webmanifest', '/install.js', '/app-icon.svg', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png',
 ];
 const paths = new Set(STATIC_ASSETS);
@@ -125,8 +127,6 @@ self.addEventListener('fetch', event => {
     if (!version) version = VERSION;
     if (navigation) await pinClient(event.resultingClientId || event.clientId, VERSION);
     try { const cache = await caches.open(buildName(version)), response = await cache.match(url.href); if (response && await complete(version)) return response; } catch { /* Matching online build can recover unavailable storage. */ }
-    // Never fill or overwrite an activated build. Errors, JSON, slow responses
-    // and a newer deployment cannot poison another client's public assets.
     try { const response = await timedFetch(url, NETWORK_TIMEOUT_MS, version); return cacheableResponse(response, url, version) ? response : unavailable(); } catch { return unavailable(); }
   })());
 });
