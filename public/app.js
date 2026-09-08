@@ -469,8 +469,12 @@ async function action(button) {
     if (state.view === "sigil" && !destination.startsWith("sigil-")) sigil.reset();
     if (state.view === "static" && !destination.startsWith("static-")) signals.reset();
     if (state.view === "stagehand" && !destination.startsWith("stagehand-")) stagehand.reset();
+    if (state.view === "command-deck" && !destination.startsWith("command-deck-")) commandDeck.reset();
   }
-  if (state.view === "command-deck" && !destination.startsWith("command-deck-")) commandDeck.reset();
+  if (state.view === "command-deck" && destination === "kit-view") {
+    commandDeck.reset();
+    state.view = "detail";
+  }
   if (await commandDeck.action(button)) return;
   if (await install.action(button)) return;
   if (await field.action(button)) return;
