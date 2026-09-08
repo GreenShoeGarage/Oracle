@@ -1,8 +1,8 @@
 {
   "name": "oracle-larp-field-kit",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
-  "description": "ORACLE — LARP Field Kit. Themed adventures, live event operations, connection cards, and offline field resilience.",
+  "description": "ORACLE — LARP Field Kit. Themed adventures, live event operations, connection cards, personal character arcs, and offline field resilience.",
   "type": "module",
   "engines": { "node": ">=22.9.0 <25" },
   "scripts": {
