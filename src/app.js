@@ -1,3 +1,4 @@
+import { createExperienceStudioHandler } from './experience-studio.js';
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { VERSION } from "./config.js";
@@ -197,6 +198,7 @@ export function createApp({
   const sigilHandler = createSigilHandler({ pool, config, helpers });
   const staticHandler = createStaticHandler({ pool, config, helpers });
   const stagehandHandler = createStagehandHandler({ pool, helpers });
+  const experienceStudioHandler = createExperienceStudioHandler({ pool, config, helpers });
   const commandDeckHandler = createCommandDeckHandler({ pool, helpers });
   return async function handle(req, res) {
     const requestId = randomUUID();
@@ -443,6 +445,7 @@ export function createApp({
       if (await sigilHandler({ req, res, path, url, method, user })) return;
       if (await staticHandler({ req, res, path, url, method, user })) return;
       if (await stagehandHandler({ req, res, path, url, method, user })) return;
+      if (await experienceStudioHandler({ req, res, path, url, method, user })) return;
       if (await commandDeckHandler({ req, res, path, url, method, user })) return;
       if (path === "/api/catalog" && method === "GET")
         return send(res, 200, { themes: THEMES, templates: TEMPLATES, instruments: INSTRUMENTS });

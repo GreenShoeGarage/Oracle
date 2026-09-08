@@ -1,3 +1,4 @@
+import { createExperienceStudioUI } from './experience-studio-ui.js';
 "use strict";
 import { createKitUI } from "./builder.js";
 import { createCharacterUI } from "./characters-ui.js";
@@ -115,6 +116,7 @@ const oaths = createOathUI({ state, api, shell, esc, openModal, closeModal, load
 const sigil = createSigilUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openJournal: (characterId) => { sigil.reset(); return adventure.open({ characterId }); } });
 const signals = createStaticUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openJournal: (characterId) => { signals.reset(); return adventure.open({ characterId }); } });
 const stagehand = createStagehandUI({ state, api, shell, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, openStory: () => story.open({ manage: true }), openAdventure: (options) => adventure.open(options) });
+const experienceStudio = createExperienceStudioUI({ state, api, shell, esc, isManager, onReturnToEvent: loadEvent });
 const commandDeck = createCommandDeckUI({ state, api, shell, esc, openTool: async (destination, options = {}) => {
   const eventId = options.eventId || state.event?.id;
   if (!eventId || eventId !== state.event?.id) throw new Error("Open the event again before continuing.");
@@ -145,9 +147,10 @@ const field = createFieldUI({ state, api, shell: (html) => {
 }, esc, openModal, closeModal, loadEvent, toast, isManager, err, render, offline, store: fieldStore, sync: fieldSync, checkOfflineShell: () => install.verifyOfflineReady(), isOfflineShellReady: () => install.offlineReady, openExchanges: (characterId) => exchanges.open({ characterId }) });
 const install = createInstallUI({ getDirty: () => true, confirmDiscard: () => {
   if (pendingApiWrites || fieldSync.busy) { toast("Wait for the current server request to finish before applying an app update."); return false; }
-  return field.canUpdate ? field.canUpdate() : true;
+  return experienceStudio.confirmDiscard() && (field.canUpdate ? field.canUpdate() : true);
 }, onChange: updateInstallUI, toast });
 function resetPrivateViews() {
+  experienceStudio.reset();
   commandDeck.reset();
   field.reset();
   fieldSync.reset();
@@ -312,7 +315,7 @@ function auth() {
 }
 function shell(content) {
   publicIntroduction(false);
-  app.innerHTML = `<div class="layout"><aside class="sidebar"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><nav aria-label="Main navigation">${state.event && isManager() && kit.isOrganizerView() ? `<button class="nav-button ${state.view === "command-deck" ? "active" : ""}" data-action="command-deck-open">Command Deck</button>` : ""}<button class="nav-button ${!["account", "admin"].includes(state.view) ? "active" : ""}" data-action="events">${state.session.user.isSuperuser ? "All events" : "My events"}</button><button class="nav-button ${state.view === "account" ? "active" : ""}" data-action="account">Account</button><button class="nav-button" data-action="offline-open">Saved readings</button><button class="nav-button ${state.view === "field" ? "active" : ""}" data-action="field-open">Field desk</button><a class="nav-link" href="/tour.html" target="_blank" rel="noopener">Explore ORACLE ↗</a><a class="nav-link" href="/help.html" target="_blank" rel="noopener">Help &amp; guides ↗</a>${state.session.user.isSuperuser ? `<button class="nav-button ${state.view === "admin" ? "active" : ""}" data-action="admin-open">Administration</button>` : ""}</nav><div class="sidebar-footer"><div><p class="account-name">${esc(state.session.user.displayName)}</p>${state.session.user.isSuperuser ? '<p class="hint">Project superuser</p>' : ""}<p class="version">ORACLE / v${esc(state.session.version)}</p></div><div data-install-controls>${install.render()}</div><button class="quiet" data-action="logout">Sign out</button></div></aside><main class="workspace" id="main" tabindex="-1"><div class="topbar"><button class="quiet menu-toggle" data-action="kit-collapse" aria-label="Toggle navigation" aria-expanded="true">☰ Menu</button><span class="eyebrow">Green Shoe Garage / Field instruments</span>${kit.controls()}${state.session.environment !== "production" ? `<span class="environment">${esc(state.session.environment)}</span>` : ""}</div>${content}</main></div>`;
+  app.innerHTML = `<div class="layout"><aside class="sidebar"><div class="brand"><div class="wordmark">ORACLE</div><p>LARP Field Kit</p></div><nav aria-label="Main navigation">${state.event && isManager() && kit.isOrganizerView() ? `<button class="nav-button ${state.view === "command-deck" ? "active" : ""}" data-action="command-deck-open">Command Deck</button><button class="nav-button ${state.view === "experience-studio" ? "active" : ""}" data-action="studio-open">Experience Studio</button>` : ""}<button class="nav-button ${!["account", "admin"].includes(state.view) ? "active" : ""}" data-action="events">${state.session.user.isSuperuser ? "All events" : "My events"}</button><button class="nav-button ${state.view === "account" ? "active" : ""}" data-action="account">Account</button><button class="nav-button" data-action="offline-open">Saved readings</button><button class="nav-button ${state.view === "field" ? "active" : ""}" data-action="field-open">Field desk</button><a class="nav-link" href="/tour.html" target="_blank" rel="noopener">Explore ORACLE ↗</a><a class="nav-link" href="/help.html" target="_blank" rel="noopener">Help &amp; guides ↗</a>${state.session.user.isSuperuser ? `<button class="nav-button ${state.view === "admin" ? "active" : ""}" data-action="admin-open">Administration</button>` : ""}</nav><div class="sidebar-footer"><div><p class="account-name">${esc(state.session.user.displayName)}</p>${state.session.user.isSuperuser ? '<p class="hint">Project superuser</p>' : ""}<p class="version">ORACLE / v${esc(state.session.version)}</p></div><div data-install-controls>${install.render()}</div><button class="quiet" data-action="logout">Sign out</button></div></aside><main class="workspace" id="main" tabindex="-1"><div class="topbar"><button class="quiet menu-toggle" data-action="kit-collapse" aria-label="Toggle navigation" aria-expanded="true">☰ Menu</button><span class="eyebrow">Green Shoe Garage / Field instruments</span>${kit.controls()}${state.session.environment !== "production" ? `<span class="environment">${esc(state.session.environment)}</span>` : ""}</div>${content}</main></div>`;
   kit.apply();
 }
 function render() {
@@ -335,6 +338,7 @@ function render() {
   if (state.view === "sigil" && state.event) return sigil.render();
   if (state.view === "static" && state.event) return signals.render();
   if (state.view === "stagehand" && state.event) return stagehand.render();
+  if (state.view === "experience-studio" && state.event) return experienceStudio.render();
   if (state.view === "command-deck" && state.event) return commandDeck.render();
   if (state.view === "detail" && state.event) return detail();
   events();
@@ -359,7 +363,7 @@ function detail() {
   ].filter(([id]) => enabled.includes(id)).map(([, action, label]) => `<button data-action="${action}">${label}</button>`).join("");
   const news = enabled.some((id) => ["whisper", "broadside"].includes(id));
   const guidance = renderEventGuide({ event: state.event, accountId: state.session.user.id, isManager: Boolean(isManager()), audience: managerView ? "organizer" : "player", members: state.members, online: connectionState === "online" });
-  document.querySelector(".workspace .page-head, .workspace .world-header")?.insertAdjacentHTML("afterend", `${guidance}${managerView ? '<section class="panel"><div class="panel-head"><div><h2>Organizer Command Deck</h2><p class="hint">Approvals, project reviews, bulletin drafts, and scene readiness in one place.</p></div><button class="primary" data-action="command-deck-open">Open Command Deck</button></div></section>' : ""}<section class="panel character-entry"><h2>Your field tools</h2><div class="actions"><button data-action="character-open">Characters</button><button class="primary" data-action="adv-open">Open adventure</button><button data-action="exchange-open">Exchanges</button></div>${tools || news ? `<details class="mt"><summary>More tools for this event</summary><div class="actions mt">${news ? '<button data-action="story-open">Rumors & news</button>' : ""}${tools}</div></details>` : ""}${isManager() || state.event.role === "staff" ? `<details class="mt"><summary>Organizer and staff tools</summary><div class="actions mt">${news ? '<button data-action="story-manage">Prepare rumors & news</button>' : ""}${enabled.includes("sigil") ? '<button data-action="sigil-manage">Prepare cooperative challenges</button>' : ""}${enabled.includes("static") ? '<button data-action="static-manage">Prepare fictional readings</button>' : ""}${enabled.includes("stagehand") ? '<button data-action="stagehand-manage">Run encounters</button>' : ""}${isManager() ? `<button data-action="advedit-open">Prepare adventure</button><button data-action="sharing-open">Sharing rules</button>${enabled.includes("bazaar") ? '<button data-action="bazaar-manage">Manage shops & balances</button>' : ""}${enabled.includes("oathbook") ? '<button data-action="oath-manage">Review agreements</button>' : ""}` : ""}</div></details>` : ""}</section>`);
+  document.querySelector(".workspace .page-head, .workspace .world-header")?.insertAdjacentHTML("afterend", `${guidance}${managerView ? '<section class="panel"><div class="panel-head"><div><h2>Organizer Command Deck</h2><p class="hint">Approvals, project reviews, bulletin drafts, and scene readiness in one place.</p></div><div class="actions"><button class="primary" data-action="command-deck-open">Open Command Deck</button><button data-action="studio-open">Experience Studio</button></div></div></section>' : ""}<section class="panel character-entry"><h2>Your field tools</h2><div class="actions"><button data-action="character-open">Characters</button><button class="primary" data-action="adv-open">Open adventure</button><button data-action="exchange-open">Exchanges</button></div>${tools || news ? `<details class="mt"><summary>More tools for this event</summary><div class="actions mt">${news ? '<button data-action="story-open">Rumors & news</button>' : ""}${tools}</div></details>` : ""}${isManager() || state.event.role === "staff" ? `<details class="mt"><summary>Organizer and staff tools</summary><div class="actions mt">${news ? '<button data-action="story-manage">Prepare rumors & news</button>' : ""}${enabled.includes("sigil") ? '<button data-action="sigil-manage">Prepare cooperative challenges</button>' : ""}${enabled.includes("static") ? '<button data-action="static-manage">Prepare fictional readings</button>' : ""}${enabled.includes("stagehand") ? '<button data-action="stagehand-manage">Run encounters</button>' : ""}${isManager() ? `<button data-action="advedit-open">Prepare adventure</button><button data-action="sharing-open">Sharing rules</button>${enabled.includes("bazaar") ? '<button data-action="bazaar-manage">Manage shops & balances</button>' : ""}${enabled.includes("oathbook") ? '<button data-action="oath-manage">Review agreements</button>' : ""}` : ""}</div></details>` : ""}</section>`);
 }
 function organizerDetail() {
   const ev = state.event;
@@ -373,6 +377,7 @@ function account() {
   );
 }
 async function loadEvents() {
+  experienceStudio.reset();
   commandDeck.reset();
   sigil.reset();
   signals.reset();
@@ -387,15 +392,17 @@ async function loadEvents() {
   await sigil.handleHash();
   await signals.handleHash();
   const requested = new URLSearchParams(location.search);
-  if (!location.hash && requested.get("view") === "command-deck") {
+  if (!location.hash && ["command-deck", "experience-studio"].includes(requested.get("view"))) {
+    const targetView = requested.get("view");
     const eventId = requested.get("event");
     requested.delete("event"); requested.delete("view");
     history.replaceState(null, "", `${location.pathname}${requested.size ? `?${requested}` : ""}`);
-    if (state.events.some(e => e.id === eventId)) { await loadEvent(eventId); await commandDeck.open(); }
+    if (state.events.some(e => e.id === eventId)) { await loadEvent(eventId); if (targetView === "experience-studio") await experienceStudio.open(); else await commandDeck.open(); }
     else toast("That event is not available to this account.");
   }
 }
 async function loadEvent(id) {
+  experienceStudio.reset();
   commandDeck.reset();
   const result = await api(`/api/events/${id}`);
   Object.assign(state, { view: "detail", ...result });
@@ -452,7 +459,8 @@ async function action(button) {
     toast("This device is signed out. Reconnect and sign in before opening private Field desk data.");
     return;
   }
-  if (["command-deck-open", "events", "account", "logout", "open-event", "create", "kit-import", "character-open", "adv-open", "advedit-open", "advedit-starter", "offline-open", "admin-open", "exchange-open", "sharing-open", "story-open", "story-manage", "trace-open", "bazaar-open", "bazaar-manage", "oath-open", "oath-manage", "sigil-open", "sigil-manage", "static-open", "static-manage", "stagehand-open", "stagehand-manage", "field-open"].includes(destination)) {
+  if (["studio-open", "command-deck-open", "events", "account", "logout", "open-event", "create", "kit-import", "character-open", "adv-open", "advedit-open", "advedit-starter", "offline-open", "admin-open", "exchange-open", "sharing-open", "story-open", "story-manage", "trace-open", "bazaar-open", "bazaar-manage", "oath-open", "oath-manage", "sigil-open", "sigil-manage", "static-open", "static-manage", "stagehand-open", "stagehand-manage", "field-open"].includes(destination)) {
+    if (state.view === "experience-studio" && !experienceStudio.confirmDiscard()) return;
     if (state.view === "field" && !field.confirmDiscard()) return;
     if (state.view === "characters" && !characters.confirmDiscard()) return;
     if (state.view === "adventure" && !adventure.confirmDiscard()) return;
@@ -470,11 +478,17 @@ async function action(button) {
     if (state.view === "static" && !destination.startsWith("static-")) signals.reset();
     if (state.view === "stagehand" && !destination.startsWith("stagehand-")) stagehand.reset();
     if (state.view === "command-deck" && !destination.startsWith("command-deck-")) commandDeck.reset();
+    if (state.view === "experience-studio" && !destination.startsWith("studio-")) experienceStudio.reset();
+  }
+  if (state.view === "experience-studio" && destination === "kit-view") {
+    if (!experienceStudio.confirmDiscard()) return;
+    experienceStudio.reset(); state.view="detail";
   }
   if (state.view === "command-deck" && destination === "kit-view") {
     commandDeck.reset();
     state.view = "detail";
   }
+  if (await experienceStudio.action(button)) return;
   if (await commandDeck.action(button)) return;
   if (await install.action(button)) return;
   if (await field.action(button)) return;
@@ -677,7 +691,9 @@ document.addEventListener("click", async (e) => {
     endOperation(interaction, button);
   }
 });
-document.addEventListener("change", (e) => {
+document.addEventListener("input", e => { experienceStudio.input(e.target); });
+document.addEventListener("change", async (e) => {
+  if (await experienceStudio.change(e.target)) return;
   if (commandDeck.change(e.target)) return;
   if (e.target.id === "role") {
     const field = document.querySelector("#maxUses");
@@ -800,7 +816,7 @@ document.addEventListener("submit", async (e) => {
 });
 window.addEventListener("hashchange", async () => {
   try {
-    if (["#prop/", "#exchange/", "#badge/", "#sigil/", "#static/"].some((prefix) => location.hash.startsWith(prefix)) && (!field.confirmDiscard() || !kit.confirmDiscard() || !characters.confirmDiscard() || !adventure.confirmDiscard() || !adventureOrganizer.confirmDiscard() || !sharing.confirmDiscard() || !exchanges.confirmDiscard() || !story.confirmDiscard() || !trace.confirmDiscard() || !economy.confirmDiscard() || !oaths.confirmDiscard() || !sigil.confirmDiscard() || !signals.confirmDiscard() || !stagehand.confirmDiscard())) {
+    if (["#prop/", "#exchange/", "#badge/", "#sigil/", "#static/"].some((prefix) => location.hash.startsWith(prefix)) && (!experienceStudio.confirmDiscard() || !field.confirmDiscard() || !kit.confirmDiscard() || !characters.confirmDiscard() || !adventure.confirmDiscard() || !adventureOrganizer.confirmDiscard() || !sharing.confirmDiscard() || !exchanges.confirmDiscard() || !story.confirmDiscard() || !trace.confirmDiscard() || !economy.confirmDiscard() || !oaths.confirmDiscard() || !sigil.confirmDiscard() || !signals.confirmDiscard() || !stagehand.confirmDiscard())) {
       history.replaceState(null, "", `${location.pathname}${location.search}`);
       return;
     }
@@ -814,12 +830,13 @@ window.addEventListener("hashchange", async () => {
 modal.addEventListener("cancel", (e) => { e.preventDefault(); closeModal(); });
 // Connectivity changes update only the status strip, preserving active forms.
 window.addEventListener("offline", () => {
+  experienceStudio.disconnect();
   commandDeck.disconnect();
   connectionEpoch++; connectionState = "offline"; connectionBanner();
   toast("Connection lost. Your open drafts remain here. Field desk notes are saved on this device.");
 });
 window.addEventListener("online", () => { void checkConnection(); });
-window.addEventListener("focus", () => { if (!state.busy) void commandDeck.refresh(); });
+window.addEventListener("focus", () => { if (!state.busy) { void commandDeck.refresh(); void experienceStudio.refresh(); } });
 async function forgetLocalAccess() {
   authEpoch++; connectionEpoch++;
   interactionEpoch++; state.busy = false;
@@ -887,6 +904,7 @@ async function checkConnection() {
     }
     connectionState = "online"; connectionBanner();
     await commandDeck.refresh();
+    await experienceStudio.refresh();
     toast("Connected. Review pending information requests in the Field desk before sending.");
   } catch (error) {
     if (epoch === connectionEpoch) { connectionState = "offline"; connectionBanner(); }
