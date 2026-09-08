@@ -239,8 +239,8 @@ after(async () => {
 });
 
 test("Batch 1 to Batch 9 migration preserves event identity, lifecycle, membership, invitations and audit", async () => {
-  assert.equal(await migrate(pool), 10);
-  assert.equal(await checkSchema(pool), 10);
+  assert.equal(await migrate(pool), 13);
+  assert.equal(await checkSchema(pool), 13);
   const event = (await pool.query("SELECT * FROM events WHERE id=$1", [legacy.event])).rows[0];
   assert.equal(event.name, "Existing live event");
   assert.equal(event.description, "Original description");
@@ -258,7 +258,7 @@ test("Batch 1 to Batch 9 migration preserves event identity, lifecycle, membersh
   assert.equal(user.is_superuser, true, "An enabled existing superuser must retain their access and password.");
   assert.equal(user.is_disabled, false);
   assert.deepEqual((await pool.query("SELECT * FROM users WHERE id=$1", [legacy.user])).rows[0], legacy.operator, "The entire enabled operator row must survive migration unchanged.");
-  assert.deepEqual((await pool.query("SELECT version FROM schema_migrations ORDER BY version")).rows.map((row) => row.version), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.deepEqual((await pool.query("SELECT version FROM schema_migrations ORDER BY version")).rows.map((row) => row.version), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
   assert.deepEqual((await pool.query("SELECT * FROM schema_migrations WHERE version<=9 ORDER BY version")).rows, legacy.migrations, "All nine deployed migration names, checksums and original application timestamps must be preserved.");
 });
 
