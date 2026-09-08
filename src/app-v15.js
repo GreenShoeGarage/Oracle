@@ -6,8 +6,17 @@ import { digest, readCookie } from './security.js';
 const STATIC={
   '/app.js':['app-v15.js','text/javascript'],
   '/app-v14.js':['app-v14.js','text/javascript'],
+  '/app-v13.js':['app-v13.js','text/javascript'],
+  '/app-core.js':['app.js','text/javascript'],
   '/install.js':['install-v15.js','text/javascript'],
   '/sw.js':['sw-v15.js','text/javascript'],
+  '/connections.html':['connections.html','text/html'],
+  '/connections.js':['connections-ui.js','text/javascript'],
+  '/connections.css':['connections.css','text/css'],
+  '/arcs.html':['arcs.html','text/html'],
+  '/arcs.js':['arcs-ui.js','text/javascript'],
+  '/arcs-store.js':['arcs-store.js','text/javascript'],
+  '/arcs.css':['arcs.css','text/css'],
   '/projects.html':['projects.html','text/html'],
   '/projects.js':['projects-ui.js','text/javascript'],
   '/projects.css':['projects.css','text/css']
