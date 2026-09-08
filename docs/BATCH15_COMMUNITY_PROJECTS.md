@@ -2,6 +2,8 @@
 
 Release target: **v1.5.0** · schema **13**
 
+Implementation status: **candidate on `main`; production promotion remains a separate release gate.**
+
 Community Projects give an event a small set of shared goals with visible milestones and several ways to help. This release is deliberately narrative-first: it does not spend inventory, consume currency, or automatically convert instrument results into progress. Those verified effects remain Batch 16 work.
 
 ## Player experience
