@@ -3,6 +3,8 @@ import { createAppV17 } from './app-v17.js';
 const STATIC={
  '/app.js':['app-v18.js','text/javascript'],
  '/app-v17.js':['app-v17.js','text/javascript'],
+ '/install.js':['install-v18.js','text/javascript'],
+ '/sw.js':['sw-v18.js','text/javascript'],
  '/field-home.html':['field-home.html','text/html'],
  '/field-home.js':['field-home.js','text/javascript'],
  '/field-home.css':['field-home.css','text/css']
