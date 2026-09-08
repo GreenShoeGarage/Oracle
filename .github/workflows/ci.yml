@@ -69,6 +69,12 @@ jobs:
       - run: npm ci
       - name: Verify the deployed staging release and two-player workflow
         run: node scripts/staging-check.js
+      - name: Verify every offline shell asset and Field Home on staging
+        env:
+          SMOKE_ORIGIN: https://oracle-production-488d.up.railway.app
+          EXPECTED_ENVIRONMENT: staging
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: node scripts/shell-smoke.js
   production-smoke:
     if: github.ref == 'refs/heads/production'
     runs-on: ubuntu-latest
@@ -87,3 +93,9 @@ jobs:
           EXPECTED_COMMIT: ${{ github.sha }}
           SMOKE_WAIT_SECONDS: "300"
         run: node scripts/staging-check.js --public-only
+      - name: Verify every offline shell asset and Field Home in production
+        env:
+          SMOKE_ORIGIN: https://oracle.greenshoegarage.com
+          EXPECTED_ENVIRONMENT: production
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: node scripts/shell-smoke.js
