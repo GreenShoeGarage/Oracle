@@ -14,7 +14,7 @@ assert.equal(VERSION, pkg.version, "App/package versions must match.");
 const workerSource = await readFile("public/sw-v17.js", "utf8");
 assert.ok(workerSource.includes(`const VERSION='${VERSION}';`), "The v1.7 cached public shell must match the server version.");
 assert.ok((await readFile("public/install-v17.js", "utf8")).includes(`export const SHELL_VERSION = '${VERSION}';`), "The v1.7 install controller must identify this shell version.");
-for (const asset of ["/landing.css","/display.js","/startup.js","/preparation-model.js","/app.js","/app-v16.js","/app-v15.js","/app-v14.js","/app-v13.js","/app-core.js","/install.js","/connections.html","/connections.js","/connections.css","/arcs.html","/arcs.js","/arcs-store.js","/arcs.css","/projects.html","/projects.js","/projects.css","/project-effects-ui.js"]) {
+for (const asset of ["/landing.css","/display.js","/startup.js","/preparation-model.js","/app.js","/app-v16.js","/app-v15.js","/app-v14.js","/app-v13.js","/app-core.js","/install.js","/connections.html","/connections.js","/connections.css","/arcs.html","/arcs.js","/arcs-store.js","/arcs.css","/projects.html","/projects.js","/projects.css","/project-effects-ui.js","/experiences.html","/experiences.js","/experiences.css"]) {
   assert.ok(workerSource.includes(`'${asset}'`), `${asset} must be included in offline installation.`);
 }
 const html = await readFile("public/index.html", "utf8");
@@ -22,9 +22,18 @@ for (const asset of ["/style.css", "/themes.css", "/characters.css", "/adventure
   assert.ok(html.includes(asset));
   await readFile(`public${asset}`);
 }
-for (const file of ["public/projects.html","public/projects-ui.js","public/projects.css","public/project-effects-ui.js","public/app-v16.js","public/sw-v17.js","public/install-v17.js","src/projects-app.js","src/project-effects-app.js","src/project-starters.js","src/app-v16.js","migrations/013_community_projects.sql","migrations/014_project_effects.sql","migrations/015_starter_experiences.sql","src/app-v17.js","src/experiences-app.js","src/experience-starters.js","public/experiences.html","public/experiences-ui.js","public/experiences.css","public/starter-experiences.html","migrations/015_starter_experiences.sql","src/app-v17.js","src/experiences-app.js","src/experience-starters.js","public/experiences.html","public/experiences-ui.js","public/experiences.css","migrations/015_starter_experiences.sql","src/app-v17.js","src/experiences-app.js","src/experience-starters.js","public/experiences.html","public/experiences-ui.js","public/experiences.css"]) await readFile(file);
-const migration = await readFile("migrations/014_project_effects.sql","migrations/015_starter_experiences.sql","src/app-v17.js","src/experiences-app.js","src/experience-starters.js","public/experiences.html","public/experiences-ui.js","public/experiences.css","migrations/015_starter_experiences.sql","src/app-v17.js","src/experiences-app.js","src/experience-starters.js","public/experiences.html","public/experiences-ui.js","public/experiences.css","migrations/015_starter_experiences.sql","src/app-v17.js","src/experiences-app.js","src/experience-starters.js","public/experiences.html","public/experiences-ui.js","public/experiences.css", "utf8");
-for (const marker of ["project_donation","project_refund","community_project_consequences","community_project_effects","community_project_refunds"]) assert.ok(migration.includes(marker), `Batch 16 migration must include ${marker}.`);
+for (const file of [
+  "public/projects.html","public/projects-ui.js","public/projects.css","public/project-effects-ui.js","public/app-v16.js",
+  "public/experiences.html","public/experiences-ui.js","public/experiences.css","public/starter-experiences.html","public/app-v17.js",
+  "public/sw-v17.js","public/install-v17.js",
+  "src/projects-app.js","src/project-effects-app.js","src/project-starters.js","src/app-v16.js",
+  "src/app-v17.js","src/experiences-app.js","src/experience-starters.js",
+  "migrations/013_community_projects.sql","migrations/014_project_effects.sql","migrations/015_starter_experiences.sql"
+]) await readFile(file);
+const projectMigration = await readFile("migrations/014_project_effects.sql", "utf8");
+for (const marker of ["project_donation","project_refund","community_project_consequences","community_project_effects","community_project_refunds"]) assert.ok(projectMigration.includes(marker), `Batch 16 migration must include ${marker}.`);
+const experienceMigration = await readFile("migrations/015_starter_experiences.sql", "utf8");
+for (const marker of ["starter_experience_installs","starter_key","starter_version","snapshot"]) assert.ok(experienceMigration.includes(marker), `Batch 17 migration must include ${marker}.`);
 const manifest = JSON.parse(await readFile("public/manifest.webmanifest", "utf8"));
 assert.match(manifest.name, /ORACLE/);
 assert.equal(manifest.start_url, "/");
