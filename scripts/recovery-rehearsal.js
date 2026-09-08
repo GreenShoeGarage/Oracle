@@ -334,6 +334,13 @@ try {
     ["stagehand_requests", "event_id,actor_user_id,request_id"],
     ["stagehand_history", "id"],
     ["stagehand_announcements", "event_id,story_entry_id"],
+    ["community_projects", "id"],
+    ["community_project_milestones", "id"],
+    ["community_project_contributions", "id"],
+    ["community_project_receipts", "id"],
+    ["community_project_consequences", "id"],
+    ["community_project_effects", "id"],
+    ["community_project_refunds", "id"],
     ["schema_migrations", "version"],
   ]) {
     const a = (await source.query(`SELECT * FROM ${table} ORDER BY ${order}`))
