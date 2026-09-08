@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createAppV13 } from "./app-v13.js";
+import { createAppV14 } from "./app-v14.js";
 import { createPool, checkSchema } from "./db.js";
 import { readConfig, VERSION } from "./config.js";
 
@@ -13,7 +13,7 @@ try {
     const { rows } = await pool.query("SELECT is_superuser,is_disabled FROM users WHERE email=$1", [config.bootstrapSuperuserEmail]);
     console.log(JSON.stringify({ event: "superuser_status", accountExists: Boolean(rows[0]), enabled: rows[0]?.is_superuser === true && rows[0]?.is_disabled === false }));
   }
-  const server = createServer({ requestTimeout: 30000, headersTimeout: 10000, maxHeaderSize: 16384 }, createAppV13({ pool, config, logger: (entry) => console.log(JSON.stringify(entry)) }));
+  const server = createServer({ requestTimeout: 30000, headersTimeout: 10000, maxHeaderSize: 16384 }, createAppV14({ pool, config, logger: (entry) => console.log(JSON.stringify(entry)) }));
   server.listen(config.port, "0.0.0.0", () => console.log(JSON.stringify({ event: "server_ready", version: VERSION, environment: config.appEnv, port: config.port })));
   const cleanup = setInterval(() => pool.query("DELETE FROM sessions WHERE expires_at<now()").then(() => pool.query("DELETE FROM rate_limits WHERE expires_at<now()")).catch((error) => console.error(JSON.stringify({ event: "cleanup_failed", code: error.code || "DATABASE_ERROR" }))), 3600000);
   cleanup.unref();
