@@ -14,6 +14,7 @@ import { createOathHandler } from "./oaths.js";
 import { createSigilHandler, syncSigilEventState } from "./sigil.js";
 import { createStaticHandler } from "./static.js";
 import { createStagehandHandler } from "./stagehand.js";
+import { createCommandDeckHandler } from "./command-deck.js";
 import { syncStagehandEventState } from "./stagehand-core.js";
 import { checkSchema, transaction } from "./db.js";
 import {
@@ -196,6 +197,7 @@ export function createApp({
   const sigilHandler = createSigilHandler({ pool, config, helpers });
   const staticHandler = createStaticHandler({ pool, config, helpers });
   const stagehandHandler = createStagehandHandler({ pool, helpers });
+  const commandDeckHandler = createCommandDeckHandler({ pool, helpers });
   return async function handle(req, res) {
     const requestId = randomUUID();
     res.setHeader("X-Request-Id", requestId);
@@ -441,6 +443,7 @@ export function createApp({
       if (await sigilHandler({ req, res, path, url, method, user })) return;
       if (await staticHandler({ req, res, path, url, method, user })) return;
       if (await stagehandHandler({ req, res, path, url, method, user })) return;
+      if (await commandDeckHandler({ req, res, path, url, method, user })) return;
       if (path === "/api/catalog" && method === "GET")
         return send(res, 200, { themes: THEMES, templates: TEMPLATES, instruments: INSTRUMENTS });
       if (path === "/api/auth/logout" && method === "POST") {

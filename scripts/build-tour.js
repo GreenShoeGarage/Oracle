@@ -6,9 +6,10 @@ import { THEMES } from '../public/kit.js';
 import { examples as adventureExamples } from './tour/adventure-examples.mjs';
 import { examples as socialExamples } from './tour/social-examples.mjs';
 import { examples as fieldExamples } from './tour/field-examples.mjs';
+import { examples as commandDeckExamples } from './tour/command-deck-example.mjs';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-const screens = [...await adventureExamples(), ...await socialExamples(), ...await fieldExamples()];
+const screens = [...await adventureExamples(), ...await socialExamples(), ...await fieldExamples(), ...await commandDeckExamples()];
 const ids = new Set();
 for (const screen of screens) {
   if (!/^[a-z][a-z0-9-]+$/.test(screen.id) || ids.has(screen.id)) throw new Error('Invalid or duplicate example ID');
@@ -35,7 +36,7 @@ for (const screen of screens) {
   screen.html = fixture.innerHTML;
   dom.window.close();
 }
-const styles = ['style','themes','characters','adventure','adventure-organizer','exchanges','sharing','story','trace','economy','oath','sigil','static','stagehand','props','field','guide','tour-examples'];
+const styles = ['style','themes','characters','adventure','adventure-organizer','exchanges','sharing','story','trace','economy','oath','sigil','static','stagehand','props','field','guide','command-deck','tour-examples'];
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,follow"><meta name="theme-color" content="#0d1211">

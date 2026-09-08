@@ -1,3 +1,25 @@
+# ORACLE development roadmap — current sequence
+
+Updated September 8, 2026. Production: **v1.8.0 / Batch 18**. Current candidate: **v1.9.0 / Batch 19**, not deployed. Earlier software through Batch 18 has shipped; outstanding human/device/operations acceptance is not marked complete by shipping software.
+
+| Batch | Release | Focus | State |
+| --- | --- | --- | --- |
+| 13–17 | v1.3–v1.7 | Connection cards, private arcs, community projects, verified contributions, complete themed starter experiences | Deployed |
+| 18 | v1.8 | Player Field Home and offline shell integrity | Deployed |
+| 19 | v1.9 | Organizer Command Deck and read-only needs-attention queues | Current candidate; see BATCH19_COMMAND_DECK.md |
+| 20 | v2.0 | Field-proven maturity gate: real device/newcomer/organizer observations; live backups, rollback and sustained capacity | Planned; depends on actual evidence |
+| 21 | v2.1 | Expand small starter experiences based on field findings | Proposed |
+| 22 | v2.2 | Organizer experience authoring and dependency validation | Proposed |
+| 23 | v2.3 | Explicitly versioned reusable experience packs | Proposed |
+
+Versions express sequence, not dates. Do not introduce player engagement scores, generic automation, or mandatory progression rewards. Preserve the original promise: someone to approach, a personal reason to care, and something meaningful to accomplish together.
+
+## Historical foundation roadmap
+
+The following dated implementation history is retained for its evidence and open dependencies. Its older "current release" descriptions are historical; use STATUS.md and deployment receipts for present status.
+
+---
+
 # ORACLE
 
 *LARP Field Kit*

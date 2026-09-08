@@ -1,3 +1,19 @@
+# ORACLE v1.9.0 — Batch 19 candidate
+
+Recorded September 8, 2026.
+
+Batch 19 implements the Organizer Command Deck; **v1.9.0 is not yet deployed**. The production baseline is **v1.8.0 / Batch 18**, schema 15, release `dfdb7624786ded20d946c335453bb7749e213434`. That production release passed the exact staging gameplay journey and all-shell verification, followed by Railway production and public/all-shell checks (GitHub runs 34225320737 and 34226085077).
+
+The candidate retains schema 15 and existing stored formats. It adds a read-only organizer operational projection, integrated navigation, original-workflow review links, bounded queue/progress summaries, and a v1.9 immutable public shell. Private arc/reflection/connection-choice data is not included and organizer queues are not persisted offline. See [Batch 19](BATCH19_COMMAND_DECK.md) for boundaries and verification coverage. CI results belong to their exact commit; this source record does not substitute for a completed run or a deployment receipt.
+
+Physical-device and human acceptance, scheduled live backups, sustained Railway capacity, and the application rollback rehearsal remain open. An isolated load/recovery test does not close those operational gates. No new gameplay subsystem is included.
+
+## Historical records
+
+The dated records below describe the state at their original writing, not the current production version.
+
+---
+
 # ORACLE v1.7.0 — Batch 17 candidate
 
 Recorded September 8, 2026.
