@@ -1,6 +1,6 @@
 import { registerOfflineShell } from './offline.js';
 
-export const SHELL_VERSION = '1.2.0';
+export const SHELL_VERSION = '1.4.0';
 
 /** Public install/update controls. They never reload another tab or transmit game actions. */
 export function createInstallUI({ getDirty = () => false, confirmDiscard = () => true, onChange = () => {}, toast = () => {} } = {}) {
@@ -115,7 +115,6 @@ export function createInstallUI({ getDirty = () => false, confirmDiscard = () =>
     const scrollTop = target.querySelector('.install-options')?.scrollTop || 0;
     target.innerHTML = render();
     if (restoreFocus) {
-      // Keep keyboard position when a button's label changes or instructions close.
       const replacementAction = actionName === 'install-help' && helpOpen ? 'install-close-help' : actionName === 'install-close-help' && !helpOpen ? 'install-help' : actionName;
       const button = [...target.querySelectorAll('button[data-action]')].find(item => item.dataset.action === replacementAction && !item.disabled);
       (button || target.querySelector('summary'))?.focus({ preventScroll: true });
