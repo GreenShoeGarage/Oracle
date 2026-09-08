@@ -1,0 +1,23 @@
+/* Uses the active world and Outdoor reading tokens; no translucent controls. */
+.command-deck{max-width:1280px;margin:0 auto;padding-bottom:calc(1rem + env(safe-area-inset-bottom));overflow-wrap:anywhere}
+.deck-heading{align-items:flex-start;gap:1rem;flex-wrap:wrap}
+.deck-status{display:flex;align-items:center;flex-wrap:wrap;gap:1rem;margin:1rem 0}
+.deck-status p{margin:0}.command-deck button,.command-deck select{min-height:48px}
+.command-deck label{display:block}.command-deck select{margin-top:.35rem;background:var(--panel);color:var(--text);max-width:100%}
+.deck-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem;margin:1rem 0}
+.deck-metrics article{padding:1rem;border:1px solid var(--muted);border-radius:.6rem;background:var(--panel)}
+.deck-metrics h2{font:600 .95rem/1.4 system-ui,sans-serif;margin:0 0 .3rem}.deck-metrics strong{font-size:2rem;line-height:1.3}.deck-metrics p{margin:.25rem 0 0}
+.deck-attention{border:2px solid var(--accent)}.deck-attention>.panel-head{align-items:start;flex-wrap:wrap;gap:1rem}
+.deck-attention h2{margin:0}.deck-queue{margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--muted)}
+.deck-queue .panel-head{gap:.75rem;flex-wrap:wrap}.deck-queue h3{margin:0;font-size:1.1rem}
+.deck-items{list-style:none;margin:1rem 0 0;padding:0;display:grid;gap:.7rem}
+.deck-items li{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.8rem;border:1px solid var(--line);border-radius:.4rem;background:var(--panel)}
+.deck-items li>div{min-width:0}.deck-items p{margin:.25rem 0}.deck-items button{flex-shrink:0}
+.deck-overviews{display:grid;gap:1rem;margin-top:1rem}.deck-detail summary{font-size:1.15rem}
+.deck-project,.deck-scenes article{padding:1rem 0;border-bottom:1px solid var(--line)}.deck-project:last-child{border-bottom:0}
+.deck-milestone{margin:.8rem 0}.deck-milestone label{font-weight:500}.deck-milestone progress{width:100%;height:1rem;accent-color:var(--accent)}
+.deck-empty{padding:1.2rem}.deck-empty h3{margin:.5rem 0}.deck-detail .actions{margin-top:1rem}
+@media(max-width:720px){.deck-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.deck-items li{align-items:stretch;flex-direction:column}.deck-heading .actions{width:100%}.deck-heading button{flex:1}.deck-attention>.panel-head>label{width:100%}}
+@media(max-width:380px){.deck-metrics{grid-template-columns:minmax(0,1fr)}}
+@media(forced-colors:active){.deck-metrics article,.deck-items li,.deck-attention{border-color:CanvasText}.deck-status .badge{color:CanvasText}.deck-milestone progress{forced-color-adjust:auto}}
+@media(prefers-reduced-motion:reduce){.command-deck *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}

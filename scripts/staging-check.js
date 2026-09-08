@@ -1203,6 +1203,10 @@ if (publicOnly) {
         assert.equal(character.status, "approved", "Prewritten starter characters must be ready to assign and play.");
         assert.equal(character.userId, null, "Starter characters must not inherit another event's ownership.");
       }
+      const initialDeck = await request(owner, `/api/events/${event.id}/command-deck`);
+      assert.equal(initialDeck.event.id,event.id);
+      assert.equal(initialDeck.counts.unassigned,2,"The deck must show the two unassigned starter characters.");
+      await request(player, `/api/events/${event.id}/command-deck`, { status:403 });
       const assigned = [];
       for (const [index, account] of [owner, player].entries()) {
         const { character } = await request(owner, `/api/events/${event.id}/characters/${characters[index].id}/assign`, {
@@ -1210,6 +1214,10 @@ if (publicOnly) {
         });
         assigned.push({ account, character });
       }
+      const assignedDeck = await request(owner, `/api/events/${event.id}/command-deck`);
+      assert.equal(assignedDeck.counts.unassigned,0,"Assignment through the original workflow must update the deck.");
+      assert.ok(!JSON.stringify(assignedDeck).includes(secretMarker),"Deck summaries must not include unrelated organizer content.");
+      pass(`${theme} Command Deck: authorized current snapshot, player denial, and assignment queue reconciliation`);
       let manage = await request(owner, `${base}/manage`);
       const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
       const operationsNode = { ...defaultAdventureNode("wayfinder", "staging-dispatch-scene", [...randomBytes(20)].map((byte) => alphabet[byte % alphabet.length]).join("")), title: `Staging ${theme} dispatch scene`, location: "Disposable rehearsal gathering point", maxPlayers: 2 };

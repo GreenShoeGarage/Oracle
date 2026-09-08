@@ -2,7 +2,7 @@
 
 Planning revision 1.0 · September 7, 2026 · Proposed Batches 13–17
 
-Status: Batches 13–17 are implemented on `main`; production is deployed through Batch 16 / v1.6.0. Batch 17 / v1.7.0 is the current candidate and is not yet deployed. Version targets describe delivery order, not calendar commitments.
+Status: Batches 13–18 are implemented and deployed through v1.8.0. Batch 19 / v1.9.0 is the current Organizer Command Deck candidate, not deployed. See [the current roadmap](ROADMAP.md) and [Batch 19](BATCH19_COMMAND_DECK.md). Human/device acceptance remains distinct from software delivery. Version targets describe delivery order, not calendar commitments.
 
 The player outcome is simple: someone to approach, a personal reason to care, and something meaningful to accomplish together. Keep these features in the existing character, event, and Field desk screens. Each is optional, and existing events retain their current behavior until an organizer enables or installs the relevant feature.
 
