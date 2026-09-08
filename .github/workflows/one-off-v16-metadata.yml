@@ -1,0 +1,29 @@
+name: One-off v16 metadata maintenance
+on:
+  push:
+    branches:
+      - main
+permissions:
+  contents: write
+jobs:
+  update-v16-metadata:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Update schema and lock metadata
+        run: |
+          sed -i '0,/"version": "1.2.0"/s//"version": "1.6.0"/' package-lock.json
+          sed -i '0,/"version": "1.2.0"/s//"version": "1.6.0"/' package-lock.json
+          sed -i 's/migrate(pool), 13/migrate(pool), 14/g; s/checkSchema(pool), 13/checkSchema(pool), 14/g; s/migrate(isolated.pool), 13/migrate(isolated.pool), 14/g' test/foundation.test.js test/batch2.test.js
+          sed -i 's/migrate(restored), 13/migrate(restored), 14/g; s/schema 13/schema 14/g' scripts/recovery-rehearsal.js
+          git diff --check
+      - name: Commit metadata update
+        run: |
+          git config user.name 'ORACLE maintenance bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add package-lock.json test/foundation.test.js test/batch2.test.js scripts/recovery-rehearsal.js
+          git commit -m 'Advance ORACLE release gates to schema 14'
+          git push origin HEAD:main
