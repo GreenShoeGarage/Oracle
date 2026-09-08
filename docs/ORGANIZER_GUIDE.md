@@ -1,3 +1,7 @@
+## Experience Studio (v2.3)
+
+In Organizer view, open **Experience Studio** from the sidebar or event overview. Choose a matching scenario, edit six authoring steps, save a draft, preview dependencies, and confirm installation. Imported JSON only opens a preview. Required instrument activation and additive new-version installation require explicit choices. Projects remain drafts; assign cards/characters and open projects through the existing tools. **Packs & versions** exports authored organizer fiction, not player data or a full event backup. **Print player prompts** excludes organizer-only endings and puzzle material. **Field checks** records self-reported observations and must not be interpreted as automatic acceptance. Full scope: [Batches 20–23](BATCH20_23_EXPERIENCE_STUDIO.md).
+
 # Organizer Command Deck (v1.9 candidate)
 
 From an event in Organizer view, select **Command Deck**. Filter Needs attention, then choose Review to open the original character, project, bulletin, or scene workflow. Expand Community projects, Scenes and capacity, or Upcoming scenes for context. Refresh after decisions. Joined-player counts are memberships, not attendance. Ordinary staff retain their existing assigned tools. The deck is connected-only; disconnecting clears its private report rather than displaying stale operational data.

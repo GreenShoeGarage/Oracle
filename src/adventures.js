@@ -1,3 +1,4 @@
+import { copyEngagementDefinitions, resetEngagementPlay } from './engagement-lifecycle.js';
 import { randomUUID, randomInt, createHash } from "node:crypto";
 import { defaultAdventure, validateAdventure, ADVENTURE_CODE } from "../public/adventure-model.js";
 import { characterRecord, characterText, characterInteger, validateCharacterProfile, defaultCharacterProfile } from "../public/characters-model.js";
@@ -204,6 +205,7 @@ export function createAdventureHandler({ pool, config, helpers }) {
         await copySigil(db, event.id, copied.id, user.id);
         await copyStatic(db, event.id, copied.id, user.id);
         await copyStagehand(db, event.id, copied.id, user.id);
+        await copyEngagementDefinitions(db, event.id, copied.id, user.id, characterMap);
         await captureEconomyBaseline(db, copied.id);
         const oldSettings = (await db.query("SELECT * FROM event_character_settings WHERE event_id=$1", [event.id])).rows[0];
         if (oldSettings) await db.query("INSERT INTO event_character_settings(event_id,allow_player_creation,require_approval,max_per_player,public_fields) VALUES($1,$2,$3,$4,$5)", [copied.id, oldSettings.allow_player_creation, oldSettings.require_approval, oldSettings.max_per_player, JSON.stringify(oldSettings.public_fields)]);
@@ -215,6 +217,7 @@ export function createAdventureHandler({ pool, config, helpers }) {
         if (!record.is_rehearsal || event.status !== "rehearsal" || input.confirm !== true) fail(409, "Only a dedicated rehearsal copy in rehearsal mode can be reset with confirmation.");
         // Remove exchange provenance before the readings it references. These
         // tables belong only to this rehearsal; the source event is untouched.
+        await resetEngagementPlay(db, eventId);
         await resetStory(db, eventId);
         await resetOaths(db, eventId);
         await resetSigil(db, eventId);

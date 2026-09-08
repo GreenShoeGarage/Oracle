@@ -1,16 +1,17 @@
 # ORACLE development roadmap — current sequence
 
-Updated September 8, 2026. Production: **v1.8.0 / Batch 18**. Current candidate: **v1.9.0 / Batch 19**, not deployed. Earlier software through Batch 18 has shipped; outstanding human/device/operations acceptance is not marked complete by shipping software.
+Updated September 8, 2026. v2.3.0 is the software delivery target for Batches 20–23 plus the already-verified Batch 19. Deployment requires exact release receipts; see STATUS.md. **The field-proven milestone remains open even when the software is deployed.**
 
-| Batch | Release | Focus | State |
+| Batch | Target | Focus | Software / acceptance state |
 | --- | --- | --- | --- |
-| 13–17 | v1.3–v1.7 | Connection cards, private arcs, community projects, verified contributions, complete themed starter experiences | Deployed |
-| 18 | v1.8 | Player Field Home and offline shell integrity | Deployed |
-| 19 | v1.9 | Organizer Command Deck and read-only needs-attention queues | Current candidate; see BATCH19_COMMAND_DECK.md |
-| 20 | v2.0 | Field-proven maturity gate: real device/newcomer/organizer observations; live backups, rollback and sustained capacity | Planned; depends on actual evidence |
-| 21 | v2.1 | Expand small starter experiences based on field findings | Proposed |
-| 22 | v2.2 | Organizer experience authoring and dependency validation | Proposed |
-| 23 | v2.3 | Explicitly versioned reusable experience packs | Proposed |
+| 13–18 | v1.3–v1.8 | Engagement mechanics, starters, Field Home | Previously deployed |
+| 19 | v1.9 | Organizer Command Deck | Verified and included in v2.3 |
+| 20 | v2.0 | Field-proven maturity gate | Evidence tooling and software fixes implemented; real-world/operations acceptance OPEN |
+| 21 | v2.1 | Fifteen small themed scenarios | Implemented; size/duration remain unvalidated design targets |
+| 22 | v2.2 | Six-step Experience Studio and dependency checks | Implemented |
+| 23 | v2.3 | Author-only reusable packs and safe additive versions | Implemented; format-1 scope/limits documented |
+
+The user authorized the later software delivery while preserving the open field acceptance distinction. See [Batches 20–23](BATCH20_23_EXPERIENCE_STUDIO.md). No claim of a completed physical pilot is made.
 
 Versions express sequence, not dates. Do not introduce player engagement scores, generic automation, or mandatory progression rewards. Preserve the original promise: someone to approach, a personal reason to care, and something meaningful to accomplish together.
 

@@ -1,6 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { createPool } from "../src/db.js";
-export async function testDatabase() {
+export async function testDatabase({ snapshot } = {}) {
   if (process.env.TEST_DATABASE_URL) {
     const pool = createPool({
       databaseUrl: process.env.TEST_DATABASE_URL,
@@ -17,7 +17,7 @@ export async function testDatabase() {
   }
   // PGlite runs PostgreSQL in WebAssembly. It has a single connection; CI also
   // runs these tests on real PostgreSQL connections to verify row-lock races.
-  const pg = new PGlite();
+  const pg = new PGlite(snapshot ? { loadDataDir: snapshot } : {});
   let tail = Promise.resolve();
   const acquire = async () => {
     let release;
@@ -50,6 +50,7 @@ export async function testDatabase() {
     pool,
     kind: "PGlite PostgreSQL (single connection)",
     pg,
+    snapshot: async () => { const release = await acquire(); try { return await pg.dumpDataDir(); } finally { release(); } },
     close: () => pg.close(),
   };
 }
