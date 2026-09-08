@@ -1,0 +1,32 @@
+import { createApp } from './app.js';
+import { createConnectionsHandler } from './connections-app.js';
+import { digest, readCookie } from './security.js';
+
+export function createAppV13({ pool, config, logger }) {
+  const delegate = createApp({ pool, config, logger });
+  const connections = createConnectionsHandler({ pool, config });
+  return async function handle(req, res) {
+    const url = new URL(req.url, config.origin);
+    if (!/^\/api\/events\/[0-9a-f-]{36}\/connections(?:\/|$)/i.test(url.pathname)) return delegate(req, res);
+    if (!['GET','HEAD'].includes(req.method) && req.headers.origin !== config.origin) {
+      res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ error: 'This request must come from the ORACLE application.' }));
+    }
+    const token = readCookie(req, config.cookieName);
+    const user = token ? (await pool.query("SELECT u.id,u.is_superuser FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND NOT u.is_disabled", [digest(token)])).rows[0] : null;
+    if (!user) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ error: 'Sign in to continue.' }));
+    }
+    res.setHeader('X-ORACLE-Account', user.id);
+    try {
+      if (await connections({ req, res, path: url.pathname, url, method: req.method, user })) return;
+      return delegate(req, res);
+    } catch (error) {
+      const status = Number.isInteger(error.status) ? error.status : 500;
+      if (status === 500) logger?.({ event: 'connection_request_failed', code: error.code || 'INTERNAL_ERROR' });
+      res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ error: status === 500 ? 'Unable to complete the connection-card request.' : error.message }));
+    }
+  };
+}
