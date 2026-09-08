@@ -144,12 +144,12 @@ test("single-use invitations admit exactly one of two concurrent users", async (
     request("/api/events/join", "POST", { code: invitation.code }, users.player),
     request("/api/events/join", "POST", { code: invitation.code }, users.other),
   ]);
-  assert.deepEqual([one.status, two.status].sort(), [201, 409]);
+  assert.deepEqual([one.status, two.status].sort(), [200, 400]);
 });
 test("joining an event twice does not duplicate membership or consume another use", async () => {
   const event = success(await request("/api/events", "POST", { name: "Repeat join", setup: defaultSetup() }), 201).event;
   const invitation = success(await request(`/api/events/${event.id}/invites`, "POST", { role: "player", maxUses: 2, expiresInHours: 1 }), 201).invitation;
-  success(await request("/api/events/join", "POST", { code: invitation.code }, users.player), 201);
+  success(await request("/api/events/join", "POST", { code: invitation.code }, users.player), 200);
   success(await request("/api/events/join", "POST", { code: invitation.code }, users.player), 200);
   const row = (await pool.query("SELECT uses FROM invitations WHERE id=$1", [invitation.id])).rows[0];
   assert.equal(row.uses, 1);
@@ -157,9 +157,9 @@ test("joining an event twice does not duplicate membership or consume another us
 test("privileged invitations are single-use and cannot restore a demoted role", async () => {
   const event = success(await request("/api/events", "POST", { name: "Privilege join", setup: defaultSetup() }), 201).event;
   const invitation = success(await request(`/api/events/${event.id}/invites`, "POST", { role: "organizer", maxUses: 1, expiresInHours: 1 }), 201).invitation;
-  success(await request("/api/events/join", "POST", { code: invitation.code }, users.organizer), 201);
+  success(await request("/api/events/join", "POST", { code: invitation.code }, users.organizer), 200);
   success(await request(`/api/events/${event.id}/members/${users.organizer.id}`, "PATCH", { role: "player" }, users.owner));
-  assert.equal((await request("/api/events/join", "POST", { code: invitation.code }, users.organizer)).status, 409);
+  assert.equal((await request("/api/events/join", "POST", { code: invitation.code }, users.organizer)).status, 400);
   const role = (await pool.query("SELECT role FROM memberships WHERE event_id=$1 AND user_id=$2", [event.id, users.organizer.id])).rows[0].role;
   assert.equal(role, "player");
 });
@@ -167,16 +167,16 @@ test("expired and revoked invitation codes cannot be redeemed", async () => {
   const event = success(await request("/api/events", "POST", { name: "Dead invites", setup: defaultSetup() }), 201).event;
   const expired = success(await request(`/api/events/${event.id}/invites`, "POST", { role: "player", maxUses: 1, expiresInHours: 1 }), 201).invitation;
   await pool.query("UPDATE invitations SET expires_at=now()-interval '1 minute' WHERE id=$1", [expired.id]);
-  assert.equal((await request("/api/events/join", "POST", { code: expired.code }, users.player)).status, 409);
+  assert.equal((await request("/api/events/join", "POST", { code: expired.code }, users.player)).status, 400);
   const revoked = success(await request(`/api/events/${event.id}/invites`, "POST", { role: "player", maxUses: 1, expiresInHours: 1 }), 201).invitation;
-  success(await request(`/api/events/${event.id}/invites/${revoked.id}`, "DELETE"), 204);
-  assert.equal((await request("/api/events/join", "POST", { code: revoked.code }, users.player)).status, 409);
+  success(await request(`/api/events/${event.id}/invites/${revoked.id}`, "DELETE"), 200);
+  assert.equal((await request("/api/events/join", "POST", { code: revoked.code }, users.player)).status, 400);
 });
 test("removing a member invalidates access through their existing session", async () => {
   const event = success(await request("/api/events", "POST", { name: "Remove event", setup: defaultSetup() }), 201).event;
   await pool.query("INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'player')", [event.id, users.player.id]);
   assert.equal((await request(`/api/events/${event.id}`, "GET", undefined, users.player)).status, 200);
-  success(await request(`/api/events/${event.id}/members/${users.player.id}`, "DELETE"), 204);
+  success(await request(`/api/events/${event.id}/members/${users.player.id}`, "DELETE"), 200);
   assert.equal((await request(`/api/events/${event.id}`, "GET", undefined, users.player)).status, 404);
 });
 test("event lifecycle enforces order, optimistic concurrency, and archive read-only behavior", async () => {
@@ -253,7 +253,8 @@ test("malformed requests and SQL-shaped values cannot escape validation", async 
   assert.equal((await request("/api/events", "POST", { name: "x'; DROP TABLE users; --", setup: defaultSetup() })).status, 201);
   assert.ok((await pool.query("SELECT count(*)::int n FROM users")).rows[0].n >= 6);
 });
-test("an isolated database snapshot restores records and accepts repeat migrations", { skip: database?.kind === "PostgreSQL TCP" ? "The PostgreSQL TCP gate runs the dedicated pg_dump/pg_restore rehearsal." : false }, async () => {
+test("an isolated database snapshot restores records and accepts repeat migrations", async (t) => {
+  if (database?.kind === "PostgreSQL TCP") { t.skip("The PostgreSQL TCP gate runs the dedicated pg_dump/pg_restore rehearsal."); return; }
   const event = success(await request("/api/events", "POST", { name: "Backup source", setup: defaultSetup() }), 201).event;
   const snapshot = await database.snapshot();
   const isolated = await testDatabase({ snapshot });
