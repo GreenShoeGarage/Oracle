@@ -1,0 +1,85 @@
+name: Apply Batch 19 verified implementation
+on:
+  push:
+    branches: [feature/batch19-command-deck]
+    paths: [.github/workflows/batch19-apply.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate and apply the tested source manifest
+        run: |
+          python - <<'PY'
+          import base64, hashlib, json, shutil, zlib
+          from pathlib import Path
+          encoded=''.join(Path(f'.github/batch19/part-{i:02d}.txt').read_text() for i in range(1,6))
+          assert len(encoded)==34176, 'Transport length mismatch'
+          decoder=zlib.decompressobj()
+          raw=decoder.decompress(base64.b64decode(encoded,validate=True),1_000_000)
+          assert decoder.eof and not decoder.unused_data and not decoder.unconsumed_tail
+          assert len(raw)==82112
+          assert hashlib.sha256(raw).hexdigest()=='159bb7f5c4dcc0aef4eb3d918a01ded0b820cfb6c1a35b2b4e7026bf25cf4f51', 'Source checksum mismatch'
+          rows=json.loads(raw)
+          assert len(rows)==34 and len({r['path'] for r in rows})==34
+          pending=[]
+          for row in rows:
+              p=Path(row['path'])
+              assert not p.is_absolute() and '..' not in p.parts and not p.is_symlink()
+              assert p.parts[0] in {'src','public','scripts','test','docs'} or str(p) in {'README.md','package.json','package-lock.json','.github/workflows/batch19-workspace.yml'}
+              if row['sha256'] is None:
+                  assert not p.exists(), f'New file already exists: {p}'
+                  result=row['content']
+              else:
+                  old=p.read_text(encoding='utf-8')
+                  assert hashlib.sha256(old.encode()).hexdigest()==row['sha256'], f'Base changed: {p}'
+                  if row.get('delete'):
+                      assert str(p)=='.github/workflows/batch19-workspace.yml'
+                      result=None
+                  else:
+                      result=old
+                      end=len(old)
+                      for start,stop,text in reversed(row['edits']):
+                          assert 0<=start<=stop<=end
+                          result=result[:start]+text+result[stop:]
+                          end=start
+              pending.append((p,result))
+          for p,result in pending:
+              if result is None: p.unlink()
+              else:
+                  p.parent.mkdir(parents=True,exist_ok=True)
+                  p.write_text(result,encoding='utf-8')
+          sw=Path('public/sw-v18.js').read_text()
+          sw=sw.replace("const VERSION='1.8.0';","const VERSION='1.9.0';",1)
+          sw=sw.replace("'/', '/app.js','/app-v17.js'","'/', '/app.js','/app-v18.js','/app-v17.js'",1)
+          sw=sw.replace("'/field-home.html','/field-home.js','/field-home.css',","'/field-home.html','/field-home.js','/field-home.css','/command-deck-ui.js','/command-deck.css',",1)
+          Path('public/sw-v19.js').write_text(sw)
+          install=Path('public/install-v18.js').read_text().replace("export const SHELL_VERSION = '1.8.0';","export const SHELL_VERSION = '1.9.0';",1)
+          Path('public/install-v19.js').write_text(install)
+          shutil.rmtree('.github/batch19')
+          Path('.github/workflows/batch19-apply.yml').unlink()
+          print('Applied 34 checksum-verified source changes; removed temporary transport.')
+          PY
+      - run: npm ci --ignore-scripts
+      - name: Generate inert public examples and validate the release
+        env:
+          TZ: UTC
+        run: |
+          npm run tour:build
+          npm run check
+          git diff --check
+      - name: Commit clean candidate without touching staging or production
+        run: |
+          git config user.name 'ORACLE maintenance bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'Implement ORACLE v1.9 Organizer Command Deck'
+          git push origin HEAD:feature/batch19-command-deck
