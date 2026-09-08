@@ -10,7 +10,8 @@ const STATIC={
  '/sw.js':['sw-v17.js','text/javascript'],
  '/experiences.html':['experiences.html','text/html'],
  '/experiences.js':['experiences-ui.js','text/javascript'],
- '/experiences.css':['experiences.css','text/css']
+ '/experiences.css':['experiences.css','text/css'],
+ '/starter-experiences.html':['starter-experiences.html','text/html']
 };
 export function createAppV17({pool,config,logger}){
  const delegate=createAppV16({pool,config,logger}),experiences=createExperiencesHandler({pool});
