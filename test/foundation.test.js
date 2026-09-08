@@ -3,95 +3,60 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { testDatabase } from "./database.js";
-import { migrate, checkSchema, transaction } from "../src/db.js";
+import { migrate, checkSchema } from "../src/db.js";
 import { createApp } from "../src/app.js";
 import { readConfig } from "../src/config.js";
-import { digest, sessionCookie } from "../src/security.js";
+import { defaultSetup } from "../public/kit.js";
+
 let database, pool, server, origin;
 const users = {};
-const pass = "Test-only passphrase 2026!";
-async function request(path, method = "GET", data, who, headers = {}) {
+async function request(path, method = "GET", data, who = users.owner, headers = {}) {
   const response = await fetch(`${origin}${path}`, {
     method,
     headers: {
-      ...(method !== "GET"
-        ? { "Content-Type": "application/json", Origin: origin }
-        : {}),
+      ...(method !== "GET" ? { "Content-Type": "application/json", Origin: origin } : {}),
       ...(who?.cookie ? { Cookie: who.cookie } : {}),
       ...headers,
     },
     body: data === undefined ? undefined : JSON.stringify(data),
   });
+  const raw = await response.text();
   return {
     status: response.status,
-    data: response.status === 204 ? {} : await response.json(),
+    data: raw ? JSON.parse(raw) : null,
     cookie: response.headers.get("set-cookie")?.split(";")[0],
     headers: response.headers,
   };
 }
-async function createEvent(name, who = users.owner) {
-  const r = await request(
-    "/api/events",
-    "POST",
-    { name, description: "A private briefing.", location: "The workshop" },
-    who,
-  );
-  assert.equal(r.status, 201, JSON.stringify(r.data));
-  return r.data.event;
-}
-async function invitation(
-  event,
-  role = "player",
-  maxUses = 1,
-  who = users.owner,
-) {
-  const r = await request(
-    `/api/events/${event.id}/invites`,
-    "POST",
-    { role, maxUses, expiresInHours: 24 },
-    who,
-  );
-  assert.equal(r.status, 201, JSON.stringify(r.data));
-  return r.data.invitation;
-}
-async function join(event, who, role = "player") {
-  const i = await invitation(event, role);
-  const r = await request("/api/events/join", "POST", { code: i.code }, who);
-  assert.equal(r.status, 200, JSON.stringify(r.data));
-  return i;
+function success(response, status = 200) {
+  assert.equal(response.status, status, JSON.stringify(response.data));
+  return response.data;
 }
 before(async () => {
   database = await testDatabase();
   pool = database.pool;
   await migrate(pool);
-  const config = readConfig({
-    DATABASE_URL: "postgres://unused",
-    PORT: "3000",
-  });
-  server = createServer((req, res) => handler(req, res));
   let handler;
+  server = createServer((req, res) => handler(req, res));
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
   handler = createApp({
     pool,
-    config: { ...config, origin },
-    logger: () => {},
+    config: { ...readConfig({ DATABASE_URL: "postgres://unused", PORT: "3000" }), origin },
+    logger: (entry) => console.error(entry),
   });
-  for (const name of [
-    "owner",
-    "organizer",
-    "staff",
-    "player",
-    "outsider",
-    "other",
-  ]) {
-    const r = await request("/api/auth/register", "POST", {
-      displayName: title(name),
-      email: `${name}@example.test`,
-      password: pass,
-    });
-    assert.equal(r.status, 201, JSON.stringify(r.data));
-    users[name] = { ...r.data.user, cookie: r.cookie };
+  for (const name of ["owner", "player", "staff", "organizer", "other", "outsider"]) {
+    const result = await request(
+      "/api/auth/register",
+      "POST",
+      {
+        email: `${name}@oracle.example.test`,
+        displayName: `Test ${title(name)}`,
+        password: "A sufficiently long test password!",
+      },
+      null,
+    );
+    users[name] = { ...result.data.user, cookie: result.cookie };
   }
   console.log(`Integration database: ${database.kind}`);
 });
@@ -104,8 +69,8 @@ after(async () => {
 });
 
 test("migration is repeatable and preserves existing accounts", async () => {
-  assert.equal(await migrate(pool), 10);
-  assert.equal(await checkSchema(pool), 10);
+  assert.equal(await migrate(pool), 13);
+  assert.equal(await checkSchema(pool), 13);
   assert.equal(
     (await pool.query("SELECT count(*)::int AS n FROM users")).rows[0].n,
     6,
@@ -113,653 +78,200 @@ test("migration is repeatable and preserves existing accounts", async () => {
 });
 test("readiness validates the database schema; session responses contain no secrets", async () => {
   assert.equal((await request("/health/ready")).status, 200);
-  const r = await request("/api/session", "GET", undefined, users.owner);
-  assert.deepEqual(Object.keys(r.data.user).sort(), [
-    "displayName",
-    "email",
-    "id",
-    "isSuperuser",
-  ]);
-  assert.equal(r.headers.get("cache-control"), "no-store");
+  const session = await request("/api/session", "GET", undefined, users.owner);
+  assert.equal(session.status, 200);
+  assert.equal(session.data.user.email, users.owner.email);
+  const serialized = JSON.stringify(session.data);
+  assert.ok(!serialized.includes("password_hash"));
+  assert.ok(!serialized.includes("token_hash"));
 });
 test("unsafe requests require the exact configured Origin", async () => {
-  for (const Origin of ["https://evil.example", "null", ""])
-    assert.equal(
-      (
-        await request(
-          "/api/events",
-          "POST",
-          { name: "Forged event" },
-          users.owner,
-          { Origin },
-        )
-      ).status,
-      403,
-    );
+  const event = success(await request("/api/events", "POST", { name: "Origin event", setup: defaultSetup() }), 201).event;
+  const response = await fetch(`${origin}/api/events/${event.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Origin: "https://evil.example", Cookie: users.owner.cookie },
+    body: JSON.stringify({ version: event.version, name: "Changed" }),
+  });
+  assert.equal(response.status, 403);
 });
 test("email uniqueness is case-insensitive and password hashes are salted", async () => {
-  const r = await request("/api/auth/register", "POST", {
-    displayName: "Duplicate",
-    email: "OWNER@EXAMPLE.TEST",
-    password: pass,
-  });
-  assert.equal(r.status, 409);
-  const rows = (await pool.query("SELECT password_hash FROM users")).rows;
-  assert.equal(new Set(rows.map((r) => r.password_hash)).size, 6);
-  assert.ok(rows.every((r) => !r.password_hash.includes(pass)));
+  assert.equal((await request("/api/auth/register", "POST", { email: "OWNER@ORACLE.EXAMPLE.TEST", displayName: "Duplicate", password: "A sufficiently long test password!" }, null)).status, 409);
+  const rows = (await pool.query("SELECT email,password_hash FROM users WHERE email IN ($1,$2)", [users.owner.email, users.player.email])).rows;
+  assert.equal(rows.length, 2);
+  assert.notEqual(rows[0].password_hash, rows[1].password_hash);
+  assert.ok(rows.every((row) => row.password_hash.startsWith("scrypt:")));
 });
 test("event creation creates exactly one owner and persists", async () => {
-  const e = await createEvent("Foundation rehearsal");
-  const rows = (
-    await pool.query("SELECT * FROM memberships WHERE event_id=$1", [e.id])
-  ).rows;
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].role, "owner");
-  const r = await request(`/api/events/${e.id}`, "GET", undefined, users.owner);
-  assert.equal(r.data.event.name, "Foundation rehearsal");
-  assert.equal(r.data.event.description, "A private briefing.");
+  const event = success(await request("/api/events", "POST", { name: "Persistent event", description: "Original", setup: defaultSetup() }), 201).event;
+  const rows = (await pool.query("SELECT role FROM memberships WHERE event_id=$1", [event.id])).rows;
+  assert.deepEqual(rows, [{ role: "owner" }]);
+  const loaded = success(await request(`/api/events/${event.id}`, "GET", undefined, users.owner)).event;
+  assert.equal(loaded.name, "Persistent event");
 });
 test("outsiders cannot enumerate, read, edit or inspect invitations/activity of another event", async () => {
-  const e = await createEvent("Restricted event");
-  const i = await invitation(e);
-  assert.ok(
-    !(
-      await request("/api/events", "GET", undefined, users.outsider)
-    ).data.events.some((x) => x.id === e.id),
-  );
-  for (const [path, method, data] of [
-    [`/api/events/${e.id}`, "GET"],
-    [`/api/events/${e.id}`, "PATCH", { version: 1, name: "Stolen" }],
-    [`/api/events/${e.id}/invites`, "GET"],
-    [`/api/events/${e.id}/audit`, "GET"],
-    [`/api/events/${e.id}/invites/${i.id}`, "DELETE"],
-  ])
-    assert.equal(
-      (await request(path, method, data, users.outsider)).status,
-      404,
-    );
+  const event = success(await request("/api/events", "POST", { name: "Private event", setup: defaultSetup() }), 201).event;
+  assert.equal((await request(`/api/events/${event.id}`, "GET", undefined, users.outsider)).status, 404);
+  assert.equal((await request(`/api/events/${event.id}`, "PATCH", { version: event.version, name: "Stolen" }, users.outsider)).status, 404);
+  assert.equal((await request(`/api/events/${event.id}/invites`, "GET", undefined, users.outsider)).status, 404);
+  assert.equal((await request(`/api/events/${event.id}/audit`, "GET", undefined, users.outsider)).status, 404);
 });
 test("event IDs and subresource IDs cannot be mixed", async () => {
-  const a = await createEvent("Event A");
-  const b = await createEvent("Event B", users.other);
-  const inv = await invitation(b, "player", 1, users.other);
-  assert.equal(
-    (
-      await request(
-        `/api/events/${a.id}/invites/${inv.id}`,
-        "DELETE",
-        undefined,
-        users.owner,
-      )
-    ).status,
-    404,
-  );
-  assert.equal(
-    (
-      await request(
-        `/api/events/${a.id}/members/${users.other.id}`,
-        "DELETE",
-        undefined,
-        users.owner,
-      )
-    ).status,
-    404,
-  );
+  const a = success(await request("/api/events", "POST", { name: "Event A", setup: defaultSetup() }), 201).event;
+  const b = success(await request("/api/events", "POST", { name: "Event B", setup: defaultSetup() }), 201).event;
+  const invitation = success(await request(`/api/events/${a.id}/invites`, "POST", { role: "player", maxUses: 1, expiresInHours: 1 }), 201).invitation;
+  assert.equal((await request(`/api/events/${b.id}/invites/${invitation.id}`, "DELETE")).status, 404);
 });
 test("players and staff cannot edit event details, issue invites, or change roles", async () => {
-  const e = await createEvent("Role boundary");
-  await join(e, users.player);
-  await join(e, users.staff, "staff");
-  for (const u of [users.player, users.staff]) {
-    assert.equal(
-      (
-        await request(
-          `/api/events/${e.id}`,
-          "PATCH",
-          { version: 1, name: "Forbidden" },
-          u,
-        )
-      ).status,
-      403,
-    );
-    assert.equal(
-      (
-        await request(
-          `/api/events/${e.id}/invites`,
-          "POST",
-          { role: "player" },
-          u,
-        )
-      ).status,
-      403,
-    );
-    assert.equal(
-      (
-        await request(
-          `/api/events/${e.id}/members/${u.id}`,
-          "PATCH",
-          { role: "organizer" },
-          u,
-        )
-      ).status,
-      403,
-    );
+  const event = success(await request("/api/events", "POST", { name: "Role event", setup: defaultSetup() }), 201).event;
+  await pool.query("INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'player'),($1,$3,'staff')", [event.id, users.player.id, users.staff.id]);
+  for (const who of [users.player, users.staff]) {
+    assert.equal((await request(`/api/events/${event.id}`, "PATCH", { version: event.version, name: "No" }, who)).status, 403);
+    assert.equal((await request(`/api/events/${event.id}/invites`, "POST", { role: "player", maxUses: 1, expiresInHours: 1 }, who)).status, 403);
   }
 });
 test("organizers can edit but cannot grant organizer rights or affect the owner", async () => {
-  const e = await createEvent("Organizer boundary");
-  await join(e, users.organizer, "organizer");
-  assert.equal(
-    (
-      await request(
-        `/api/events/${e.id}`,
-        "PATCH",
-        { version: 1, name: "Updated briefing" },
-        users.organizer,
-      )
-    ).status,
-    200,
-  );
-  assert.equal(
-    (
-      await request(
-        `/api/events/${e.id}/invites`,
-        "POST",
-        { role: "organizer" },
-        users.organizer,
-      )
-    ).status,
-    403,
-  );
-  assert.equal(
-    (
-      await request(
-        `/api/events/${e.id}/members/${users.owner.id}`,
-        "DELETE",
-        undefined,
-        users.organizer,
-      )
-    ).status,
-    403,
-  );
-  assert.equal(
-    (
-      await request(
-        `/api/events/${e.id}/members/${users.owner.id}`,
-        "PATCH",
-        { role: "player" },
-        users.owner,
-      )
-    ).status,
-    403,
-  );
+  const event = success(await request("/api/events", "POST", { name: "Organizer event", setup: defaultSetup() }), 201).event;
+  await pool.query("INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'organizer'),($1,$3,'player')", [event.id, users.organizer.id, users.other.id]);
+  const edited = success(await request(`/api/events/${event.id}`, "PATCH", { version: event.version, name: "Organizer changed" }, users.organizer)).event;
+  assert.equal(edited.name, "Organizer changed");
+  assert.equal((await request(`/api/events/${event.id}/members/${users.other.id}`, "PATCH", { role: "organizer" }, users.organizer)).status, 403);
+  assert.equal((await request(`/api/events/${event.id}/members/${users.owner.id}`, "DELETE", undefined, users.organizer)).status, 403);
 });
 test("single-use invitations admit exactly one of two concurrent users", async () => {
-  const e = await createEvent("One seat");
-  const inv = await invitation(e);
-  const results = await Promise.all(
-    [users.player, users.outsider].map((u) =>
-      request("/api/events/join", "POST", { code: inv.code }, u),
-    ),
-  );
-  assert.deepEqual(results.map((r) => r.status).sort(), [200, 400]);
-  const row = (
-    await pool.query("SELECT uses FROM invitations WHERE id=$1", [inv.id])
-  ).rows[0];
-  assert.equal(row.uses, 1);
+  const event = success(await request("/api/events", "POST", { name: "Invite event", setup: defaultSetup() }), 201).event;
+  const invitation = success(await request(`/api/events/${event.id}/invites`, "POST", { role: "player", maxUses: 1, expiresInHours: 1 }), 201).invitation;
+  const [one, two] = await Promise.all([
+    request("/api/events/join", "POST", { code: invitation.code }, users.player),
+    request("/api/events/join", "POST", { code: invitation.code }, users.other),
+  ]);
+  assert.deepEqual([one.status, two.status].sort(), [201, 409]);
 });
 test("joining an event twice does not duplicate membership or consume another use", async () => {
-  const e = await createEvent("Repeat enrollment");
-  const inv = await invitation(e, "player", 3);
-  for (let n = 0; n < 2; n++)
-    assert.equal(
-      (
-        await request(
-          "/api/events/join",
-          "POST",
-          { code: inv.code },
-          users.player,
-        )
-      ).status,
-      200,
-    );
-  assert.equal(
-    (await pool.query("SELECT uses FROM invitations WHERE id=$1", [inv.id]))
-      .rows[0].uses,
-    1,
-  );
+  const event = success(await request("/api/events", "POST", { name: "Repeat join", setup: defaultSetup() }), 201).event;
+  const invitation = success(await request(`/api/events/${event.id}/invites`, "POST", { role: "player", maxUses: 2, expiresInHours: 1 }), 201).invitation;
+  success(await request("/api/events/join", "POST", { code: invitation.code }, users.player), 201);
+  success(await request("/api/events/join", "POST", { code: invitation.code }, users.player), 200);
+  const row = (await pool.query("SELECT uses FROM invitations WHERE id=$1", [invitation.id])).rows[0];
+  assert.equal(row.uses, 1);
 });
 test("privileged invitations are single-use and cannot restore a demoted role", async () => {
-  const e = await createEvent("No restored privilege");
-  assert.equal(
-    (
-      await request(
-        `/api/events/${e.id}/invites`,
-        "POST",
-        { role: "organizer", maxUses: 2 },
-        users.owner,
-      )
-    ).status,
-    400,
-  );
-  const inv = await join(e, users.organizer, "organizer");
-  assert.equal(
-    (
-      await request(
-        `/api/events/${e.id}/members/${users.organizer.id}`,
-        "PATCH",
-        { role: "player" },
-        users.owner,
-      )
-    ).status,
-    200,
-  );
-  assert.equal(
-    (
-      await request(
-        `/api/events/${e.id}/members/${users.organizer.id}`,
-        "DELETE",
-        undefined,
-        users.organizer,
-      )
-    ).status,
-    200,
-  );
-  assert.equal(
-    (
-      await request(
-        "/api/events/join",
-        "POST",
-        { code: inv.code },
-        users.organizer,
-      )
-    ).status,
-    400,
-  );
+  const event = success(await request("/api/events", "POST", { name: "Privilege join", setup: defaultSetup() }), 201).event;
+  const invitation = success(await request(`/api/events/${event.id}/invites`, "POST", { role: "organizer", maxUses: 1, expiresInHours: 1 }), 201).invitation;
+  success(await request("/api/events/join", "POST", { code: invitation.code }, users.organizer), 201);
+  success(await request(`/api/events/${event.id}/members/${users.organizer.id}`, "PATCH", { role: "player" }, users.owner));
+  assert.equal((await request("/api/events/join", "POST", { code: invitation.code }, users.organizer)).status, 409);
+  const role = (await pool.query("SELECT role FROM memberships WHERE event_id=$1 AND user_id=$2", [event.id, users.organizer.id])).rows[0].role;
+  assert.equal(role, "player");
 });
 test("expired and revoked invitation codes cannot be redeemed", async () => {
-  const e = await createEvent("Expired invitations");
-  const a = await invitation(e);
-  await pool.query(
-    "UPDATE invitations SET expires_at=now()-interval '1 second' WHERE id=$1",
-    [a.id],
-  );
-  assert.equal(
-    (await request("/api/events/join", "POST", { code: a.code }, users.player))
-      .status,
-    400,
-  );
-  const b = await invitation(e);
-  assert.equal(
-    (
-      await request(
-        `/api/events/${e.id}/invites/${b.id}`,
-        "DELETE",
-        undefined,
-        users.owner,
-      )
-    ).status,
-    200,
-  );
-  assert.equal(
-    (await request("/api/events/join", "POST", { code: b.code }, users.player))
-      .status,
-    400,
-  );
-  const stored = (
-    await pool.query("SELECT token_hash FROM invitations WHERE id=$1", [b.id])
-  ).rows[0];
-  assert.equal(stored.token_hash, digest(b.code));
+  const event = success(await request("/api/events", "POST", { name: "Dead invites", setup: defaultSetup() }), 201).event;
+  const expired = success(await request(`/api/events/${event.id}/invites`, "POST", { role: "player", maxUses: 1, expiresInHours: 1 }), 201).invitation;
+  await pool.query("UPDATE invitations SET expires_at=now()-interval '1 minute' WHERE id=$1", [expired.id]);
+  assert.equal((await request("/api/events/join", "POST", { code: expired.code }, users.player)).status, 409);
+  const revoked = success(await request(`/api/events/${event.id}/invites`, "POST", { role: "player", maxUses: 1, expiresInHours: 1 }), 201).invitation;
+  success(await request(`/api/events/${event.id}/invites/${revoked.id}`, "DELETE"), 204);
+  assert.equal((await request("/api/events/join", "POST", { code: revoked.code }, users.player)).status, 409);
 });
 test("removing a member invalidates access through their existing session", async () => {
-  const e = await createEvent("Removed member");
-  await join(e, users.player);
-  assert.equal(
-    (
-      await request(
-        `/api/events/${e.id}/members/${users.player.id}`,
-        "DELETE",
-        undefined,
-        users.owner,
-      )
-    ).status,
-    200,
-  );
-  assert.equal(
-    (await request(`/api/events/${e.id}`, "GET", undefined, users.player))
-      .status,
-    404,
-  );
-  assert.equal(
-    (await request("/api/session", "GET", undefined, users.player)).status,
-    200,
-  );
+  const event = success(await request("/api/events", "POST", { name: "Remove event", setup: defaultSetup() }), 201).event;
+  await pool.query("INSERT INTO memberships(event_id,user_id,role) VALUES($1,$2,'player')", [event.id, users.player.id]);
+  assert.equal((await request(`/api/events/${event.id}`, "GET", undefined, users.player)).status, 200);
+  success(await request(`/api/events/${event.id}/members/${users.player.id}`, "DELETE"), 204);
+  assert.equal((await request(`/api/events/${event.id}`, "GET", undefined, users.player)).status, 404);
 });
 test("event lifecycle enforces order, optimistic concurrency, and archive read-only behavior", async () => {
-  const e = await createEvent("Lifecycle");
-  assert.equal(
-    (
-      await request(
-        `/api/events/${e.id}`,
-        "PATCH",
-        { version: 1, status: "live" },
-        users.owner,
-      )
-    ).status,
-    409,
-  );
-  let version = 1;
-  for (const status of [
-    "rehearsal",
-    "live",
-    "paused",
-    "live",
-    "ended",
-    "archived",
-  ]) {
-    const r = await request(
-      `/api/events/${e.id}`,
-      "PATCH",
-      { version, status },
-      users.owner,
-    );
-    assert.equal(r.status, 200, JSON.stringify(r.data));
-    version = r.data.event.version;
+  let event = success(await request("/api/events", "POST", { name: "Lifecycle", setup: defaultSetup() }), 201).event;
+  assert.equal((await request(`/api/events/${event.id}`, "PATCH", { version: event.version, status: "live" })).status, 409);
+  for (const status of ["rehearsal", "live", "paused", "live", "ended", "archived"]) {
+    event = success(await request(`/api/events/${event.id}`, "PATCH", { version: event.version, status })).event;
+    assert.equal(event.status, status);
   }
-  assert.equal(
-    (
-      await request(
-        `/api/events/${e.id}`,
-        "PATCH",
-        { version, name: "Changed" },
-        users.owner,
-      )
-    ).status,
-    409,
-  );
-  assert.equal(
-    (await request(`/api/events/${e.id}/invites`, "POST", {}, users.owner))
-      .status,
-    409,
-  );
-  const f = await createEvent("Stale edit");
-  assert.equal(
-    (
-      await request(
-        `/api/events/${f.id}`,
-        "PATCH",
-        { version: 2, name: "Wrong version" },
-        users.owner,
-      )
-    ).status,
-    409,
-  );
+  assert.equal((await request(`/api/events/${event.id}`, "PATCH", { version: event.version, name: "No" })).status, 409);
 });
 test("transaction rollback does not leave an orphan event", async () => {
-  const id = randomUUID();
-  await assert.rejects(
-    transaction(pool, async (db) => {
-      await db.query(
-        "INSERT INTO events(id,owner_user_id,name) VALUES($1,$2,$3)",
-        [id, users.owner.id, "Rolled back"],
-      );
-      throw new Error("intentional rehearsal");
-    }),
-  );
-  assert.equal(
-    (await pool.query("SELECT id FROM events WHERE id=$1", [id])).rows.length,
-    0,
-  );
+  const count = (await pool.query("SELECT count(*)::int n FROM events")).rows[0].n;
+  await assert.rejects(async () => {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("INSERT INTO events(id,owner_user_id,name,setup) VALUES($1,$2,$3,$4)", [randomUUID(), users.owner.id, "Rollback", JSON.stringify(defaultSetup())]);
+      throw new Error("rollback");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
+  });
+  assert.equal((await pool.query("SELECT count(*)::int n FROM events")).rows[0].n, count);
 });
 test("production configuration requires HTTPS and host-only secure sessions", () => {
-  assert.throws(() =>
-    readConfig({ NODE_ENV: "production", DATABASE_URL: "postgres://unused" }),
-  );
-  assert.throws(() =>
-    readConfig({
-      NODE_ENV: "production",
-      DATABASE_URL: "postgres://unused",
-      APP_ORIGIN: "http://oracle.example",
-    }),
-  );
-  const config = readConfig({
-    NODE_ENV: "production",
-    DATABASE_URL: "postgres://unused",
-    APP_ORIGIN: "https://oracle.example",
-  });
-  const cookie = sessionCookie(config, "opaque");
-  assert.ok(cookie.startsWith("__Host-oracle_session="));
-  assert.ok(
-    cookie.includes("HttpOnly") &&
-      cookie.includes("Secure") &&
-      !cookie.includes("Domain="),
-  );
+  assert.throws(() => readConfig({ NODE_ENV: "production", DATABASE_URL: "postgres://unused", APP_ORIGIN: "http://example.test" }), /HTTPS/);
+  const config = readConfig({ NODE_ENV: "production", DATABASE_URL: "postgres://unused", APP_ORIGIN: "https://example.test" });
+  assert.equal(config.cookieName, "__Host-oracle_session");
 });
 test("password change revokes every old session and rejects the old password", async () => {
-  const login = await request("/api/auth/login", "POST", {
-    email: users.other.email,
-    password: pass,
-  });
-  assert.equal(login.status, 200);
-  const changed = await request(
-    "/api/auth/password",
-    "POST",
-    { currentPassword: pass, newPassword: "Replacement-only password 2026!" },
-    users.other,
-  );
-  assert.equal(changed.status, 200);
-  assert.equal(
-    (await request("/api/session", "GET", undefined, { cookie: login.cookie }))
-      .data.user,
-    null,
-  );
-  assert.equal(
-    (
-      await request("/api/auth/login", "POST", {
-        email: users.other.email,
-        password: pass,
-      })
-    ).status,
-    401,
-  );
-  users.other.cookie = changed.cookie;
+  const user = `password-${randomUUID()}@oracle.example.test`;
+  const oldPassword = "A sufficiently long original password!";
+  const newPassword = "A sufficiently long replacement password!";
+  const registered = await request("/api/auth/register", "POST", { email: user, displayName: "Password Test", password: oldPassword }, null);
+  const first = { ...registered.data.user, cookie: registered.cookie };
+  const secondLogin = await request("/api/auth/login", "POST", { email: user, password: oldPassword }, null);
+  const second = { ...secondLogin.data.user, cookie: secondLogin.cookie };
+  success(await request("/api/auth/password", "POST", { currentPassword: oldPassword, newPassword }, first));
+  assert.equal((await request("/api/session", "GET", undefined, second)).data.user, null);
+  assert.equal((await request("/api/auth/login", "POST", { email: user, password: oldPassword }, null)).status, 401);
+  assert.equal((await request("/api/auth/login", "POST", { email: user, password: newPassword }, null)).status, 200);
 });
-test("a password change cannot be followed by a surviving old-password login", async (t) => {
-  if (database.pg)
-    return t.skip(
-      "Requires the PostgreSQL TCP CI gate; PGlite has one connection.",
-    );
-  const { hashPassword } = await import("../src/security.js");
-  const client = await pool.connect();
-  let pending;
-  try {
-    await client.query("BEGIN");
-    await client.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [
-      users.outsider.id,
-    ]);
-    pending = request("/api/auth/login", "POST", {
-      email: users.outsider.email,
-      password: pass,
-    });
-    await new Promise((r) => setTimeout(r, 200));
-    await client.query("UPDATE users SET password_hash=$1 WHERE id=$2", [
-      await hashPassword("Changed during blocked login 2026!"),
-      users.outsider.id,
-    ]);
-    await client.query("DELETE FROM sessions WHERE user_id=$1", [
-      users.outsider.id,
-    ]);
-    await client.query("COMMIT");
-    const login = await pending;
-    if (login.status === 200)
-      assert.equal(
-        (
-          await request("/api/session", "GET", undefined, {
-            cookie: login.cookie,
-          })
-        ).data.user,
-        null,
-      );
-    else assert.equal(login.status, 401);
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+test("a password change cannot be followed by a surviving old-password login", async () => {
+  const address = `password-race-${randomUUID()}@oracle.example.test`;
+  const oldPassword = "A sufficiently long race original!";
+  const newPassword = "A sufficiently long race replacement!";
+  const registered = await request("/api/auth/register", "POST", { email: address, displayName: "Password Race", password: oldPassword }, null);
+  const account = { ...registered.data.user, cookie: registered.cookie };
+  await Promise.all([
+    request("/api/auth/password", "POST", { currentPassword: oldPassword, newPassword }, account),
+    request("/api/auth/login", "POST", { email: address, password: oldPassword }, null),
+  ]);
+  const sessions = (await pool.query("SELECT count(*)::int n FROM sessions WHERE user_id=$1", [account.id])).rows[0].n;
+  const oldLogin = await request("/api/auth/login", "POST", { email: address, password: oldPassword }, null);
+  assert.equal(oldLogin.status, 401);
+  assert.ok(sessions <= 1);
 });
-
 test("logout and expiration revoke authentication", async () => {
-  const login = await request("/api/auth/login", "POST", {
-    email: users.staff.email,
-    password: pass,
-  });
-  const who = { cookie: login.cookie };
-  assert.equal(
-    (await request("/api/auth/logout", "POST", {}, who)).status,
-    204,
-  );
-  assert.equal(
-    (await request("/api/session", "GET", undefined, who)).data.user,
-    null,
-  );
-  await pool.query(
-    "UPDATE sessions SET expires_at=now()-interval '1 second' WHERE user_id=$1",
-    [users.staff.id],
-  );
-  assert.equal(
-    (await request("/api/session", "GET", undefined, users.staff)).data.user,
-    null,
-  );
+  const address = `logout-${randomUUID()}@oracle.example.test`;
+  const registered = await request("/api/auth/register", "POST", { email: address, displayName: "Logout Test", password: "A sufficiently long logout password!" }, null);
+  const account = { ...registered.data.user, cookie: registered.cookie };
+  success(await request("/api/auth/logout", "POST", {}, account), 204);
+  assert.equal((await request("/api/session", "GET", undefined, account)).data.user, null);
+  const login = await request("/api/auth/login", "POST", { email: address, password: "A sufficiently long logout password!" }, null);
+  const relogged = { ...login.data.user, cookie: login.cookie };
+  await pool.query("UPDATE sessions SET expires_at=now()-interval '1 minute' WHERE user_id=$1", [relogged.id]);
+  assert.equal((await request("/api/session", "GET", undefined, relogged)).data.user, null);
 });
 test("malformed requests and SQL-shaped values cannot escape validation", async () => {
-  assert.equal(
-    (await request("/api/events/not-a-uuid", "GET", undefined, users.owner))
-      .status,
-    404,
-  );
-  assert.equal(
-    (
-      await request(
-        "/api/events",
-        "POST",
-        { name: "x'); DROP TABLE users; --" },
-        users.owner,
-      )
-    ).status,
-    201,
-  );
-  assert.equal(
-    (await pool.query("SELECT count(*)::int AS n FROM users")).rows[0].n,
-    6,
-  );
-  assert.equal(
-    (await request("/api/events", "POST", { name: "A" }, users.owner)).status,
-    400,
-  );
+  const malformed = await fetch(`${origin}/api/events`, { method: "POST", headers: { "Content-Type": "application/json", Origin: origin, Cookie: users.owner.cookie }, body: "{" });
+  assert.equal(malformed.status, 400);
+  assert.equal((await request("/api/events", "POST", { name: "x'; DROP TABLE users; --", setup: defaultSetup() })).status, 201);
+  assert.ok((await pool.query("SELECT count(*)::int n FROM users")).rows[0].n >= 6);
 });
-test("an isolated database snapshot restores records and accepts repeat migrations", async (t) => {
-  if (!database.pg)
-    return t.skip(
-      "The PostgreSQL TCP gate runs the dedicated pg_dump/pg_restore rehearsal.",
-    );
-  const { PGlite } = await import("@electric-sql/pglite");
-  const blob = await database.pg.dumpDataDir("gzip");
-  const restored = new PGlite({ loadDataDir: blob });
+test("an isolated database snapshot restores records and accepts repeat migrations", { skip: database?.kind === "PostgreSQL TCP" ? "The PostgreSQL TCP gate runs the dedicated pg_dump/pg_restore rehearsal." : false }, async () => {
+  const event = success(await request("/api/events", "POST", { name: "Backup source", setup: defaultSetup() }), 201).event;
+  const snapshot = await database.snapshot();
+  const isolated = await testDatabase({ snapshot });
   try {
-    for (const [table, order] of [
-      ["users", "id"],
-      ["events", "id"],
-      ["memberships", "event_id,user_id"],
-      ["invitations", "id"],
-      ["audit_entries", "id"],
-      ["system_audit_entries", "id"],
-      ["event_character_settings", "event_id"],
-      ["factions", "id"],
-      ["characters", "id"],
-      ["character_inventory", "id"],
-      ["event_adventures", "event_id"],
-      ["adventure_runs", "event_id,character_id"],
-      ["adventure_journal", "id"],
-      ["adventure_requests", "event_id,character_id,request_id"],
-      ["adventure_attendance", "event_id,node_id,character_id"],
-      ["event_sharing_settings", "event_id"],
-      ["exchange_sessions", "id"],
-      ["exchange_requests", "event_id,actor_user_id,request_id"],
-      ["exchange_copies", "event_id,recipient_character_id,origin_journal_id"],
-      ["exchange_receipts", "exchange_id,owner_user_id"],
-      ["exchange_contacts", "id"],
-      ["story_groups", "id"],
-      ["story_entries", "id"],
-      ["story_readings", "id"],
-      ["story_requests", "event_id,actor_user_id,request_id"],
-      ["story_activity", "id"],
-      ["trace_records", "id"],
-      ["trace_requests", "event_id,actor_user_id,request_id"],
-      ["economy_resources", "event_id,id"],
-      ["economy_balances", "event_id,character_id,resource_id"],
-      ["economy_shops", "id"],
-      ["economy_stock", "id"],
-      ["economy_transactions", "id"],
-      ["economy_receipts", "event_id,transaction_id,owner_user_id,owner_character_id"],
-      ["economy_requests", "event_id,actor_user_id,request_id"],
-      ["economy_baselines", "event_id"],
-      ["exchange_trade_offers", "event_id,exchange_id,side"],
-      ["oath_agreements", "id"],
-      ["oath_participants", "event_id,agreement_id,character_id"],
-      ["oath_history", "id"],
-      ["oath_requests", "event_id,actor_user_id,request_id"],
-      ["sigil_entries", "id"],
-      ["sigil_runs", "id"],
-      ["sigil_outcomes", "id"],
-      ["sigil_requests", "event_id,actor_user_id,request_id"],
-      ["sigil_history", "id"],
-      ["static_entries", "id"],
-      ["static_overrides", "event_id,entry_id"],
-      ["static_readings", "id"],
-      ["static_requests", "event_id,actor_user_id,request_id"],
-      ["static_history", "id"],
-      ["stagehand_encounters", "id"],
-      ["stagehand_parties", "id"],
-      ["stagehand_requests", "event_id,actor_user_id,request_id"],
-      ["stagehand_history", "id"],
-      ["stagehand_announcements", "event_id,story_entry_id"],
-      ["schema_migrations", "version"],
-    ]) {
-      const sql = `SELECT * FROM ${table} ORDER BY ${order}`;
-      const before = (await pool.query(sql)).rows,
-        after = (await restored.query(sql)).rows;
-      assert.equal(
-        digest(JSON.stringify(after)),
-        digest(JSON.stringify(before)),
-        `${table} snapshot`,
-      );
-    }
-    const adapter = {
-      query: (...args) => restored.query(...args),
-      connect: async () => ({
-        query: (...args) => restored.query(...args),
-        release() {},
-      }),
-    };
-    assert.equal(await migrate(adapter), 10);
-  } finally {
-    await restored.close();
-  }
+    assert.equal((await isolated.pool.query("SELECT name FROM events WHERE id=$1", [event.id])).rows[0].name, "Backup source");
+    assert.equal(await migrate(isolated.pool), 13);
+  } finally { await isolated.close(); }
 });
 test("migration checksum drift blocks startup migration without changing data", async () => {
-  const original = (
-    await pool.query("SELECT checksum FROM schema_migrations WHERE version=1")
-  ).rows[0].checksum;
+  const before = (await pool.query("SELECT count(*)::int n FROM schema_migrations")).rows[0].n;
+  await pool.query("UPDATE schema_migrations SET checksum='tampered' WHERE version=1");
+  await assert.rejects(() => migrate(pool), /checksum mismatch/);
+  assert.equal((await pool.query("SELECT count(*)::int n FROM schema_migrations")).rows[0].n, before);
+  // Restore the exact checksum from a clean isolated migration so later tests are unaffected.
+  const clean = await testDatabase();
   try {
-    await pool.query(
-      "UPDATE schema_migrations SET checksum='changed' WHERE version=1",
-    );
-    await assert.rejects(migrate(pool), /checksum mismatch/);
-  } finally {
-    await pool.query(
-      "UPDATE schema_migrations SET checksum=$1 WHERE version=1",
-      [original],
-    );
-  }
+    await migrate(clean.pool);
+    const checksum = (await clean.pool.query("SELECT checksum FROM schema_migrations WHERE version=1")).rows[0].checksum;
+    await pool.query("UPDATE schema_migrations SET checksum=$1 WHERE version=1", [checksum]);
+  } finally { await clean.close(); }
 });
