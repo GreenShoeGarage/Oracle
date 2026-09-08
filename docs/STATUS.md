@@ -1,3 +1,15 @@
+# ORACLE v1.7.0 — Batch 17 candidate
+
+Recorded September 8, 2026.
+
+Batch 17 is implemented on `main` but is **not yet deployed**. Production remains ORACLE v1.6.0 / Batch 16 at release `2b9b625cdcf5b7ad9ac01074f5ac79c92cfaba4f`. The v1.7.0 candidate advances SQL schema to 15 and adds versioned complete starter experiences, a combined player next-action workspace, printable organizer run sheets, public no-account starter examples, and an immutable v1.7 offline shell.
+
+The candidate intentionally installs authored definitions only. It never creates or copies player connection responses, mutual consent, arc progress/reflections, community-project contributions, donations, effects, rewards, or refunds. Human/device field acceptance remains outstanding and is not implied by automated verification.
+
+---
+
+## Previous deployed-status record
+
 # ORACLE v1.6.0 — Batch 16 candidate
 
 Recorded September 7, 2026.

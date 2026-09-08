@@ -2,7 +2,7 @@
 
 Planning revision 1.0 · September 7, 2026 · Proposed Batches 13–17
 
-Status: Batches 13–16 are implemented on `main`; production is deployed through Batch 15 / v1.5.0. Batch 16 / v1.6.0 is built and verified but has not yet been promoted to production. Batch 17 remains planned. Version targets describe delivery order, not calendar commitments.
+Status: Batches 13–17 are implemented on `main`; production is deployed through Batch 16 / v1.6.0. Batch 17 / v1.7.0 is the current candidate and is not yet deployed. Version targets describe delivery order, not calendar commitments.
 
 The player outcome is simple: someone to approach, a personal reason to care, and something meaningful to accomplish together. Keep these features in the existing character, event, and Field desk screens. Each is optional, and existing events retain their current behavior until an organizer enables or installs the relevant feature.
 
@@ -14,7 +14,7 @@ The player outcome is simple: someone to approach, a personal reason to care, an
 | 14 ✓ | v1.4 — Personal character arcs | Choose a character journey, follow flexible prompts, and save private reflections | Medium |
 | 15 ✓ | v1.5 — Community projects | Contribute to a shared goal and see accepted collective progress | Large |
 | 16 ✓ | v1.6 — Project contributions and consequences | Use verified instrument outcomes and player-confirmed resource contributions to change the fictional world | Large |
-| 17 | v1.7 — Complete starter experiences | Run a coherent themed gathering with cards, arcs, and a shared project using a short setup workflow | Medium |
+| 17 ✓ | v1.7 — Complete starter experiences | Run a coherent themed gathering with cards, arcs, and a shared project using a short setup workflow | Medium |
 
 Starter material ships with each feature. Batch 17 assembles and refines the complete experiences; it is not a prerequisite for using earlier batches.
 
@@ -120,4 +120,4 @@ Extend the existing bounded preparation projection and account/event clearing ru
 - Each software release follows the existing exact main verification → Railway staging → full remote journey/cleanup → production promotion → public readiness checks. Update recovery fixtures and the remote journey when stored structures or playable behavior expand.
 - Deliver documentation and an accurate public tour example in each feature batch. Preserve the historical deployment and unresolved device/operations records in [STATUS.md](STATUS.md); this planning document closes none of those outstanding checks.
 
-First implementation target: **Batch 13 — Connection cards**. Batch 14 depends on its assignment/privacy foundation; Batch 15 adds shared project state; Batch 16 adds verified effects; Batch 17 combines the delivered features into polished starter experiences.
+Batches 13–17 are implemented. The next product cycle should be driven by field observations, mobile/offline ergonomics, organizer workload, and newcomer comprehension rather than another major gameplay subsystem.
