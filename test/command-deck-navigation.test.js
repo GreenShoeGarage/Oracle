@@ -9,7 +9,7 @@ const dispatcher = source.slice(source.indexOf('async function action(button) {'
 function harness() {
   const state = { view: 'command-deck', event: { id: 'event' }, session: { user: { id: 'owner' } } };
   const calls = [];
-  const context = { state, commandDeck: { reset() { calls.push('clear'); }, async action() { return false; } },
+  const context = { state, experienceStudio: { async action() { return false; }, confirmDiscard() { return true; }, reset() {} }, commandDeck: { reset() { calls.push('clear'); }, async action() { return false; } },
     pendingSignout: () => false, toast() {},
     kit: { async action(button) { if (!button.dataset.action.startsWith('kit-')) return false; calls.push(`kit:${state.view}`); return true; } },
     async loadEvents() { calls.push('events'); state.view = 'events'; },

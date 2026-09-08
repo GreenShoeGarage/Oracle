@@ -10,6 +10,10 @@ import { defaultSetup } from "../public/kit.js";
 import { defaultCharacterProfile } from "../public/characters-model.js";
 import { defaultStoryDocument } from "../public/story-model.js";
 import { defaultAdventure, defaultAdventureNode, validateAdventure } from "../public/adventure-model.js";
+import { EXPERIENCE_LIBRARY } from "../public/experience-library.js";
+import { canonicalPack } from "../public/experience-pack-model.js";
+import { newFieldAcceptance } from "../public/field-acceptance-model.js";
+import { VERSION } from "../src/config.js";
 const sourceUrl = new URL(process.env.TEST_DATABASE_URL || "");
 const targetUrl = new URL(process.env.RESTORE_DATABASE_URL || "");
 for (const url of [sourceUrl, targetUrl])
@@ -234,6 +238,17 @@ try {
     await client.query("INSERT INTO story_entries(id,event_id,kind,document,status,version,published,published_version,created_by) VALUES($1,$2,'bulletin',$3,'published',2,$4,1,$5)", [announcementId, fixture.event, JSON.stringify(announcementDocument), JSON.stringify({ ...announcementDocument, publishedAt: dispatchedAt }), operationsStaff]);
     await client.query("INSERT INTO stagehand_announcements(id,event_id,encounter_id,encounter_version,story_entry_id,created_by) VALUES($1,$2,$3,7,$4,$5)", [randomUUID(), fixture.event, encounterId, announcementId, operationsStaff]);
   });
+  // Populate every Batch 20–23 table explicitly, independent of test order.
+  const authoredPack = structuredClone(EXPERIENCE_LIBRARY[0]);
+  await transaction(source, async client => {
+    await client.query('INSERT INTO experience_pack_drafts(id,event_id,document,version,created_by) VALUES($1,$2,$3,3,$4)', [randomUUID(), fixture.event, JSON.stringify(authoredPack), fixture.user]);
+    const mapping = { connections: {}, arcs: {}, milestones: {}, consequences: {}, nodes: {}, nodeFingerprints: {}, resourceBindings: {}, roleBindings: {}, requestFingerprint: digest('recovery-fixture') };
+    await client.query('INSERT INTO experience_pack_installs(id,event_id,pack_key,pack_version,digest,document,mapping,installed_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8)', [randomUUID(), fixture.event, authoredPack.key, authoredPack.version, digest(canonicalPack(authoredPack)), JSON.stringify(authoredPack), JSON.stringify(mapping), fixture.user]);
+    // A restored unrun report must remain unrun; restore success cannot certify a field pilot.
+    await client.query('INSERT INTO field_acceptance_reports(event_id,report,version,updated_by) VALUES($1,$2,2,$3)', [fixture.event, JSON.stringify(newFieldAcceptance(VERSION, process.env.GITHUB_SHA || '')), fixture.user]);
+  });
+  for (const table of ['experience_pack_drafts','experience_pack_installs','field_acceptance_reports'])
+    assert.ok((await source.query(`SELECT count(*)::int n FROM ${table}`)).rows[0].n > 0, `${table} must contain recovery data.`);
   for (const table of ["economy_resources", "economy_balances", "economy_shops", "economy_stock", "economy_transactions", "economy_receipts", "economy_requests", "economy_baselines", "exchange_trade_offers", "oath_agreements", "oath_participants", "oath_history", "oath_requests", "sigil_entries", "sigil_runs", "sigil_outcomes", "sigil_requests", "sigil_history", "static_entries", "static_overrides", "static_readings", "static_requests", "static_history", "stagehand_encounters", "stagehand_parties", "stagehand_requests", "stagehand_history", "stagehand_announcements"])
     assert.ok((await source.query(`SELECT count(*)::int AS n FROM ${table}`)).rows[0].n > 0, `${table} must contain actual recovery data.`);
   await source.query(`CREATE DATABASE "${name}"`);
@@ -342,6 +357,13 @@ try {
     ["community_project_effects", "id"],
     ["community_project_refunds", "id"],
     ["starter_experience_installs", "id"],
+    ["experience_pack_drafts", "id"],
+    ["experience_pack_installs", "id"],
+    ["field_acceptance_reports", "event_id"],
+    ["connection_templates", "id"],
+    ["connection_assignments", "id"],
+    ["character_arc_templates", "id"],
+    ["character_arc_states", "id"],
     ["schema_migrations", "version"],
   ]) {
     const a = (await source.query(`SELECT * FROM ${table} ORDER BY ${order}`))
@@ -354,7 +376,7 @@ try {
       `${table} restored content`,
     );
   }
-  assert.equal(await migrate(restored), 15, "The recovered database must accept repeat migration at schema 15.");
+  assert.equal(await migrate(restored), 16, "The recovered database must accept repeat migration at schema 16.");
   const event = (
     await restored.query("SELECT id,owner_user_id FROM events LIMIT 1")
   ).rows[0];
@@ -380,7 +402,7 @@ try {
   const systemAudit = (await restored.query("INSERT INTO system_audit_entries(actor_id,target_user_id,action) VALUES($1,$1,'recovery.rehearsed') RETURNING id", [fixture.user])).rows[0];
   assert.ok(BigInt(systemAudit.id) > maximumSystemAudit, "Restored system audit identity sequence must advance safely.");
   console.log(
-    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventures, journals, sharing policies, exchange sessions, provenance, bilateral contacts and receipts, story groups and draft/publication separation, hidden truths, collected rumors, activity, private investigations, fictional balances and finite shops, atomic transaction receipts, inventory baselines, fixed agreement terms and captured signatures, replay records, published cooperative snapshots and private drafts, captured roles and components, completed outcomes and paused timer state, fictional signal rules and staff overrides, account-bound readings, scoped scene staff and readiness acknowledgments, captured party consent and overdue occupied return windows, approved scene-linked bulletins, operations history/replays, both audit sequences, and migration after restore passed.",
+    "PostgreSQL pg_dump/pg_restore round trip, populated characters, administrators, adventures, journals, sharing policies, exchange sessions, provenance, bilateral contacts and receipts, story groups and draft/publication separation, hidden truths, collected rumors, activity, private investigations, fictional balances and finite shops, atomic transaction receipts, inventory baselines, fixed agreement terms and captured signatures, replay records, published cooperative snapshots and private drafts, captured roles and components, completed outcomes and paused timer state, fictional signal rules and staff overrides, account-bound readings, scoped scene staff and readiness acknowledgments, captured party consent and overdue occupied return windows, approved scene-linked bulletins, operations history/replays, authored experience drafts, installed pack snapshots and mappings, unrun field-acceptance evidence, both audit sequences, and migration after restore passed.",
   );
 } finally {
   if (restored) await restored.end();

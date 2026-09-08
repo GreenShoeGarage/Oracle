@@ -152,5 +152,26 @@
     "theme": "fantasy",
     "description": "Three fictional work items: a character approval, a project contribution, and a bulletin draft. The organizer opens the original workflow to decide. Private arcs, reflections, and player engagement scores are never included.",
     "source": "public/command-deck-ui.js"
+  },
+  {
+    "id": "experience-library",
+    "title": "Experience scenario library",
+    "theme": "fantasy",
+    "description": "Five fantasy starters, alongside five cyberpunk and five wasteland scenarios in their matching events. Choose a copy to customize; viewing an example installs nothing.",
+    "source": "public/experience-studio-ui.js"
+  },
+  {
+    "id": "experience-builder",
+    "title": "Experience builder",
+    "theme": "fantasy",
+    "description": "Six guided steps connect people, personal stakes, a shared goal, instruments, and endings. Installation uses a deliberate server preview and leaves the shared project in draft.",
+    "source": "public/experience-studio-ui.js"
+  },
+  {
+    "id": "field-acceptance",
+    "title": "Field acceptance evidence",
+    "theme": "fantasy",
+    "description": "An explicitly unrun checklist. Deployment is not proof of physical-device, human field, live-backup, rollback, or sustained-capacity acceptance. Evidence is organizer-recorded, not telemetry.",
+    "source": "public/experience-studio-ui.js"
   }
 ]

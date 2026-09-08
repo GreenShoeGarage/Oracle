@@ -1,5 +1,5 @@
-export const VERSION = "1.9.0";
-export const SCHEMA_VERSION = 15;
+export const VERSION = "2.3.0";
+export const SCHEMA_VERSION = 16;
 export function readConfig(env = process.env) {
   const production = env.NODE_ENV === "production";
   const port = Number(env.PORT || 3000);

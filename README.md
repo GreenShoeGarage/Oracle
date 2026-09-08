@@ -1,20 +1,24 @@
 # ORACLE
 
-**LARP Field Kit** · v1.9.0 candidate · Green Shoe Garage
+**LARP Field Kit** · v2.3.0 · Green Shoe Garage
 
 ORACLE is a themed event companion for live-action roleplaying. Players use connection cards, optional private character arcs, community projects, discoveries, QR exchanges, and prepared field material. Organizers build and run events with twelve optional instruments and three complete themed starter experiences.
 
 The **Organizer Command Deck** brings approvals, unassigned characters, project contribution reviews, BROADSIDE drafts, scene readiness/capacity, and broken connection assignments into one read-only “Needs attention” view. It opens the existing tools for decisions; it does not collect player engagement scores or expose private arcs/reflections. [Batch 19 details](docs/BATCH19_COMMAND_DECK.md).
 
-**Production is v1.8.0 / Batch 18**, schema 15, release `dfdb7624786ded20d946c335453bb7749e213434`. **v1.9.0 is a candidate and has not been promoted.** Current release checks and remaining human/device/operations gates are recorded in [STATUS](docs/STATUS.md). No schema migration is introduced by Batch 19.
+**v2.3.0 includes Batch 19 and the Batches 20–23 software**, with schema 16. **Field-proven acceptance remains open**: real device/human observations and live-backup/rollback/sustained-capacity evidence are not inferred from CI or deployment. Release contents and limits: [Experience Studio](docs/BATCH20_23_EXPERIENCE_STUDIO.md). Deployment receipts and remaining gates: [STATUS](docs/STATUS.md).
 
 [Open ORACLE](https://oracle.greenshoegarage.com) · [Public tour](https://oracle.greenshoegarage.com/tour.html) · [Help](https://oracle.greenshoegarage.com/help.html) · [Roadmap](docs/ROADMAP.md)
 
 The no-account tour includes fictional, inactive examples rendered with the shipped components. The Command Deck example adds no live-event access. Existing screenshot assets remain separate from the offline app cache; the new example is an HTML rendering, not evidence of human field testing.
 
+## Experience Studio
+
+Open an event in Organizer view and choose **Experience Studio**. Pick a scenario, customize the six authoring steps, map dependencies, validate/preview, and confirm. Projects remain drafts; assignments and publication are deliberate existing workflows. Packs exclude player state. A newer version installs alongside the earlier version, never silently overwriting customized material.
+
 ## What works in this release
 
-See [organizer guide](docs/ORGANIZER_GUIDE.md), [player guide](docs/PLAYER_GUIDE.md), [theme and event packs](docs/THEME_AND_EVENT_PACKS.md), [troubleshooting](docs/TROUBLESHOOTING.md), and [release notes](docs/RELEASE_NOTES.md). The current candidate adds the Organizer Command Deck while preserving the existing gameplay and field-preparation contracts. Deployment status is recorded above.
+See [organizer guide](docs/ORGANIZER_GUIDE.md), [player guide](docs/PLAYER_GUIDE.md), [theme and event packs](docs/THEME_AND_EVENT_PACKS.md), [troubleshooting](docs/TROUBLESHOOTING.md), and [release notes](docs/RELEASE_NOTES.md). Experience Studio adds fifteen scenarios, six-step authoring, strict reusable authored packs, safe additive version installation, and explicit field-evidence records. Existing gameplay and player field-preparation contracts remain intact.
 
 - Clear player and organizer entry paths, a next-step event guide, and explanations of invitation, badge, prop, and exchange codes.
 - Three immediate event actions with specialist tools under collapsed sections; existing instruments and permissions remain available.

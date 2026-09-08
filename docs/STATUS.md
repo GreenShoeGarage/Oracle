@@ -1,3 +1,19 @@
+# ORACLE v2.3.0 — software release scope
+
+Recorded September 8, 2026. SQL schema 16.
+
+This source describes the Batches 20–23 implementation and includes the verified Batch 19 Command Deck. See [Experience Studio](BATCH20_23_EXPERIENCE_STUDIO.md). The exact release commit must pass main CI, staging gameplay/shell checks, Railway production, and public/shell verification before it is considered deployed. Deployment evidence is attached to the release pull request; `/health/ready` reports the actual running commit and schema. A version in this file alone is not a deployment receipt.
+
+The last verified production baseline before this release work was v1.8.0 / Batch 18, schema 15, commit `dfdb7624786ded20d946c335453bb7749e213434`. Batch 19 main commit `3287eba7ab502e51128d314849378660e266ad24` passed its complete technical gate and is included in this release.
+
+**Batch 20 field-proven acceptance remains OPEN.** The new evidence workspace begins unrun. Physical iPhone/Android, camera/assistive-technology and human field observations, scheduled live backups, actual live-data recovery, schema-compatible application rollback and sustained Railway capacity require their own recorded evidence. Software checks do not close them. New scenario sizes and durations are design targets only.
+
+Schema 16 requires a compatible application; older schema-15 binaries are not valid rollback targets. Recovery checks use disposable databases, not the live production database. Existing source records below are historical and preserve their original dates/status descriptions.
+
+---
+
+## Historical pre-v2.3 records
+
 # ORACLE v1.9.0 — Batch 19 candidate
 
 Recorded September 8, 2026.

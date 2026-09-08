@@ -1,3 +1,9 @@
+# Current continuation: Batches 20–23
+
+September 8, 2026: v2.3.0 implements Experience Studio, fifteen expanded scenarios, safe portable authored packs, and self-reported field evidence. It includes Batch 19. **Batch 20’s actual field/operations acceptance is still open.** See [implementation and limits](BATCH20_23_EXPERIENCE_STUDIO.md) and [current roadmap](ROADMAP.md). The engagement plan below is retained as historical context, not a current deployment receipt.
+
+---
+
 # ORACLE engagement roadmap
 
 Planning revision 1.0 · September 7, 2026 · Proposed Batches 13–17

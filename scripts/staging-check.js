@@ -1,3 +1,4 @@
+import { exerciseExperienceStudio } from './studio-staging.js';
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
@@ -1712,6 +1713,7 @@ if (publicOnly) {
     await request(player, `/api/badges/${sharedCharacter.badgeCode}`, { status: 404 });
     pass("membership revocation immediately removes detail, export, preview, character, and badge access");
     await adventureJourney(owner, player);
+    await exerciseExperienceStudio({owner,player,request,createEvent,ownedEvents,pass});
   } catch (error) {
     // Every assertion above uses an explicit message; never dump request bodies,
     // response payloads, passwords, invitation codes, or session cookies into CI.
