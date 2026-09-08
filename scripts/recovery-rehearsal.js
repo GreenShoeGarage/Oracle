@@ -341,6 +341,7 @@ try {
     ["community_project_consequences", "id"],
     ["community_project_effects", "id"],
     ["community_project_refunds", "id"],
+    ["starter_experience_installs", "id"],
     ["schema_migrations", "version"],
   ]) {
     const a = (await source.query(`SELECT * FROM ${table} ORDER BY ${order}`))
@@ -353,7 +354,7 @@ try {
       `${table} restored content`,
     );
   }
-  assert.equal(await migrate(restored), 14, "The recovered database must accept repeat migration at schema 14.");
+  assert.equal(await migrate(restored), 15, "The recovered database must accept repeat migration at schema 15.");
   const event = (
     await restored.query("SELECT id,owner_user_id FROM events LIMIT 1")
   ).rows[0];

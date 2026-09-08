@@ -69,8 +69,8 @@ after(async () => {
 });
 
 test("migration is repeatable and preserves existing accounts", async () => {
-  assert.equal(await migrate(pool), 14);
-  assert.equal(await checkSchema(pool), 14);
+  assert.equal(await migrate(pool), 15);
+  assert.equal(await checkSchema(pool), 15);
   assert.equal(
     (await pool.query("SELECT count(*)::int AS n FROM users")).rows[0].n,
     6,
